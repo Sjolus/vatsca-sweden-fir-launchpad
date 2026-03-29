@@ -1,0 +1,47 @@
+## Build outputs
+bin/
+obj/
+publish/
+publish-compressed/
+
+## Visual Studio / Rider
+.vs/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.rsuser
+
+## NuGet
+*.nupkg
+*.snupkg
+packages/
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+## User-specific files
+*.userprefs
+
+## macOS
+.DS_Store
+
+## Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+## Archives
+*.zip
+*.7z
+
+## Logs
+*.log
+
+## Claude Code local config
+.claude/
+
+## Sensitive / local config — never commit
+appsettings.local.json
+secrets.json

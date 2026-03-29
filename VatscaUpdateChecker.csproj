@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <Version>1.0.0</Version>
+    <AssemblyName>VatscaUpdateChecker</AssemblyName>
+    <AssemblyTitle>Sweden FIR Launchpad</AssemblyTitle>
+    <Product>Sweden FIR Launchpad</Product>
+    <RootNamespace>VatscaUpdateChecker</RootNamespace>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <!-- Single-file publish settings -->
+  <PropertyGroup Condition="'$(PublishSingleFile)' == 'true'">
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\app.ico"/>
+
+    <Resource Include="Assets\logo-banner.png"/>
+  </ItemGroup>
+</Project>

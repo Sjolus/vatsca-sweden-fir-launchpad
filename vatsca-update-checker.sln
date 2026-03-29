@@ -1,0 +1,24 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.5.2.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VatscaUpdateChecker", "VatscaUpdateChecker.csproj", "{AE9BB2F8-DE49-E065-DC32-CE787EA86A21}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{AE9BB2F8-DE49-E065-DC32-CE787EA86A21}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AE9BB2F8-DE49-E065-DC32-CE787EA86A21}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AE9BB2F8-DE49-E065-DC32-CE787EA86A21}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AE9BB2F8-DE49-E065-DC32-CE787EA86A21}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {7D2DAA7C-B6DC-4CF8-BC61-330DF78D012E}
+	EndGlobalSection
+EndGlobal

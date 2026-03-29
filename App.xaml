@@ -1,0 +1,15 @@
+<Application x:Class="VatscaUpdateChecker.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:converters="clr-namespace:VatscaUpdateChecker.Converters"
+             StartupUri="MainWindow.xaml">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Themes/Light.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+            <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
+            <converters:RowBackgroundConverter x:Key="RowBgConverter"/>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>
