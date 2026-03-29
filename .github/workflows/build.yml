@@ -53,7 +53,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: VatscaUpdateChecker-win-x64
+          name: VATSCA-Sweden-FIR-Launchpad-win-x64
           path: publish/VatscaUpdateChecker.exe
           retention-days: 30
 
