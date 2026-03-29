@@ -149,6 +149,7 @@ The GitHub API is called without authentication. If rate-limiting becomes an iss
 - **EuroScope profile picker** — replaced profile bar (below row) with a `▾` dropdown button next to Launch; selected profile name shown on button face; selection persisted to `AppSettings.LastEuroscopeProfile`; no-profile option labelled `— No profile —`
 - **Window widened** — 740 → 800px (and MinWidth) to give the profile picker button room
 - **`EnableCompressionInSingleFile`** — added to csproj, conditional on `PublishSingleFile=true`; roughly halves published `.exe` size
+- **`IncludeNativeLibrariesForSelfExtract`** — required for single-file WPF publish; without it, native WPF DLLs (`wpfgfx_cor3.dll` etc.) are placed alongside the exe instead of bundled into it, causing `DllNotFoundException` at runtime when only the exe is distributed
 - **`logo-square.png`** — removed unused `<Resource>` entry from csproj (file kept on disk)
 - **Orphan `<StackPanel>`** — removed leftover wrapper around row `<Grid>` in DataTemplate (profile bar remnant)
 - **Added** `.gitignore`, `CLAUDE.md`, `README.md`, `.github/workflows/build.yml`, issue templates, PR template
