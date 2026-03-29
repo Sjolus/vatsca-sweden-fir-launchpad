@@ -2,6 +2,8 @@
 
 A desktop launchpad for [VATSIM Scandinavia](https://vatsca.org) controllers. It keeps your ATC tools up to date, manages your VATSIM profile across all EuroScope configurations, and lets you launch everything from one place.
 
+![VATSCA Launchpad screenshot](Assets/screenshot.png)
+
 ---
 
 ## Features
