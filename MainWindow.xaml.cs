@@ -42,6 +42,7 @@ public partial class MainWindow : Window
             new() { AppName = "VACS" },
             new() { AppName = "vATIS" },
             new() { AppName = "VATIRIS", IsWebApp = true, LaunchPath = "https://vatiris.se", Status = CheckStatus.WebApp, InstalledVersion = "N/A", LatestVersion = "N/A" },
+            new() { AppName = "Sweden FIR Launchpad" },
         };
 
         ApplyLaunchPaths();
@@ -201,7 +202,8 @@ public partial class MainWindow : Window
             UpdateChecker.CheckGng(_results[1], _settings.EuroscopeDataPath),
             UpdateChecker.CheckGitHub(_results[2], _settings.TrackAudioExePath, "pierr3/TrackAudio", skipPreRelease: true),
             UpdateChecker.CheckGitHub(_results[3], _settings.VacsExePath,       "vacs-project/vacs"),
-            UpdateChecker.CheckGitHub(_results[4], _settings.VatisExePath,      "vatis-project/vatis")
+            UpdateChecker.CheckGitHub(_results[4], _settings.VatisExePath,      "vatis-project/vatis"),
+            UpdateChecker.CheckGitHub(_results[6], Environment.ProcessPath!,    "Sjolus/vatsca-sweden-fir-launchpad")
         );
 
         LastCheckedText.Text    = $"Last checked: {DateTime.Now:HH:mm:ss}";
