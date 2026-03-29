@@ -41,7 +41,7 @@ public partial class MainWindow : Window
             new() { AppName = "TrackAudio" },
             new() { AppName = "VACS" },
             new() { AppName = "vATIS" },
-            new() { AppName = "VATIRIS", IsWebApp = true, LaunchPath = "https://vatiris.se", Status = CheckStatus.WebApp },
+            new() { AppName = "VATIRIS", IsWebApp = true, LaunchPath = "https://vatiris.se", Status = CheckStatus.WebApp, InstalledVersion = "N/A", LatestVersion = "N/A" },
         };
 
         ApplyLaunchPaths();
