@@ -5,7 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
-    <Version>1.0.0</Version>
+    <Version>1.1.0</Version>
     <AssemblyName>VatscaUpdateChecker</AssemblyName>
     <AssemblyTitle>Sweden FIR Launchpad</AssemblyTitle>
     <Product>Sweden FIR Launchpad</Product>
