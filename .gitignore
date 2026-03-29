@@ -1,8 +1,7 @@
 ## Build outputs
 bin/
 obj/
-publish/
-publish-compressed/
+publish*/
 
 ## Visual Studio / Rider
 .vs/
