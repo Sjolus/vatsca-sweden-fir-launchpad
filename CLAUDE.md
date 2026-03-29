@@ -141,6 +141,10 @@ The GitHub API is called without authentication. If rate-limiting becomes an iss
 
 ## Changelog
 
+### 2026-03-30
+- **VATIRIS web app row** — added VATIRIS as an `IsWebApp = true` row; launched via `msedge.exe --app=https://vatiris.se --user-data-dir=%APPDATA%\VatscaUpdateChecker\VATIRISProfile` (isolated Edge profile — logins persist but sandboxed from regular Edge). Added `CheckStatus.WebApp` enum value with "Web app" badge text. Web app rows are skipped in update checks and the Checking-status reset loop.
+- **Web app PID tracking** — after launch, PID + launch timestamp are written to `%APPDATA%\VatscaUpdateChecker\VATIRIS.pid`. The running-state timer checks the tracked PID; if it has exited (Edge relaunches itself on first-run profile setup), `ProcessHelper.FindEdgeBrowserProcess` scans all `msedge.exe` processes using `CreateToolhelp32Snapshot` and finds the root browser process (the one whose parent is not itself msedge — renderers/GPU/network processes are children of the browser). Kill targets that specific PID with `entireProcessTree: true`, leaving unrelated Edge windows untouched.
+
 ### 2026-03-29
 - **Logging** — added `Services/Logger.cs`; appends timestamped `[CHECK]`, `[LAUNCH]`, `[KILL]`, `[APPLY]` entries to `%APPDATA%\VatscaUpdateChecker\launchpad.log`; auto-trims to ~500 lines at 200 KB; never throws. Wired into `UpdateChecker` (per-app version check results + errors), `ProfileService` (per-file patch, Hoppie write, LoginProfiles update), and `MainWindow` (launch, kill). Passwords are never logged — field names only.
 - **Silent catch fixed** — `FetchLatestTag` bare `catch {}` now logs the error instead of swallowing it silently.

@@ -13,6 +13,9 @@ namespace VatscaUpdateChecker;
 
 public partial class MainWindow : Window
 {
+    private static readonly string AppDataDir =
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "VatscaUpdateChecker");
+
     private readonly ObservableCollection<CheckResult> _results;
     private readonly DispatcherTimer _processTimer;
     private AppSettings _settings;
@@ -38,6 +41,7 @@ public partial class MainWindow : Window
             new() { AppName = "TrackAudio" },
             new() { AppName = "VACS" },
             new() { AppName = "vATIS" },
+            new() { AppName = "VATIRIS", IsWebApp = true, LaunchPath = "https://vatiris.se", Status = CheckStatus.WebApp },
         };
 
         ApplyLaunchPaths();
@@ -85,10 +89,68 @@ public partial class MainWindow : Window
     {
         foreach (var result in _results)
         {
+            if (result.IsWebApp)
+            {
+                result.IsRunning = IsWebAppRunning(result.AppName);
+                continue;
+            }
             if (result.IsFolder || string.IsNullOrEmpty(result.LaunchPath)) continue;
             var exeName = Path.GetFileNameWithoutExtension(result.LaunchPath);
             result.IsRunning = Process.GetProcessesByName(exeName).Length > 0;
         }
+    }
+
+    // Returns true if the pid file for this web app exists and the tracked process is still alive.
+    // If the tracked PID has exited (e.g. Edge relaunched itself during first-run profile setup),
+    // falls back to scanning for the actual browser process spawned around the same time.
+    private bool IsWebAppRunning(string appName)
+    {
+        var pidFile = Path.Combine(AppDataDir, $"{appName}.pid");
+        if (!File.Exists(pidFile)) return false;
+
+        var lines = File.ReadAllLines(pidFile);
+        if (lines.Length == 0) return false;
+        if (!int.TryParse(lines[0].Trim(), out var pid)) return false;
+        var launchTime = lines.Length > 1 && DateTime.TryParse(lines[1].Trim(), out var lt) ? lt : DateTime.MinValue;
+
+        // Fast path: tracked PID is still alive.
+        try
+        {
+            var proc = Process.GetProcessById(pid);
+            if (!proc.HasExited && proc.ProcessName == "msedge") return true;
+        }
+        catch { }
+
+        // Tracked PID is gone — Edge may have relaunched itself (e.g. first-run profile setup).
+        // Find the new browser process: an msedge that started after our launch whose parent is
+        // not itself msedge (renderers/GPU processes are children of the browser, not vice versa).
+        var browserId = ProcessHelper.FindEdgeBrowserProcess(launchTime);
+        if (browserId > 0)
+        {
+            File.WriteAllLines(pidFile, new[] { browserId.ToString(), launchTime.ToString("O") });
+            return true;
+        }
+
+        try { File.Delete(pidFile); } catch { }
+        return false;
+    }
+
+    private void KillWebApp(CheckResult result)
+    {
+        var pidFile = Path.Combine(AppDataDir, $"{result.AppName}.pid");
+        var lines   = File.Exists(pidFile) ? File.ReadAllLines(pidFile) : Array.Empty<string>();
+        if (lines.Length > 0 && int.TryParse(lines[0].Trim(), out var pid))
+        {
+            try
+            {
+                var proc = Process.GetProcessById(pid);
+                Logger.Log("KILL", $"{result.AppName}: killing pid {pid}");
+                proc.Kill(entireProcessTree: true);
+            }
+            catch { /* already exited */ }
+            try { File.Delete(pidFile); } catch { }
+        }
+        result.IsRunning = false;
     }
 
     private async void Window_Loaded(object sender, RoutedEventArgs e)
@@ -132,7 +194,7 @@ public partial class MainWindow : Window
         _settings = SettingsService.Load();
 
         foreach (var r in _results)
-            r.Status = CheckStatus.Checking;
+            if (!r.IsWebApp) r.Status = CheckStatus.Checking;
 
         await Task.WhenAll(
             UpdateChecker.CheckEuroscope(_results[0], _settings.EuroscopeExePath),
@@ -184,6 +246,31 @@ public partial class MainWindow : Window
             {
                 Process.Start("explorer.exe", result.LaunchPath);
                 Logger.Log("LAUNCH", $"{result.AppName}: opened folder {result.LaunchPath}");
+            }
+            else if (result.IsWebApp)
+            {
+                if (result.IsRunning)
+                {
+                    KillWebApp(result);
+                }
+                else
+                {
+                    const string edgePath = @"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe";
+                    var profileDir = Path.Combine(AppDataDir, "VATIRISProfile");
+                    var proc = Process.Start(new ProcessStartInfo
+                    {
+                        FileName        = edgePath,
+                        Arguments       = $"--app={result.LaunchPath} --user-data-dir=\"{profileDir}\"",
+                        UseShellExecute = false,
+                    });
+                    if (proc != null)
+                    {
+                        File.WriteAllLines(Path.Combine(AppDataDir, $"{result.AppName}.pid"),
+                            new[] { proc.Id.ToString(), proc.StartTime.ToString("O") });
+                        result.IsRunning = true;
+                    }
+                    Logger.Log("LAUNCH", $"{result.AppName}: launched as web app (pid={proc?.Id}, url={result.LaunchPath})");
+                }
             }
             else if (result.IsRunning)
             {
