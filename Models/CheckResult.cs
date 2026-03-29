@@ -5,7 +5,7 @@ using System.Runtime.CompilerServices;
 
 namespace VatscaUpdateChecker.Models;
 
-public enum CheckStatus { Unknown, Checking, UpToDate, UpdateAvailable, Unsupported, NotConfigured, Error }
+public enum CheckStatus { Unknown, Checking, UpToDate, UpdateAvailable, Unsupported, NotConfigured, Error, WebApp }
 
 public class CheckResult : INotifyPropertyChanged
 {
@@ -45,6 +45,9 @@ public class CheckResult : INotifyPropertyChanged
     /// <summary>True for rows that open a folder rather than launch an exe (e.g. GNG Pack).</summary>
     public bool IsFolder { get; init; }
 
+    /// <summary>True for web app rows that are launched via Edge --app= (e.g. VATIRIS).</summary>
+    public bool IsWebApp { get; init; }
+
     public string LaunchPath
     {
         get => _launchPath;
@@ -69,7 +72,9 @@ public class CheckResult : INotifyPropertyChanged
 
     public bool ShowLaunch =>
         !string.IsNullOrEmpty(LaunchPath) &&
-        (IsFolder ? Directory.Exists(LaunchPath) : File.Exists(LaunchPath));
+        (IsWebApp  ? true :
+         IsFolder  ? Directory.Exists(LaunchPath) :
+                     File.Exists(LaunchPath));
 
     /// <summary>Launch button for apps without a profile picker.</summary>
     public bool ShowSimpleLaunch => ShowLaunch && !HasProfiles;
@@ -126,6 +131,7 @@ public class CheckResult : INotifyPropertyChanged
         CheckStatus.NotConfigured   => "Not configured",
         CheckStatus.Checking        => "Checking...",
         CheckStatus.Error           => "Error",
+        CheckStatus.WebApp          => "Web app",
         _                           => "—"
     };
 
