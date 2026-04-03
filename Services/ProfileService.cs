@@ -418,7 +418,7 @@ public static class ProfileService
             return;
         }
 
-        var lines  = File.ReadAllLines(path).ToList();
+        var lines  = File.ReadAllLines(path, PrfEncoding).ToList();
         bool found = false;
 
         for (int i = 0; i < lines.Count; i++)
@@ -445,6 +445,6 @@ public static class ProfileService
             Logger.Log("APPLY", $"LoginProfiles.txt: inserted OBS profile {obsPrefix}_OBS into {path}");
         }
 
-        File.WriteAllLines(path, lines);
+        File.WriteAllLines(path, lines, PrfEncoding);
     }
 }
