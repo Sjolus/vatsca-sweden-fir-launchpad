@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
 using System.Runtime.CompilerServices;
+using VatscaUpdateChecker.Services;
 
 namespace VatscaUpdateChecker.Models;
 
@@ -47,6 +48,23 @@ public class CheckResult : INotifyPropertyChanged
 
     /// <summary>True for web app rows that are launched via Edge --app= (e.g. VATIRIS).</summary>
     public bool IsWebApp { get; init; }
+
+    /// <summary>True when the row should render the fonts-check sub-button (currently only the GNG Pack row).</summary>
+    public bool HasFontsCheck { get; init; }
+
+    private FontsState _fontsState = FontsState.Unknown;
+    public FontsState FontsState
+    {
+        get => _fontsState;
+        set => Set(ref _fontsState, value);
+    }
+
+    private string _fontsTooltip = string.Empty;
+    public string FontsTooltip
+    {
+        get => _fontsTooltip;
+        set => Set(ref _fontsTooltip, value);
+    }
 
     /// <summary>True when LaunchPath is a local-server URL (e.g. http://localhost:17770) — the
     /// Launch button only shows while <see cref="IsLocalUrlReachable"/> is true.</summary>

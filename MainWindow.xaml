@@ -2,6 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:models="clr-namespace:VatscaUpdateChecker.Models"
+        xmlns:services="clr-namespace:VatscaUpdateChecker.Services"
         Icon="Assets/app.ico"
         Title="Sweden FIR Launchpad"
         Height="520" Width="695"
@@ -316,6 +317,32 @@
                                     <TextBlock Text="{Binding StatusText}"
                                                Foreground="White" FontSize="11" FontWeight="Medium"/>
                                 </Border>
+
+                                <!-- Fonts check sub-button — only on rows with HasFontsCheck = true (GNG Pack) -->
+                                <Button Visibility="{Binding HasFontsCheck, Converter={StaticResource BoolToVisibility}}"
+                                        Click="Fonts_Click"
+                                        Foreground="White"
+                                        Padding="6,3" Margin="6,0,0,0"
+                                        FontSize="11" FontWeight="SemiBold"
+                                        Content="Aa"
+                                        VerticalAlignment="Center"
+                                        Cursor="Hand"
+                                        ToolTip="{Binding FontsTooltip}">
+                                    <Button.Style>
+                                        <Style BasedOn="{StaticResource FlatButton}" TargetType="Button">
+                                            <Setter Property="Background" Value="#484b4c"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding FontsState}" Value="{x:Static services:FontsState.AllOk}">
+                                                    <Setter Property="Background" Value="#41826e"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding FontsState}" Value="{x:Static services:FontsState.NeedsAction}">
+                                                    <Setter Property="Background" Value="#ff9800"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
+
                                 <Button Visibility="{Binding ShowDownload, Converter={StaticResource BoolToVisibility}}"
                                         Tag="{Binding DownloadUrl}"
                                         Click="Download_Click"

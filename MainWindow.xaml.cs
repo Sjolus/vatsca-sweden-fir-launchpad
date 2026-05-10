@@ -40,7 +40,7 @@ public partial class MainWindow : Window
         _results = new ObservableCollection<CheckResult>
         {
             new() { AppName = "EuroScope" },
-            new() { AppName = "EuroScope (GNG Pack)", IsFolder = true },
+            new() { AppName = "EuroScope (GNG Pack)", IsFolder = true, HasFontsCheck = true },
             new() { AppName = "TrackAudio" },
             new() { AppName = "VACS" },
             new() { AppName = "vATIS" },
@@ -247,6 +247,12 @@ public partial class MainWindow : Window
             UpdateChecker.CheckGitHub(_results[7], Environment.ProcessPath!,    "Sjolus/vatsca-sweden-fir-launchpad")
         );
 
+        // Fonts check piggy-backs on the GNG Pack row — sync filesystem-only probe.
+        var fonts = FontService.Check(_settings.EuroscopeDataPath);
+        _results[1].FontsState   = fonts.State;
+        _results[1].FontsTooltip = fonts.Tooltip;
+        Logger.Log("CHECK", $"Fonts: {fonts.State} ({string.Join("; ", fonts.Entries.Select(e => $"{e.FileName} installed={(e.InstalledVersion?.ToString("0.00") ?? (e.InstalledPath is null ? "missing" : "?"))} source={(e.SourceVersion?.ToString("0.00") ?? "?")} {(e.IsUpToDate ? "ok" : "needs-action")}"))})");
+
         LastCheckedText.Text    = $"Last checked: {DateTime.Now:HH:mm:ss}";
         CheckButton.IsEnabled   = true;
         CheckButton.Content     = "↻  Check for Updates";
@@ -407,5 +413,33 @@ public partial class MainWindow : Window
     {
         if (sender is FrameworkElement { Tag: string url } && !string.IsNullOrEmpty(url))
             Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+    }
+
+    private void Fonts_Click(object sender, RoutedEventArgs e)
+    {
+        var result = FontService.Check(_settings.EuroscopeDataPath);
+        switch (result.State)
+        {
+            case FontsState.Unknown:
+                MessageBox.Show(
+                    "Set the EuroScope data folder in Settings to enable font checking.",
+                    "Fonts", MessageBoxButton.OK, MessageBoxImage.Information);
+                break;
+            case FontsState.AllOk:
+                MessageBox.Show(
+                    "All required fonts are installed and match the GNG Pack version.",
+                    "Fonts", MessageBoxButton.OK, MessageBoxImage.Information);
+                break;
+            case FontsState.NeedsAction:
+                FontService.InstallMissing(result);
+                break;
+        }
+
+        // Re-probe so the badge updates immediately after the click. The user may not
+        // have clicked Install in fontview yet; that's fine — the next Check button
+        // press (or app restart) re-probes and reflects the actual state.
+        var fresh = FontService.Check(_settings.EuroscopeDataPath);
+        _results[1].FontsState   = fresh.State;
+        _results[1].FontsTooltip = fresh.Tooltip;
     }
 }
