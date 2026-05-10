@@ -4,8 +4,8 @@
         xmlns:models="clr-namespace:VatscaUpdateChecker.Models"
         Icon="Assets/app.ico"
         Title="Sweden FIR Launchpad"
-        Height="470" Width="695"
-        MinHeight="470" MinWidth="695"
+        Height="520" Width="695"
+        MinHeight="520" MinWidth="695"
         ResizeMode="CanMinimize"
         WindowStyle="None"
         WindowStartupLocation="CenterScreen"
@@ -98,6 +98,9 @@
                 </DataTrigger>
                 <DataTrigger Binding="{Binding Status}" Value="{x:Static models:CheckStatus.Error}">
                     <Setter Property="Background" Value="#ff9800"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Status}" Value="{x:Static models:CheckStatus.Installed}">
+                    <Setter Property="Background" Value="#41826e"/>
                 </DataTrigger>
             </Style.Triggers>
         </Style>

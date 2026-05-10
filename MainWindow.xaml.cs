@@ -2,6 +2,8 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Net;
+using System.Net.NetworkInformation;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -15,6 +17,7 @@ public partial class MainWindow : Window
 {
     private static readonly string AppDataDir =
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "VatscaUpdateChecker");
+
 
     private readonly ObservableCollection<CheckResult> _results;
     private readonly DispatcherTimer _processTimer;
@@ -41,6 +44,7 @@ public partial class MainWindow : Window
             new() { AppName = "TrackAudio" },
             new() { AppName = "VACS" },
             new() { AppName = "vATIS" },
+            new() { AppName = "VatEFS", IsWebApp = true, IsLocalUrl = true, LaunchPath = "http://localhost:17770" },
             new() { AppName = "VATIRIS", IsWebApp = true, LaunchPath = "https://vatiris.se", Status = CheckStatus.WebApp, InstalledVersion = "N/A", LatestVersion = "N/A" },
             new() { AppName = "Sweden FIR Launchpad" },
         };
@@ -88,8 +92,21 @@ public partial class MainWindow : Window
 
     private void UpdateRunningStates()
     {
+        // Snapshot the OS TCP listener table once per tick. Used to gate Launch buttons for rows
+        // whose LaunchPath points at a local server (e.g. VatEFS on localhost:17770) without
+        // throwing first-chance exceptions every tick like an HTTP / TCP-connect probe would.
+        IPEndPoint[]? listeners = null;
+        if (_results.Any(r => r.IsLocalUrl))
+        {
+            try { listeners = IPGlobalProperties.GetIPGlobalProperties().GetActiveTcpListeners(); }
+            catch { listeners = Array.Empty<IPEndPoint>(); }
+        }
+
         foreach (var result in _results)
         {
+            if (result.IsLocalUrl && !string.IsNullOrEmpty(result.LaunchPath))
+                UpdateLocalUrlReachability(result, listeners!);
+
             if (result.IsWebApp)
             {
                 result.IsRunning = IsWebAppRunning(result.AppName);
@@ -99,6 +116,29 @@ public partial class MainWindow : Window
             var exeName = Path.GetFileNameWithoutExtension(result.LaunchPath);
             result.IsRunning = Process.GetProcessesByName(exeName).Length > 0;
         }
+    }
+
+    private static void UpdateLocalUrlReachability(CheckResult result, IPEndPoint[] listeners)
+    {
+        bool reachable = false;
+        if (Uri.TryCreate(result.LaunchPath, UriKind.Absolute, out var uri))
+        {
+            // Match by port and accept any loopback or wildcard binding — covers servers bound to
+            // 127.0.0.1, ::1, 0.0.0.0, or [::] (all reachable from a localhost client).
+            foreach (var ep in listeners)
+            {
+                if (ep.Port != uri.Port) continue;
+                if (IPAddress.IsLoopback(ep.Address) ||
+                    ep.Address.Equals(IPAddress.Any) ||
+                    ep.Address.Equals(IPAddress.IPv6Any))
+                {
+                    reachable = true;
+                    break;
+                }
+            }
+        }
+        if (result.IsLocalUrlReachable != reachable)
+            result.IsLocalUrlReachable = reachable;
     }
 
     // Returns true if the pid file for this web app exists and the tracked process is still alive.
@@ -203,7 +243,8 @@ public partial class MainWindow : Window
             UpdateChecker.CheckGitHub(_results[2], _settings.TrackAudioExePath, "pierr3/TrackAudio", skipPreRelease: true),
             UpdateChecker.CheckGitHub(_results[3], _settings.VacsExePath,       "vacs-project/vacs"),
             UpdateChecker.CheckGitHub(_results[4], _settings.VatisExePath,      "vatis-project/vatis"),
-            UpdateChecker.CheckGitHub(_results[6], Environment.ProcessPath!,    "Sjolus/vatsca-sweden-fir-launchpad")
+            UpdateChecker.CheckVatEfs(_results[5], _settings.VatEfsPath),
+            UpdateChecker.CheckGitHub(_results[7], Environment.ProcessPath!,    "Sjolus/vatsca-sweden-fir-launchpad")
         );
 
         LastCheckedText.Text    = $"Last checked: {DateTime.Now:HH:mm:ss}";
@@ -258,7 +299,7 @@ public partial class MainWindow : Window
                 else
                 {
                     const string edgePath = @"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe";
-                    var profileDir = Path.Combine(AppDataDir, "VATIRISProfile");
+                    var profileDir = Path.Combine(AppDataDir, $"{result.AppName}Profile");
                     var proc = Process.Start(new ProcessStartInfo
                     {
                         FileName        = edgePath,

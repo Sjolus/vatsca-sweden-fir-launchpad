@@ -9,6 +9,8 @@ public class AppSettings
     public string TrackAudioExePath { get; set; } = string.Empty;
     public string VacsExePath { get; set; } = string.Empty;
     public string VatisExePath { get; set; } = string.Empty;
+    public string VatEfsPath { get; set; } = string.Empty;
+    public bool PatchVatEfs { get; set; } = false;
 
     // EuroScope profile fields (password is stored separately in Windows Credential Manager)
     public string VatsimName { get; set; } = string.Empty;

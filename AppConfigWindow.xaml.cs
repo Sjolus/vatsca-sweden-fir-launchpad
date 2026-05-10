@@ -28,10 +28,13 @@ public partial class AppConfigWindow : Window
             TrackAudioExePath = current.TrackAudioExePath,
             VacsExePath       = current.VacsExePath,
             VatisExePath      = current.VatisExePath,
+            VatEfsPath        = current.VatEfsPath,
+            PatchVatEfs       = current.PatchVatEfs,
             VatsimName        = current.VatsimName,
             VatsimRating      = current.VatsimRating,
             VatsimCid         = current.VatsimCid,
             ObsCallsign       = current.ObsCallsign,
+            LastEuroscopeProfile = current.LastEuroscopeProfile,
         };
 
         // Populate rating ComboBox
@@ -45,6 +48,7 @@ public partial class AppConfigWindow : Window
         ObsBox.Text          = current.ObsCallsign;
         PasswordBox.Password = CredentialManagerService.Load(CredentialManagerService.TargetVatsim)  ?? string.Empty;
         HoppieBox.Password   = CredentialManagerService.Load(CredentialManagerService.TargetHoppie) ?? string.Empty;
+        PatchVatEfsBox.IsChecked = current.PatchVatEfs;
 
         // Select current rating
         var ratingToSelect = current.VatsimRating >= 0 ? current.VatsimRating : 0;
@@ -183,10 +187,13 @@ public partial class AppConfigWindow : Window
             TrackAudioExePath = Settings.TrackAudioExePath,
             VacsExePath       = Settings.VacsExePath,
             VatisExePath      = Settings.VatisExePath,
+            VatEfsPath        = Settings.VatEfsPath,
+            PatchVatEfs       = PatchVatEfsBox.IsChecked == true,
             VatsimName        = NameBox.Text.Trim(),
             VatsimRating      = rating,
             VatsimCid         = CidBox.Text.Trim(),
             ObsCallsign       = ObsBox.Text.Trim().ToUpper(),
+            LastEuroscopeProfile = Settings.LastEuroscopeProfile,
         };
     }
 
@@ -213,6 +220,7 @@ public partial class AppConfigWindow : Window
         Settings.VatsimRating = built.VatsimRating;
         Settings.VatsimCid    = built.VatsimCid;
         Settings.ObsCallsign  = built.ObsCallsign;
+        Settings.PatchVatEfs  = built.PatchVatEfs;
 
         CredentialManagerService.Save(CredentialManagerService.TargetVatsim,  VatsimPasswordValue);
         CredentialManagerService.Save(CredentialManagerService.TargetHoppie, HoppieCodeValue);

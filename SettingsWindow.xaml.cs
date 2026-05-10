@@ -16,6 +16,7 @@ public partial class SettingsWindow : Window
         ["TrackAudio"]   = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"Programs\trackaudio\trackaudio.exe"),
         ["VACS"]         = @"C:\Program Files\vacs\vacs-client.exe",
         ["vATIS"]        = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"org.vatsim.vatis\current\vATIS.exe"),
+        ["VatEFS"]       = @"C:\Program Files\VatEFS",
     };
 
     public SettingsWindow(AppSettings current)
@@ -31,6 +32,13 @@ public partial class SettingsWindow : Window
             TrackAudioExePath = current.TrackAudioExePath,
             VacsExePath       = current.VacsExePath,
             VatisExePath      = current.VatisExePath,
+            VatEfsPath        = current.VatEfsPath,
+            PatchVatEfs       = current.PatchVatEfs,
+            VatsimName        = current.VatsimName,
+            VatsimRating      = current.VatsimRating,
+            VatsimCid         = current.VatsimCid,
+            ObsCallsign       = current.ObsCallsign,
+            LastEuroscopeProfile = current.LastEuroscopeProfile,
         };
 
         CheckOnStartup.IsChecked  = Settings.CheckOnStartup;
@@ -39,20 +47,24 @@ public partial class SettingsWindow : Window
         TrackAudioPath.Text   = Settings.TrackAudioExePath;
         VacsPath.Text         = Settings.VacsExePath;
         VatisPath.Text        = Settings.VatisExePath;
+        VatEfsPath.Text       = Settings.VatEfsPath;
     }
 
     private void BrowseFolder_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new OpenFolderDialog
+        var tag = (sender as FrameworkElement)?.Tag?.ToString();
+        var (title, target) = tag switch
         {
-            Title = "Select EuroScope Data Folder",
-            Multiselect = false,
+            "VatEFS" => ("Select VatEFS Folder",          VatEfsPath),
+            _        => ("Select EuroScope Data Folder", EuroscopePath),
         };
-        if (!string.IsNullOrWhiteSpace(EuroscopePath.Text))
-            dialog.InitialDirectory = EuroscopePath.Text;
+
+        var dialog = new OpenFolderDialog { Title = title, Multiselect = false };
+        if (!string.IsNullOrWhiteSpace(target.Text))
+            dialog.InitialDirectory = target.Text;
 
         if (dialog.ShowDialog() == true)
-            EuroscopePath.Text = dialog.FolderName;
+            target.Text = dialog.FolderName;
     }
 
     private void BrowseExe_Click(object sender, RoutedEventArgs e)
@@ -96,6 +108,7 @@ public partial class SettingsWindow : Window
         Settings.TrackAudioExePath = TrackAudioPath.Text.Trim();
         Settings.VacsExePath       = VacsPath.Text.Trim();
         Settings.VatisExePath      = VatisPath.Text.Trim();
+        Settings.VatEfsPath        = VatEfsPath.Text.Trim();
         DialogResult = true;
     }
 
@@ -119,6 +132,7 @@ public partial class SettingsWindow : Window
         "TrackAudio"   => TrackAudioPath,
         "VACS"         => VacsPath,
         "vATIS"        => VatisPath,
+        "VatEFS"       => VatEfsPath,
         _              => throw new ArgumentOutOfRangeException(nameof(key), key, null),
     };
 

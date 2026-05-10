@@ -26,6 +26,16 @@ public static class ProfileService
         (9, "I3"), (10, "SUP"), (11, "ADM"),
     };
 
+    private const string VatEfsDllName = "VatEFS.dll";
+
+    // Canonical screen names for plugin draw permissions, used when a .prf has no
+    // existing display rows to copy from. Verified across all five sample .prf files.
+    private static readonly string[] DefaultDisplays =
+    {
+        "Ground Radar display",
+        "Standard ES radar screen",
+    };
+
     // -------------------------------------------------------------------------
     // State checks
     // -------------------------------------------------------------------------
@@ -109,6 +119,29 @@ public static class ProfileService
             PatchLoginProfiles(
                 Path.Combine(euroscopeDataPath, "ESAA", "Settings"),
                 s.ObsCallsign.ToUpper());
+
+        // VatEFS plugin — only managed when a path is configured. Empty path = untracked.
+        if (!string.IsNullOrWhiteSpace(s.VatEfsPath))
+        {
+            var dll = Path.Combine(s.VatEfsPath, VatEfsDllName);
+            if (s.PatchVatEfs)
+            {
+                if (File.Exists(dll))
+                {
+                    foreach (var prf in prfFiles)
+                        EnsureVatEfsInPrf(prf, dll);
+                }
+                else
+                {
+                    Logger.Log("APPLY", $"VatEFS toggle on but {dll} missing — skipping plugin patch");
+                }
+            }
+            else
+            {
+                foreach (var prf in prfFiles)
+                    RemoveVatEfsFromPrf(prf);
+            }
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -270,8 +303,116 @@ public static class ProfileService
             sb.AppendLine($"  {curDsp,-55}  →  {newLine,-55}  {obsTag}");
         }
 
+        // ── VatEFS plugin (per .prf) ─────────────────────────────────────────────
+
+        if (!string.IsNullOrWhiteSpace(euroscopeDataPath) && !string.IsNullOrWhiteSpace(s.VatEfsPath))
+        {
+            var dll      = Path.Combine(s.VatEfsPath, VatEfsDllName);
+            var prfFiles = Directory.Exists(euroscopeDataPath)
+                ? Directory.GetFiles(euroscopeDataPath, "ES*.prf")
+                : Array.Empty<string>();
+
+            foreach (var prf in prfFiles)
+            {
+                var lines     = File.ReadAllLines(prf, PrfEncoding);
+                int existing  = -1;
+                string? curDll = null;
+                var existingDisplays = new SortedSet<int>();
+
+                foreach (var line in lines)
+                {
+                    var p = line.Split('\t');
+                    if (p.Length < 3 || p[0] != "Plugins") continue;
+                    var mm = Regex.Match(p[1], @"^Plugin(\d+)$");
+                    if (mm.Success && IsVatEfsPluginPath(p[2]))
+                    {
+                        existing = int.Parse(mm.Groups[1].Value);
+                        curDll   = p[2];
+                    }
+                }
+                if (existing >= 0)
+                {
+                    foreach (var line in lines)
+                    {
+                        var p = line.Split('\t');
+                        if (p.Length < 3 || p[0] != "Plugins") continue;
+                        var mm = Regex.Match(p[1], $@"^Plugin{existing}Display(\d+)$");
+                        if (mm.Success && int.TryParse(mm.Groups[1].Value, out var k))
+                            existingDisplays.Add(k);
+                    }
+                }
+
+                var screens = DiscoverDisplayScreens(lines);
+                var note    = s.PatchVatEfs ? "manage: ON — ensuring present"
+                                            : "manage: OFF — ensuring absent";
+                SectionHeader(prf, note);
+
+                if (s.PatchVatEfs)
+                {
+                    if (!File.Exists(dll))
+                    {
+                        sb.AppendLine($"  (DLL not found at {dll} — patch will be skipped)");
+                        continue;
+                    }
+
+                    int slot = existing >= 0 ? existing : MaxPluginIndex(lines) + 1;
+                    var mainTag = existing < 0
+                        ? "(will be added)"
+                        : string.Equals(curDll, dll, StringComparison.OrdinalIgnoreCase)
+                            ? "(unchanged)" : "← path will change";
+                    var mainCur = existing < 0 ? "(not present)" : $"Plugins\tPlugin{slot}\t{curDll}";
+                    var mainNew = $"Plugins\tPlugin{slot}\t{dll}";
+                    sb.AppendLine($"  {mainCur,-55}  →  {mainNew,-55}  {mainTag}");
+
+                    for (int k = 0; k < screens.Count; k++)
+                    {
+                        var dispCur = existingDisplays.Contains(k)
+                            ? $"Plugins\tPlugin{slot}Display{k}\t{screens[k]}"
+                            : "(not present)";
+                        var dispNew = $"Plugins\tPlugin{slot}Display{k}\t{screens[k]}";
+                        var dispTag = existingDisplays.Contains(k) ? "(unchanged)" : "(will be added)";
+                        sb.AppendLine($"  {dispCur,-55}  →  {dispNew,-55}  {dispTag}");
+                    }
+                }
+                else
+                {
+                    if (existing < 0)
+                    {
+                        sb.AppendLine("  (no VatEFS entry present — nothing to remove)");
+                        continue;
+                    }
+                    sb.AppendLine($"  Plugins\tPlugin{existing}\t{curDll}  ← will be removed");
+                    foreach (var k in existingDisplays)
+                        sb.AppendLine($"  Plugins\tPlugin{existing}Display{k}\t...  ← will be removed");
+
+                    int higher = lines.Count(l =>
+                    {
+                        var p = l.Split('\t');
+                        if (p.Length < 3 || p[0] != "Plugins") return false;
+                        var mm = Regex.Match(p[1], @"^Plugin(\d+)");
+                        return mm.Success && int.Parse(mm.Groups[1].Value) > existing;
+                    });
+                    if (higher > 0)
+                        sb.AppendLine($"  (and {higher} higher-indexed plugin line(s) will be renumbered down by 1)");
+                }
+            }
+        }
+
         sb.AppendLine();
         return sb.ToString();
+    }
+
+    private static int MaxPluginIndex(IEnumerable<string> lines)
+    {
+        int max = -1;
+        foreach (var line in lines)
+        {
+            var p = line.Split('\t');
+            if (p.Length < 3 || p[0] != "Plugins") continue;
+            var m = Regex.Match(p[1], @"^Plugin(\d+)$");
+            if (m.Success && int.TryParse(m.Groups[1].Value, out var n) && n > max) max = n;
+        }
+        return max;
     }
 
     // -------------------------------------------------------------------------
@@ -446,5 +587,198 @@ public static class ProfileService
         }
 
         File.WriteAllLines(path, lines, PrfEncoding);
+    }
+
+    // -------------------------------------------------------------------------
+    // VatEFS plugin management
+    // -------------------------------------------------------------------------
+
+    // Match by basename so a plugin entry counts as VatEFS regardless of where the
+    // user has the DLL installed. Survives folder moves and pre-existing manual installs.
+    private static bool IsVatEfsPluginPath(string value) =>
+        !string.IsNullOrWhiteSpace(value) &&
+        string.Equals(Path.GetFileName(value.Trim()), VatEfsDllName, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Discovers the screen-name list to use for plugin draw permissions in the given .prf.
+    /// Walks existing PluginNDisplayK rows in order of first appearance, deduplicating; if
+    /// no display rows exist anywhere in the file, falls back to the canonical defaults.
+    /// </summary>
+    private static List<string> DiscoverDisplayScreens(IEnumerable<string> lines)
+    {
+        var screens = new List<string>();
+        foreach (var line in lines)
+        {
+            var p = line.Split('\t');
+            if (p.Length < 3 || p[0] != "Plugins") continue;
+            if (!Regex.IsMatch(p[1], @"^Plugin\d+Display\d+$")) continue;
+            if (!screens.Contains(p[2])) screens.Add(p[2]);
+        }
+        if (screens.Count == 0) screens.AddRange(DefaultDisplays);
+        return screens;
+    }
+
+    private static void EnsureVatEfsInPrf(string prfPath, string dllPath)
+    {
+        var lines        = File.ReadAllLines(prfPath, PrfEncoding).ToList();
+        int slot         = -1;       // existing VatEFS slot, -1 if none
+        int slotMainAt   = -1;       // line index of the slot's main entry
+        int maxIndex     = -1;
+        int lastPluginAt = -1;
+        string? curPath  = null;
+
+        for (int i = 0; i < lines.Count; i++)
+        {
+            var p = lines[i].Split('\t');
+            if (p.Length < 3 || p[0] != "Plugins") continue;
+            lastPluginAt = i;
+
+            var m = Regex.Match(p[1], @"^Plugin(\d+)$");
+            if (!m.Success) continue;   // skip Display rows for index tracking
+
+            var n = int.Parse(m.Groups[1].Value);
+            if (n > maxIndex) maxIndex = n;
+
+            if (IsVatEfsPluginPath(p[2]))
+            {
+                slot       = n;
+                slotMainAt = i;
+                curPath    = p[2];
+            }
+        }
+
+        var screens = DiscoverDisplayScreens(lines);
+        bool changed = false;
+
+        if (slot < 0)
+        {
+            // Fresh insert at end of Plugins block.
+            slot = maxIndex + 1;
+            var block = new List<string> { $"Plugins\tPlugin{slot}\t{dllPath}" };
+            for (int k = 0; k < screens.Count; k++)
+                block.Add($"Plugins\tPlugin{slot}Display{k}\t{screens[k]}");
+
+            var insertAt = lastPluginAt >= 0 ? lastPluginAt + 1 : lines.Count;
+            lines.InsertRange(insertAt, block);
+            Logger.Log("APPLY", $"VatEFS added to {prfPath} as Plugin{slot} with {screens.Count} display perm(s)");
+            changed = true;
+        }
+        else
+        {
+            // Update path if it has drifted (manual install, different folder, etc.).
+            if (!string.Equals(curPath, dllPath, StringComparison.OrdinalIgnoreCase))
+            {
+                lines[slotMainAt] = $"Plugins\tPlugin{slot}\t{dllPath}";
+                Logger.Log("APPLY", $"VatEFS path updated in {prfPath} (slot Plugin{slot}): \"{curPath}\" → \"{dllPath}\"");
+                changed = true;
+            }
+
+            // Ensure each required Display row exists for this slot.
+            var have = new HashSet<int>();
+            int slotLastAt = slotMainAt;
+            for (int i = 0; i < lines.Count; i++)
+            {
+                var p = lines[i].Split('\t');
+                if (p.Length < 3 || p[0] != "Plugins") continue;
+                var m = Regex.Match(p[1], $@"^Plugin{slot}Display(\d+)$");
+                if (!m.Success) continue;
+                if (int.TryParse(m.Groups[1].Value, out var k))
+                {
+                    have.Add(k);
+                    if (i > slotLastAt) slotLastAt = i;
+                }
+            }
+
+            int added = 0;
+            for (int k = 0; k < screens.Count; k++)
+            {
+                if (have.Contains(k)) continue;
+                slotLastAt++;
+                lines.Insert(slotLastAt, $"Plugins\tPlugin{slot}Display{k}\t{screens[k]}");
+                added++;
+            }
+            if (added > 0)
+            {
+                Logger.Log("APPLY", $"VatEFS in {prfPath} (slot Plugin{slot}) — added {added} missing display perm(s)");
+                changed = true;
+            }
+        }
+
+        if (changed)
+            File.WriteAllLines(prfPath, lines, PrfEncoding);
+        else
+            Logger.Log("APPLY", $"VatEFS already complete in {prfPath} (slot Plugin{slot}) — no change");
+    }
+
+    private static void RemoveVatEfsFromPrf(string prfPath)
+    {
+        var lines = File.ReadAllLines(prfPath, PrfEncoding).ToList();
+
+        // Find every VatEFS slot index (defensive — usually 0 or 1, but tolerate corruption).
+        var slotsToRemove = new SortedSet<int>();
+        foreach (var line in lines)
+        {
+            var p = line.Split('\t');
+            if (p.Length < 3 || p[0] != "Plugins") continue;
+            var m = Regex.Match(p[1], @"^Plugin(\d+)$");
+            if (m.Success && IsVatEfsPluginPath(p[2]))
+                slotsToRemove.Add(int.Parse(m.Groups[1].Value));
+        }
+
+        if (slotsToRemove.Count == 0)
+        {
+            Logger.Log("APPLY", $"VatEFS not present in {prfPath} — nothing to remove");
+            return;
+        }
+
+        // Renumber surviving plugin indices to keep Plugin0..PluginM dense. For a slot K,
+        // its new index is K minus the count of removed slots strictly less than K.
+        int Renumber(int original)
+        {
+            int shift = 0;
+            foreach (var rs in slotsToRemove)
+            {
+                if (rs < original) shift++;
+                else break;
+            }
+            return original - shift;
+        }
+
+        var output = new List<string>(lines.Count);
+        int removedLines = 0;
+
+        foreach (var line in lines)
+        {
+            var p = line.Split('\t');
+            if (p.Length < 3 || p[0] != "Plugins") { output.Add(line); continue; }
+
+            var mainMatch = Regex.Match(p[1], @"^Plugin(\d+)$");
+            if (mainMatch.Success)
+            {
+                var n = int.Parse(mainMatch.Groups[1].Value);
+                if (slotsToRemove.Contains(n)) { removedLines++; continue; }
+                var renum = Renumber(n);
+                output.Add(renum == n ? line : $"Plugins\tPlugin{renum}\t{p[2]}");
+                continue;
+            }
+
+            var dispMatch = Regex.Match(p[1], @"^Plugin(\d+)Display(\d+)$");
+            if (dispMatch.Success)
+            {
+                var n = int.Parse(dispMatch.Groups[1].Value);
+                if (slotsToRemove.Contains(n)) { removedLines++; continue; }
+                var renum = Renumber(n);
+                var k     = dispMatch.Groups[2].Value;
+                output.Add(renum == n ? line : $"Plugins\tPlugin{renum}Display{k}\t{p[2]}");
+                continue;
+            }
+
+            // Unknown Plugins\t key — leave alone.
+            output.Add(line);
+        }
+
+        File.WriteAllLines(prfPath, output, PrfEncoding);
+        var slotList = string.Join(", ", slotsToRemove.Select(s => $"Plugin{s}"));
+        Logger.Log("APPLY", $"VatEFS removed from {prfPath} (slot(s) {slotList}, {removedLines} line(s)); subsequent slots renumbered");
     }
 }

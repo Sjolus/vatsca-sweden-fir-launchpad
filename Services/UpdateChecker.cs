@@ -295,4 +295,33 @@ public static class UpdateChecker
             return l >= r;
         return string.Equals(local, remote, StringComparison.OrdinalIgnoreCase);
     }
+
+    // -------------------------------------------------------------------------
+    // VatEFS — plugin DLL detected by file presence (no online version source yet)
+    // -------------------------------------------------------------------------
+    public static Task CheckVatEfs(CheckResult result, string vatEfsPath)
+    {
+        result.LatestVersion = "—";
+        result.StatusMessage = string.Empty;
+        result.DownloadUrl   = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(vatEfsPath))
+        {
+            result.InstalledVersion = "—";
+            result.Status = CheckStatus.NotConfigured;
+        }
+        else if (File.Exists(Path.Combine(vatEfsPath, "VatEFS.dll")))
+        {
+            result.InstalledVersion = "Installed";
+            result.Status = CheckStatus.Installed;
+        }
+        else
+        {
+            result.InstalledVersion = "Not installed";
+            result.Status = CheckStatus.NotConfigured;
+        }
+
+        Logger.Log("CHECK", $"VatEFS: {result.InstalledVersion} (path={vatEfsPath})");
+        return Task.CompletedTask;
+    }
 }

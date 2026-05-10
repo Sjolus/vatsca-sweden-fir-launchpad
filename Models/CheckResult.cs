@@ -5,7 +5,7 @@ using System.Runtime.CompilerServices;
 
 namespace VatscaUpdateChecker.Models;
 
-public enum CheckStatus { Unknown, Checking, UpToDate, UpdateAvailable, Unsupported, NotConfigured, Error, WebApp }
+public enum CheckStatus { Unknown, Checking, UpToDate, UpdateAvailable, Unsupported, NotConfigured, Error, WebApp, Installed }
 
 public class CheckResult : INotifyPropertyChanged
 {
@@ -48,6 +48,23 @@ public class CheckResult : INotifyPropertyChanged
     /// <summary>True for web app rows that are launched via Edge --app= (e.g. VATIRIS).</summary>
     public bool IsWebApp { get; init; }
 
+    /// <summary>True when LaunchPath is a local-server URL (e.g. http://localhost:17770) — the
+    /// Launch button only shows while <see cref="IsLocalUrlReachable"/> is true.</summary>
+    public bool IsLocalUrl { get; init; }
+
+    private bool _isLocalUrlReachable;
+    public bool IsLocalUrlReachable
+    {
+        get => _isLocalUrlReachable;
+        set
+        {
+            Set(ref _isLocalUrlReachable, value);
+            OnPropertyChanged(nameof(ShowLaunch));
+            OnPropertyChanged(nameof(ShowSimpleLaunch));
+            OnPropertyChanged(nameof(ShowSplitLaunch));
+        }
+    }
+
     public string LaunchPath
     {
         get => _launchPath;
@@ -72,9 +89,10 @@ public class CheckResult : INotifyPropertyChanged
 
     public bool ShowLaunch =>
         !string.IsNullOrEmpty(LaunchPath) &&
-        (IsWebApp  ? true :
-         IsFolder  ? Directory.Exists(LaunchPath) :
-                     File.Exists(LaunchPath));
+        (IsLocalUrl ? IsLocalUrlReachable :
+         IsWebApp   ? true :
+         IsFolder   ? Directory.Exists(LaunchPath) :
+                      File.Exists(LaunchPath));
 
     /// <summary>Launch button for apps without a profile picker.</summary>
     public bool ShowSimpleLaunch => ShowLaunch && !HasProfiles;
@@ -132,6 +150,7 @@ public class CheckResult : INotifyPropertyChanged
         CheckStatus.Checking        => "Checking...",
         CheckStatus.Error           => "Error",
         CheckStatus.WebApp          => "Web app",
+        CheckStatus.Installed       => "Installed",
         _                           => "—"
     };
 
