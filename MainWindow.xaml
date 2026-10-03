@@ -311,6 +311,7 @@
 
                             <!-- Status badge + inline download icon -->
                             <StackPanel Grid.Column="4" Orientation="Horizontal"
+                                        Visibility="{Binding ShowStandardStatus, Converter={StaticResource BoolToVisibility}}"
                                         VerticalAlignment="Center" Margin="8,0,0,0">
                                 <Border Style="{StaticResource StatusBadge}"
                                         ToolTip="{Binding StatusMessage}">
@@ -353,6 +354,23 @@
                                         FontSize="13" FontWeight="SemiBold"
                                         VerticalAlignment="Center"
                                         ToolTip="Download"/></StackPanel>
+                            <StackPanel Grid.Column="4" Margin="8,4,12,4" VerticalAlignment="Center"
+                                        Visibility="{Binding HasSelfUpdate, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Text="{Binding SelfUpdateNotice}" ToolTip="{Binding StatusMessage}" FontSize="9.5"
+                                           Foreground="{DynamicResource SecondaryText}" TextTrimming="CharacterEllipsis" Margin="0,0,0,3"
+                                           Visibility="{Binding HasSelfUpdateNotice, Converter={StaticResource BoolToVisibility}}"/>
+                                <Border Style="{StaticResource StatusBadge}" ToolTip="{Binding StatusMessage}"
+                                        Visibility="{Binding ShowSelfUpdateStatus, Converter={StaticResource BoolToVisibility}}">
+                                    <TextBlock Text="{Binding SelfUpdateSummary}" Foreground="White" FontSize="11" FontWeight="Medium" TextTrimming="CharacterEllipsis"/>
+                                </Border>
+                                <Button Content="{Binding SelfUpdateActionText}" Click="SelfUpdate_Click" ToolTip="{Binding StatusMessage}"
+                                        Visibility="{Binding ShowSelfUpdateAction, Converter={StaticResource BoolToVisibility}}"
+                                        IsEnabled="{Binding SelfUpdateActionEnabled}" Style="{StaticResource FlatButton}"
+                                        HorizontalAlignment="Left" Padding="9,4" Background="#1a475f" Foreground="White" FontSize="11" FontWeight="SemiBold"/>
+                                <ProgressBar Height="3" Margin="0,4,0,0" Minimum="0" Maximum="100" Foreground="#41826e"
+                                             Visibility="{Binding SelfUpdateBusy, Converter={StaticResource BoolToVisibility}}"
+                                             IsIndeterminate="{Binding SelfUpdateProgressIndeterminate}" Value="{Binding SelfUpdateProgressValue}"/>
+                            </StackPanel>
                         </Grid>
                     </Border>
                 </DataTemplate>

@@ -21,8 +21,15 @@ public partial class MainWindow : Window
 
     private readonly ObservableCollection<CheckResult> _results;
     private readonly DispatcherTimer _processTimer;
+    private readonly LaunchpadUpdateService _launchpadUpdates;
+    private readonly CancellationTokenSource _windowLifetime = new();
+    private const string LaunchpadDownloads = "https://github.com/Sjolus/vatsca-sweden-fir-launchpad/releases/latest";
     private AppSettings _settings;
     private bool _isDarkMode;
+    private bool _isChecking;
+    private bool _selfUpdateActionBusy;
+    private bool _windowClosed;
+    private int _openDialogCount;
 
     public MainWindow()
     {
@@ -46,8 +53,12 @@ public partial class MainWindow : Window
             new() { AppName = "vATIS" },
             new() { AppName = "VatEFS", IsWebApp = true, IsLocalUrl = true, LaunchPath = "http://localhost:17770" },
             new() { AppName = "VATIRIS", IsWebApp = true, LaunchPath = "https://vatiris.se", Status = CheckStatus.WebApp, InstalledVersion = "N/A", LatestVersion = "N/A" },
-            new() { AppName = "Sweden FIR Launchpad" },
+            new() { AppName = "Sweden FIR Launchpad", HasSelfUpdate = true },
         };
+
+        _launchpadUpdates = new LaunchpadUpdateService();
+        _launchpadUpdates.StateChanged += LaunchpadUpdate_StateChanged;
+        ApplySelfUpdateState(_launchpadUpdates.State);
 
         ApplyLaunchPaths();
         RefreshEuroscopeProfiles();
@@ -230,38 +241,59 @@ public partial class MainWindow : Window
 
     private async Task RunChecks()
     {
+        if (_isChecking || _windowClosed) return;
+        _isChecking = true;
+        UpdateSelfUpdateActionEnabled();
         CheckButton.IsEnabled = false;
         CheckButton.Content   = "Checking...";
-        _settings = SettingsService.Load();
+        try
+        {
+            _settings = SettingsService.Load();
 
-        foreach (var r in _results)
-            if (!r.IsWebApp) r.Status = CheckStatus.Checking;
+            foreach (var r in _results)
+                if (!r.IsWebApp && !r.HasSelfUpdate) r.Status = CheckStatus.Checking;
 
-        await Task.WhenAll(
-            UpdateChecker.CheckEuroscope(_results[0], _settings.EuroscopeExePath),
-            UpdateChecker.CheckGng(_results[1], _settings.EuroscopeDataPath),
-            UpdateChecker.CheckGitHub(_results[2], _settings.TrackAudioExePath, "pierr3/TrackAudio", skipPreRelease: true),
-            UpdateChecker.CheckGitHub(_results[3], _settings.VacsExePath,       "vacs-project/vacs"),
-            UpdateChecker.CheckGitHub(_results[4], _settings.VatisExePath,      "vatis-project/vatis"),
-            UpdateChecker.CheckVatEfs(_results[5], _settings.VatEfsPath),
-            UpdateChecker.CheckGitHub(_results[7], Environment.ProcessPath!,    "Sjolus/vatsca-sweden-fir-launchpad")
-        );
+            await Task.WhenAll(
+                UpdateChecker.CheckEuroscope(_results[0], _settings.EuroscopeExePath),
+                UpdateChecker.CheckGng(_results[1], _settings.EuroscopeDataPath),
+                UpdateChecker.CheckGitHub(_results[2], _settings.TrackAudioExePath, "pierr3/TrackAudio", skipPreRelease: true),
+                UpdateChecker.CheckGitHub(_results[3], _settings.VacsExePath,       "vacs-project/vacs"),
+                UpdateChecker.CheckGitHub(_results[4], _settings.VatisExePath,      "vatis-project/vatis"),
+                UpdateChecker.CheckVatEfs(_results[5], _settings.VatEfsPath),
+                CheckLaunchpadAsync()
+            );
+            if (_windowClosed) return;
 
-        // Fonts check piggy-backs on the GNG Pack row — sync filesystem-only probe.
-        var fonts = FontService.Check(_settings.EuroscopeDataPath);
-        _results[1].FontsState   = fonts.State;
-        _results[1].FontsTooltip = fonts.Tooltip;
-        Logger.Log("CHECK", $"Fonts: {fonts.State} ({string.Join("; ", fonts.Entries.Select(e => $"{e.FileName} installed={(e.InstalledVersion?.ToString("0.00") ?? (e.InstalledPath is null ? "missing" : "?"))} source={(e.SourceVersion?.ToString("0.00") ?? "?")} {(e.IsUpToDate ? "ok" : "needs-action")}"))})");
+            // Fonts check piggy-backs on the GNG Pack row — sync filesystem-only probe.
+            var fonts = FontService.Check(_settings.EuroscopeDataPath);
+            _results[1].FontsState   = fonts.State;
+            _results[1].FontsTooltip = fonts.Tooltip;
+            Logger.Log("CHECK", $"Fonts: {fonts.State} ({string.Join("; ", fonts.Entries.Select(e => $"{e.FileName} installed={(e.InstalledVersion?.ToString("0.00") ?? (e.InstalledPath is null ? "missing" : "?"))} source={(e.SourceVersion?.ToString("0.00") ?? "?")} {(e.IsUpToDate ? "ok" : "needs-action")}"))})");
 
-        LastCheckedText.Text    = $"Last checked: {DateTime.Now:HH:mm:ss}";
-        CheckButton.IsEnabled   = true;
-        CheckButton.Content     = "↻  Check for Updates";
+            LastCheckedText.Text = $"Last checked: {DateTime.Now:HH:mm:ss}";
+        }
+        catch (OperationCanceledException) when (_windowClosed) { }
+        catch (Exception ex)
+        {
+            Logger.Log("CHECK", $"Update check stopped: {ex.Message}");
+            if (!_windowClosed) LastCheckedText.Text = "Update check stopped. Try again.";
+        }
+        finally
+        {
+            _isChecking = false;
+            if (!_windowClosed)
+            {
+                CheckButton.IsEnabled = true;
+                CheckButton.Content = "↻  Check for Updates";
+                UpdateSelfUpdateActionEnabled();
+            }
+        }
     }
 
     private void AppConfig_Click(object sender, RoutedEventArgs e)
     {
         var win = new AppConfigWindow(_settings, _settings.EuroscopeDataPath) { Owner = this };
-        if (win.ShowDialog() == true)
+        if (ShowOwnedDialog(win) == true)
         {
             _settings            = win.Settings;
             _settings.IsDarkMode = _isDarkMode;
@@ -270,10 +302,186 @@ public partial class MainWindow : Window
         }
     }
 
+    private async Task CheckLaunchpadAsync()
+    {
+        // A normal check only discovers updates. Download and restart are separate user actions.
+        if (_selfUpdateActionBusy) return;
+        if (_launchpadUpdates.IsInstalled)
+        {
+            await _launchpadUpdates.CheckAsync(_windowLifetime.Token);
+            return;
+        }
+
+        var row = _results[7];
+        row.SelfUpdateBusy = true;
+        row.Status = CheckStatus.Checking;
+        row.SelfUpdateProgress = null;
+        row.ShowSelfUpdateAction = false;
+        row.SelfUpdateSummary = "Checking…";
+        await UpdateChecker.CheckGitHub(row, Environment.ProcessPath!, "Sjolus/vatsca-sweden-fir-launchpad");
+        if (_windowClosed) return;
+        row.DownloadUrl = LaunchpadDownloads;
+        row.StatusMessage = "This portable/development copy uses manual updates. Open downloads to get the Launchpad installer. " + row.StatusMessage;
+        row.SelfUpdateSummary = row.StatusText;
+        row.SelfUpdateActionText = "Open downloads ↗";
+        row.ShowSelfUpdateAction = true;
+        row.SelfUpdateBusy = false;
+        UpdateSelfUpdateActionEnabled();
+    }
+
+    private void LaunchpadUpdate_StateChanged(object? sender, LaunchpadUpdateState state)
+    {
+        if (_windowClosed) return;
+        if (Dispatcher.CheckAccess()) ApplySelfUpdateState(state);
+        else Dispatcher.InvokeAsync(() =>
+        {
+            if (!_windowClosed) ApplySelfUpdateState(state);
+        });
+    }
+
+    private void ApplySelfUpdateState(LaunchpadUpdateState state)
+    {
+        var row = _results[7];
+        row.InstalledVersion = FormatLaunchpadVersion(state.CurrentVersion);
+        row.LatestVersion = FormatLaunchpadVersion(state.AvailableVersion);
+        row.DownloadUrl = LaunchpadDownloads;
+        row.StatusMessage = state.Message;
+        row.SelfUpdateProgress = state.ProgressPercent;
+        row.SelfUpdateNotice = state.Status == LaunchpadUpdateStatus.NoFeed ? "Installer updates not published yet" : string.Empty;
+        row.SelfUpdateBusy = state.Status is LaunchpadUpdateStatus.Checking or LaunchpadUpdateStatus.Downloading;
+        row.Status = state.Status switch
+        {
+            LaunchpadUpdateStatus.UpToDate => CheckStatus.UpToDate,
+            LaunchpadUpdateStatus.Available or LaunchpadUpdateStatus.Ready => CheckStatus.UpdateAvailable,
+            LaunchpadUpdateStatus.Checking or LaunchpadUpdateStatus.Downloading => CheckStatus.Checking,
+            LaunchpadUpdateStatus.Error => CheckStatus.Error,
+            _ => CheckStatus.Unknown
+        };
+        row.SelfUpdateSummary = state.Status switch
+        {
+            LaunchpadUpdateStatus.Checking => "Checking…",
+            LaunchpadUpdateStatus.Downloading => state.ProgressPercent.HasValue ? $"Downloading {state.ProgressPercent}%" : "Downloading…",
+            LaunchpadUpdateStatus.UpToDate => "Up to date",
+            LaunchpadUpdateStatus.Available => "Update available",
+            LaunchpadUpdateStatus.Ready => "Ready to restart",
+            LaunchpadUpdateStatus.NoFeed => "Updates not published yet",
+            LaunchpadUpdateStatus.Unsupported => "Manual updates",
+            LaunchpadUpdateStatus.Error => "Update check failed",
+            _ => "Not checked"
+        };
+        row.SelfUpdateActionText = state.Status switch
+        {
+            LaunchpadUpdateStatus.Available => "Download update",
+            LaunchpadUpdateStatus.Ready => "Restart to update",
+            LaunchpadUpdateStatus.Unsupported or LaunchpadUpdateStatus.NoFeed => "Open downloads ↗",
+            LaunchpadUpdateStatus.Error => "Retry update check",
+            _ => "Check for updates"
+        };
+        row.ShowSelfUpdateAction = state.Status is LaunchpadUpdateStatus.Idle or LaunchpadUpdateStatus.Available or
+            LaunchpadUpdateStatus.Ready or LaunchpadUpdateStatus.Unsupported or LaunchpadUpdateStatus.NoFeed or LaunchpadUpdateStatus.Error;
+        UpdateSelfUpdateActionEnabled();
+    }
+
+    private static string FormatLaunchpadVersion(string? version) =>
+        string.IsNullOrWhiteSpace(version) ? "—" : "v" + version.TrimStart('v', 'V');
+
+    private bool CanRunSelfUpdateAction() =>
+        !_windowClosed && !_isChecking && !_selfUpdateActionBusy && _openDialogCount == 0 && IsEnabled &&
+        !System.Windows.Interop.ComponentDispatcher.IsThreadModal &&
+        OwnedWindows.Count == 0 &&
+        !Application.Current.Windows.OfType<Window>().Any(window => window != this && window.IsVisible) &&
+        _launchpadUpdates.State.Status is not (LaunchpadUpdateStatus.Checking or LaunchpadUpdateStatus.Downloading);
+
+    private void UpdateSelfUpdateActionEnabled() => _results[7].SelfUpdateActionEnabled = CanRunSelfUpdateAction();
+
+    private async void SelfUpdate_Click(object sender, RoutedEventArgs e)
+    {
+        if (!CanRunSelfUpdateAction())
+        {
+            _results[7].StatusMessage = "Finish the current operation and close Launchpad's other windows before updating Launchpad.";
+            return;
+        }
+
+        var status = _launchpadUpdates.State.Status;
+        if (!_launchpadUpdates.IsInstalled || status == LaunchpadUpdateStatus.NoFeed)
+        {
+            try { Process.Start(new ProcessStartInfo(LaunchpadDownloads) { UseShellExecute = true }); }
+            catch { _results[7].StatusMessage = "The browser could not open. Visit Launchpad's GitHub Releases page for the installer."; }
+            return;
+        }
+
+        if (status == LaunchpadUpdateStatus.Ready)
+        {
+            // Recheck here, immediately before the only path that can stop this process.
+            // Owned and native modal dialogs must finish before the process can restart.
+            if (!CanRunSelfUpdateAction()) return;
+            _selfUpdateActionBusy = true;
+            UpdateSelfUpdateActionEnabled();
+            try { _launchpadUpdates.RestartToApply(); }
+            catch (Exception ex)
+            {
+                _results[7].StatusMessage = ex.Message;
+                _results[7].SelfUpdateSummary = "Restart failed";
+            }
+            finally
+            {
+                _selfUpdateActionBusy = false;
+                UpdateSelfUpdateActionEnabled();
+            }
+            return;
+        }
+
+        _selfUpdateActionBusy = true;
+        UpdateSelfUpdateActionEnabled();
+        try
+        {
+            if (status == LaunchpadUpdateStatus.Available)
+                await _launchpadUpdates.DownloadAsync(_windowLifetime.Token);
+            else
+                await _launchpadUpdates.CheckAsync(_windowLifetime.Token);
+        }
+        catch (OperationCanceledException) when (_windowClosed) { }
+        catch (Exception ex)
+        {
+            if (!_windowClosed) _results[7].StatusMessage = ex.Message;
+        }
+        finally
+        {
+            _selfUpdateActionBusy = false;
+            if (!_windowClosed) UpdateSelfUpdateActionEnabled();
+        }
+    }
+
+    private bool? ShowOwnedDialog(Window window)
+    {
+        _openDialogCount++;
+        UpdateSelfUpdateActionEnabled();
+        try
+        {
+            window.Owner = this;
+            return window.ShowDialog();
+        }
+        finally
+        {
+            _openDialogCount--;
+            if (!_windowClosed) UpdateSelfUpdateActionEnabled();
+        }
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        _windowClosed = true;
+        _processTimer.Stop();
+        _launchpadUpdates.StateChanged -= LaunchpadUpdate_StateChanged;
+        _windowLifetime.Cancel();
+        _windowLifetime.Dispose();
+        base.OnClosed(e);
+    }
+
     private void Settings_Click(object sender, RoutedEventArgs e)
     {
         var win = new SettingsWindow(_settings) { Owner = this };
-        if (win.ShowDialog() == true)
+        if (ShowOwnedDialog(win) == true)
         {
             _settings            = win.Settings;
             _settings.IsDarkMode = _isDarkMode;
