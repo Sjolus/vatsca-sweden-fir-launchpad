@@ -4,6 +4,11 @@ All notable changes to VATSCA Launchpad will be documented here.
 
 ---
 
+## Unreleased
+
+- Add Velopack Setup and portable packages with development self-signing, a WebView2 prerequisite, and explicit download/restart app updates.
+- Build and verify installer/update packages in CI, with tagged releases prepared as drafts for review.
+
 ## [1.0.0] — 2026-03-29
 
 Initial public release.

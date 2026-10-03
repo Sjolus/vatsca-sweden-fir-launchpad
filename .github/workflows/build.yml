@@ -1,6 +1,7 @@
 name: Build
 
 on:
+  workflow_dispatch:
   push:
     branches: [ main, develop ]
     tags:     [ 'v*.*.*' ]
@@ -9,6 +10,9 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -28,12 +32,14 @@ jobs:
       - name: Build
         run: dotnet build vatsca-update-checker.sln --no-restore -c Release
 
-  publish:
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+      - name: Verify Launchpad update state and recovery with synthetic files
+        run: dotnet run --project Tests/LaunchpadUpdate.Tests/LaunchpadUpdate.Tests.csproj -c Release
+
+  package:
     needs: build
     runs-on: windows-latest
     permissions:
-      contents: write
+      contents: read
 
     steps:
       - uses: actions/checkout@v4
@@ -43,25 +49,68 @@ jobs:
         with:
           dotnet-version: '9.0.x'
 
-      - name: Publish (self-contained, single file)
+      - name: Select package version
+        shell: pwsh
         run: |
-          dotnet publish VatscaUpdateChecker.csproj `
-            -c Release `
-            -r win-x64 `
-            --self-contained true `
-            -p:PublishSingleFile=true `
-            -o publish/
+          if ($env:GITHUB_REF -like 'refs/tags/v*') {
+            $packageVersion = $env:GITHUB_REF_NAME.Substring(1)
+          } else {
+            [xml]$project = Get-Content VatscaUpdateChecker.csproj -Raw
+            $baseVersion = $project.Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
+            $packageVersion = "$baseVersion-dev.$env:GITHUB_RUN_NUMBER"
+          }
+          "PACKAGE_VERSION=$packageVersion" >> $env:GITHUB_ENV
 
-      - name: Upload artifact
+      - name: Create ephemeral development signing certificate
+        shell: pwsh
+        run: |
+          $signer = & ./scripts/New-DevelopmentCertificate.ps1
+          "SIGNING_THUMBPRINT=$($signer.Thumbprint)" >> $env:GITHUB_ENV
+
+      - name: Build and verify self-signed development packages
+        shell: pwsh
+        run: |
+          ./scripts/Build-Installer.ps1 `
+            -Version $env:PACKAGE_VERSION `
+            -CertificateThumbprint $env:SIGNING_THUMBPRINT `
+            -OutputRoot artifacts/installer-ci
+
+      - name: Upload verified installer and update artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: VATSCA-Sweden-FIR-Launchpad-win-x64
-          path: publish/VatscaUpdateChecker.exe
+          name: SwedenFIRLaunchpad-win-x64-self-signed-development
+          path: artifacts/installer-ci/releases/*
+          if-no-files-found: error
           retention-days: 30
 
-      - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Remove ephemeral job signing certificate
+        if: always()
+        shell: pwsh
+        run: |
+          if ($env:SIGNING_THUMBPRINT -match '^[A-Fa-f0-9]{40}$') {
+            Remove-Item -LiteralPath "Cert:\CurrentUser\My\$env:SIGNING_THUMBPRINT" -DeleteKey -ErrorAction SilentlyContinue
+          }
+
+  release:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: package
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download the already verified packages
+        uses: actions/download-artifact@v4
+        with:
+          name: SwedenFIRLaunchpad-win-x64-self-signed-development
+          path: verified-release
+
+      - name: Create draft GitHub Release for manual review
         uses: softprops/action-gh-release@v2
         with:
-          files: publish/VatscaUpdateChecker.exe
+          files: verified-release/*
+          fail_on_unmatched_files: true
+          draft: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
           generate_release_notes: true
+          body: |
+            These packages use a self-signed development certificate and are not trusted by Windows by default. They are for development/testing. Review signing and release contents before publishing this draft.

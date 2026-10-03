@@ -5,6 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <StartupObject>VatscaUpdateChecker.Program</StartupObject>
     <Version>1.4.0</Version>
     <AssemblyName>VatscaUpdateChecker</AssemblyName>
     <AssemblyTitle>Sweden FIR Launchpad</AssemblyTitle>
@@ -20,6 +21,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Velopack" Version="1.2.161" />
+    <Compile Remove="Tests\**\*.cs"/>
     <Resource Include="Assets\app.ico"/>
 
     <Resource Include="Assets\logo-banner.png"/>

@@ -52,6 +52,80 @@ public class CheckResult : INotifyPropertyChanged
     /// <summary>True when the row should render the fonts-check sub-button (currently only the GNG Pack row).</summary>
     public bool HasFontsCheck { get; init; }
 
+    /// <summary>Uses the dedicated inline Launchpad update action in the existing status column.</summary>
+    public bool HasSelfUpdate { get; init; }
+    public bool ShowStandardStatus => !HasSelfUpdate;
+
+    private string _selfUpdateSummary = "Not checked";
+    public string SelfUpdateSummary
+    {
+        get => _selfUpdateSummary;
+        set => Set(ref _selfUpdateSummary, value);
+    }
+
+    private string _selfUpdateNotice = string.Empty;
+    public string SelfUpdateNotice
+    {
+        get => _selfUpdateNotice;
+        set
+        {
+            Set(ref _selfUpdateNotice, value);
+            OnPropertyChanged(nameof(HasSelfUpdateNotice));
+        }
+    }
+    public bool HasSelfUpdateNotice => !string.IsNullOrEmpty(SelfUpdateNotice);
+
+    private string _selfUpdateActionText = "Check for updates";
+    public string SelfUpdateActionText
+    {
+        get => _selfUpdateActionText;
+        set => Set(ref _selfUpdateActionText, value);
+    }
+
+    private bool _showSelfUpdateAction;
+    public bool ShowSelfUpdateAction
+    {
+        get => _showSelfUpdateAction;
+        set
+        {
+            Set(ref _showSelfUpdateAction, value);
+            OnPropertyChanged(nameof(ShowSelfUpdateStatus));
+        }
+    }
+    public bool ShowSelfUpdateStatus => HasSelfUpdate && !ShowSelfUpdateAction;
+
+    private bool _selfUpdateActionEnabled = true;
+    public bool SelfUpdateActionEnabled
+    {
+        get => _selfUpdateActionEnabled;
+        set => Set(ref _selfUpdateActionEnabled, value);
+    }
+
+    private bool _selfUpdateBusy;
+    public bool SelfUpdateBusy
+    {
+        get => _selfUpdateBusy;
+        set
+        {
+            Set(ref _selfUpdateBusy, value);
+            OnPropertyChanged(nameof(SelfUpdateProgressIndeterminate));
+        }
+    }
+
+    private int? _selfUpdateProgress;
+    public int? SelfUpdateProgress
+    {
+        get => _selfUpdateProgress;
+        set
+        {
+            Set(ref _selfUpdateProgress, value);
+            OnPropertyChanged(nameof(SelfUpdateProgressValue));
+            OnPropertyChanged(nameof(SelfUpdateProgressIndeterminate));
+        }
+    }
+    public int SelfUpdateProgressValue => SelfUpdateProgress ?? 0;
+    public bool SelfUpdateProgressIndeterminate => SelfUpdateBusy && SelfUpdateProgress == null;
+
     private FontsState _fontsState = FontsState.Unknown;
     public FontsState FontsState
     {

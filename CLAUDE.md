@@ -13,7 +13,7 @@ A WPF desktop application for VATSIM Scandinavia controllers. It:
 - Manages VATSIM profile credentials across EuroScope `.prf` files
 - Launches and kills those applications with optional EuroScope profile selection
 
-Target: `.NET 8.0-windows`, WPF, no NuGet dependencies.
+Target: `net9.0-windows`, WPF. Velopack is an approved dependency for installation and self-updates; keep its SDK and the local `vpk` tool pinned to the same version.
 
 ---
 
@@ -37,7 +37,7 @@ dotnet publish VatscaUpdateChecker.csproj -c Release -r win-x64 --self-contained
 
 ```
 Models/       Pure data classes. CheckResult implements INotifyPropertyChanged.
-Services/     Static service classes — no DI container.
+Services/     Mostly static services; LaunchpadUpdateService owns update state. No DI container.
 Converters/   WPF IValueConverter implementations.
 Themes/       Light.xaml and Dark.xaml resource dictionaries (hot-swapped at runtime).
 ```
@@ -107,6 +107,22 @@ When adding a new themed colour, add it to **both** `Light.xaml` and `Dark.xaml`
 
 ---
 
+## Launchpad installation and updates
+
+`Program.Main` is the explicit startup object. `VelopackApp.Build().SetAutoApplyOnStartup(false).Run()` must be its first operation, before constructing WPF or reading settings. Installer/packaging hooks exit here without opening windows or starting checks. Staged updates are never automatically applied at startup.
+
+`LaunchpadUpdateService` uses this repository's stable `win-x64` GitHub release feed. It manages installed copies with package ID `SwedenFirLaunchpad`; standalone/development and portable copies use the release-page fallback. Check, download and restart are separate user actions. Only `RestartToApply` invokes the updater, and MainWindow blocks that action during checks, downloads or open/modal dialogs.
+
+Downloads use full packages, checking the expected package ID, version, size and SHA-256. A receipt in Velopack's package cache lets later checks reverify a staged download while offline. The service never infers readiness from a cached filename alone. SDK checks have no cancellation parameter, so the operation gate stays held until a check completes and then honors cancellation. Downloads support cancellation directly. The synthetic regression harness exercises the real SDK with temporary feeds and a locator that forbids process starts/exits; it never applies updates.
+
+The installation root is `%LOCALAPPDATA%\SwedenFirLaunchpad`, separate from the existing `VatscaUpdateChecker` AppData folders. Never reuse the data-folder name as the package ID: Velopack uninstall removes its installation root. Existing settings and Credential Manager targets remain unchanged.
+
+`scripts/Build-Installer.ps1` restores the pinned local `vpk`, publishes self-contained compressed win-x64 output, signs/packages it, and verifies signatures, tamper rejection, metadata and feed hashes. `--framework webview2` prepares the runtime prerequisite for the separately developed GNG browser. The build version is passed to both .NET and Velopack; output must be a fresh directory below `artifacts`.
+
+Development keys are non-exportable and stored in `CurrentUser\My`; only the public certificate and thumbprint go under `%LOCALAPPDATA%\VatscaUpdateChecker\Signing`. Do not import the certificate into Root/TrustedPublisher to suppress warnings. Development signatures have no timestamp or public publisher trust. CI creates an ephemeral certificate to build and verify packages on PRs/main builds; version tags create draft releases for review. Production signing identity/provider remains undecided.
+
+Automated checks do not establish installed upgrade/restart or uninstall behavior. Those smoke tests and both-theme UI checks remain required before the first public installer release.
+
 ## EuroScope profile picker
 
 - `CheckResult.Profiles` is an `ObservableCollection<ProfileOption>` populated only for the EuroScope row.
@@ -140,6 +156,9 @@ The GitHub API is called without authentication. If rate-limiting becomes an iss
 ---
 
 ## Changelog
+
+### 2026-10-03
+- **Installer and self-updates** — added Velopack Setup/portable/update packages, development self-signing, a hook before WPF startup, explicit download/restart controls, synthetic updater checks and CI package verification. Installation is separate from AppData so upgrades/uninstall preserve user data. Tagged releases are drafts pending review and installer smoke testing.
 
 ### 2026-05-10
 - **VatEFS plugin support** — added VatEFS as an "Installed"/"Not installed" row in the main list. Path setting in `SettingsWindow` (folder picker, defaults to `C:\Program Files\VatEFS`). "Enable VatEFS plugin" toggle in `AppConfigWindow` with full reconciliation: ON adds `Plugins\tPluginN\t<absolute path>` plus `PluginNDisplayK` rows for each radar screen surface — without the Display rows EuroScope loads the plugin but won't let it draw. Screen names are discovered from existing plugin display rows in the same `.prf`, falling back to "Ground Radar display" + "Standard ES radar screen". OFF removes the VatEFS main + Display rows and renumbers any higher slot indices to keep `Plugin0..PluginM` dense (we don't know if EuroScope tolerates gaps). VatEFS is identified by filename basename (`VatEFS.dll`), so the toggle still works after the user moves the install folder. Untracked when `VatEfsPath` is empty — empty path means the launchpad doesn't touch VatEFS lines either way. New `CheckStatus.Installed` enum value (badge color #41826e green, same as `UpToDate`) for apps detected locally without an online version source.

@@ -44,3 +44,13 @@ Desktop.ini
 ## Sensitive / local config — never commit
 appsettings.local.json
 secrets.json
+
+## Signing keys and certificates stay in the current-user certificate store/AppData
+*.pfx
+*.p12
+*.key
+*.pem
+*.snk
+*.cer
+*.crt
+*.thumbprint
