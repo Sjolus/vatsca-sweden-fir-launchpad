@@ -32,8 +32,59 @@ jobs:
       - name: Build
         run: dotnet build vatsca-update-checker.sln --no-restore -c Release
 
-      - name: Verify Launchpad update state and recovery with synthetic files
+      - name: Test Launchpad updates
         run: dotnet run --project Tests/LaunchpadUpdate.Tests/LaunchpadUpdate.Tests.csproj -c Release
+
+      - name: Test client updates
+        run: dotnet run --project Tests/SoftwareUpdate.Tests/SoftwareUpdate.Tests.csproj -c Release
+
+      - name: Test discovery and removal
+        run: dotnet run --project Tests/AtcRemoval.Tests/AtcRemoval.Tests.csproj -c Release
+
+      - name: Test uninstall integration
+        run: dotnet run --project Tests/UninstallIntegration.Tests/UninstallIntegration.Tests.csproj -c Release
+
+      - name: Test EuroScope installation
+        run: dotnet run --project Tests/EuroScopeInstall.Tests/EuroScopeInstall.Tests.csproj -c Release
+
+      - name: Test EuroScope launch options
+        run: dotnet run --project Tests/EuroScopeLaunch.Tests/EuroScopeLaunch.Tests.csproj -c Release
+
+      - name: Test EuroScope prerequisites
+        run: dotnet run --project Tests/EuroScopePrerequisite.Tests/EuroScopePrerequisite.Tests.csproj -c Release
+
+      - name: Test EuroScope MSI paths
+        run: dotnet run --project Tests/EuroScopeFootprint.Tests/EuroScopeFootprint.Tests.csproj -c Release
+
+      - name: Test fresh client installation
+        run: dotnet run --project Tests/FreshSoftwareInstall.Tests/FreshSoftwareInstall.Tests.csproj -c Release
+
+      - name: Test vATIS setup
+        run: dotnet run --project Tests/VatisFreshInstall.Tests/VatisFreshInstall.Tests.csproj -c Release
+
+      - name: Test client prerequisites
+        run: dotnet run --project Tests/SoftwarePrerequisite.Tests/SoftwarePrerequisite.Tests.csproj -c Release
+
+      - name: Test controller profiles
+        run: dotnet run --project Tests/Profile.Tests/Profile.Tests.csproj -c Release
+
+      - name: Test setup wizard
+        run: dotnet run --project Tests/SetupWizard.Tests/SetupWizard.Tests.csproj -c Release
+
+      - name: Test configured paths
+        run: dotnet run --project Tests/ConfiguredPath.Tests/ConfiguredPath.Tests.csproj -c Release
+
+      - name: Test settings persistence
+        run: dotnet run --project Tests/Settings.Tests/Settings.Tests.csproj -c Release
+
+      - name: Test application status
+        run: dotnet run --project Tests/CheckResult.Tests/CheckResult.Tests.csproj -c Release
+
+      - name: Build WPF layout tests
+        run: dotnet build Tests/UiReview/UiReview.csproj -c Release
+
+      - name: Check WPF layouts
+        run: dotnet Tests/UiReview/bin/Release/net9.0-windows/Launchpad.UiReview.dll --validate-layouts
 
   package:
     needs: build
@@ -113,4 +164,4 @@ jobs:
           prerelease: ${{ contains(github.ref_name, '-') }}
           generate_release_notes: true
           body: |
-            These packages use a self-signed development certificate and are not trusted by Windows by default. They are for development/testing. Review signing and release contents before publishing this draft.
+            These packages use a self-signed development certificate and are not trusted by Windows by default. Windows may show an unknown-publisher or SmartScreen warning. Review release notes and package verification before publishing this draft.

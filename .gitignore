@@ -2,6 +2,9 @@
 bin/
 obj/
 publish*/
+TestResults/
+*.binlog
+*_wpftmp.csproj
 
 ## Visual Studio / Rider
 .vs/
@@ -38,12 +41,24 @@ Desktop.ini
 ## Logs
 *.log
 
-## Claude Code local config
+## Local AI tool state (shared CLAUDE.md and AGENTS.md stay in Git)
 .claude/
+.codex/
+.copilot/
+.config/copilot/
+CLAUDE.local.md
+AGENTS.local.md
 
 ## Sensitive / local config — never commit
 appsettings.local.json
 secrets.json
+/settings.json
+/settings.local.json
+/auth.json
+/.env
+/.env.*
+!/.env.example
+!/.env.sample
 
 ## Signing keys and certificates stay in the current-user certificate store/AppData
 *.pfx

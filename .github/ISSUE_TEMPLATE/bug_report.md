@@ -20,10 +20,11 @@ labels: bug
 
 ## Environment
 
-- App version: <!-- shown in title bar or release page -->
+- App version: <!-- shown in the Sweden FIR Launchpad application row -->
+- Installation: <!-- Setup / portable ZIP / standalone or source build -->
 - Windows version: <!-- e.g. Windows 11 23H2 -->
 - Affected tool: <!-- EuroScope / TrackAudio / VACS / vATIS / GNG Pack / general -->
 
 ## Logs / screenshots
 
-<!-- Paste any error messages or attach screenshots if relevant. -->
+<!-- Include relevant error messages or screenshots. Remove credentials, personal paths and other private information; do not attach real profiles or recovery backups. -->

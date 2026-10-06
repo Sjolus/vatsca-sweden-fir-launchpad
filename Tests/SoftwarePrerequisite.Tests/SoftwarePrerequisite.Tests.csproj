@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\..\Services\SoftwarePrerequisiteService.cs" Link="SoftwarePrerequisiteService.cs" />
+    <Compile Include="..\..\Services\EuroScopePrerequisiteService.cs" Link="EuroScopePrerequisiteService.cs" />
+    <Compile Include="..\..\Models\SoftwareUpdate.cs" Link="SoftwareUpdate.cs" />
+    <Compile Include="..\..\Services\SoftwareInstaller.cs" Link="SoftwareInstaller.cs" />
+    <Compile Include="..\..\Services\SoftwareInstallerEnvironment.cs" Link="SoftwareInstallerEnvironment.cs" />
+    <Compile Include="..\..\Services\SoftwareInstallerNative.cs" Link="SoftwareInstallerNative.cs" />
+    <Compile Include="..\..\Services\SoftwareUpdateService.cs" Link="SoftwareUpdateService.cs" />
+    <Compile Include="..\..\Services\SoftwareReleaseSource.cs" Link="SoftwareReleaseSource.cs" />
+    <Compile Include="..\..\Services\SoftwareVersion.cs" Link="SoftwareVersion.cs" />
+  </ItemGroup>
+</Project>

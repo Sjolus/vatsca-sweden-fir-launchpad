@@ -30,13 +30,22 @@ public partial class MainWindow : Window
     private bool _selfUpdateActionBusy;
     private bool _windowClosed;
     private int _openDialogCount;
+    private readonly bool _firstSetup;
+    private bool _setupRestartRequired;
 
     public MainWindow()
     {
         InitializeComponent();
+        // Fit the initial work area without permanently capping later resizing or monitor moves.
+        MinHeight = Math.Min(MinHeight, SystemParameters.WorkArea.Height);
+        MinWidth = Math.Min(MinWidth, SystemParameters.WorkArea.Width);
+        Height = Math.Min(Height, SystemParameters.WorkArea.Height);
+        Width = Math.Min(Width, SystemParameters.WorkArea.Width);
 
+        _firstSetup = !SettingsService.HasSavedSettings;
         _settings   = SettingsService.Load();
         _isDarkMode = _settings.IsDarkMode;
+        ApplyDensity();
 
         if (_isDarkMode)
         {
@@ -46,16 +55,18 @@ public partial class MainWindow : Window
 
         _results = new ObservableCollection<CheckResult>
         {
-            new() { AppName = "EuroScope" },
+            new() { AppName = "EuroScope", HasEuroScopeManagement = true },
             new() { AppName = "EuroScope (GNG Pack)", IsFolder = true, HasFontsCheck = true },
-            new() { AppName = "TrackAudio" },
-            new() { AppName = "VACS" },
-            new() { AppName = "vATIS" },
+            new() { AppName = "TrackAudio", SoftwareApp = SoftwareApp.TrackAudio },
+            new() { AppName = "VACS", SoftwareApp = SoftwareApp.Vacs },
+            new() { AppName = "vATIS", SoftwareApp = SoftwareApp.Vatis },
             new() { AppName = "VatEFS", IsWebApp = true, IsLocalUrl = true, LaunchPath = "http://localhost:17770" },
             new() { AppName = "VATIRIS", IsWebApp = true, LaunchPath = "https://vatiris.se", Status = CheckStatus.WebApp, InstalledVersion = "N/A", LatestVersion = "N/A" },
             new() { AppName = "Sweden FIR Launchpad", HasSelfUpdate = true },
         };
 
+        _softwareUpdates = new SoftwareUpdateService(new SoftwareReleaseSource(_softwareHttp), new SoftwareInstaller(), _softwareHttp);
+        _softwareUpdates.StateChanged += SoftwareUpdate_StateChanged;
         _launchpadUpdates = new LaunchpadUpdateService();
         _launchpadUpdates.StateChanged += LaunchpadUpdate_StateChanged;
         ApplySelfUpdateState(_launchpadUpdates.State);
@@ -63,6 +74,8 @@ public partial class MainWindow : Window
         ApplyLaunchPaths();
         RefreshEuroscopeProfiles();
         AppList.ItemsSource = _results;
+
+        InitializeApplicationDetails();
 
         _processTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
         _processTimer.Tick += (_, _) => UpdateRunningStates();
@@ -99,6 +112,8 @@ public partial class MainWindow : Window
         _results[2].LaunchPath = _settings.TrackAudioExePath;
         _results[3].LaunchPath = _settings.VacsExePath;
         _results[4].LaunchPath = _settings.VatisExePath;
+        DiscoveryPrompt.Visibility = new[] { _settings.EuroscopeExePath, _settings.TrackAudioExePath, _settings.VacsExePath, _settings.VatisExePath, _settings.VatEfsPath }
+            .All(string.IsNullOrWhiteSpace) ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void UpdateRunningStates()
@@ -154,7 +169,7 @@ public partial class MainWindow : Window
 
     // Returns true if the pid file for this web app exists and the tracked process is still alive.
     // If the tracked PID has exited (e.g. Edge relaunched itself during first-run profile setup),
-    // falls back to scanning for the actual browser process spawned around the same time.
+    // falls back to a timestamp/parent heuristic that can match unrelated Edge windows.
     private bool IsWebAppRunning(string appName)
     {
         var pidFile = Path.Combine(AppDataDir, $"{appName}.pid");
@@ -174,7 +189,7 @@ public partial class MainWindow : Window
         catch { }
 
         // Tracked PID is gone — Edge may have relaunched itself (e.g. first-run profile setup).
-        // Find the new browser process: an msedge that started after our launch whose parent is
+        // Find a candidate browser process: an msedge that started after our launch whose parent is
         // not itself msedge (renderers/GPU processes are children of the browser, not vice versa).
         var browserId = ProcessHelper.FindEdgeBrowserProcess(launchTime);
         if (browserId > 0)
@@ -207,9 +222,12 @@ public partial class MainWindow : Window
 
     private async void Window_Loaded(object sender, RoutedEventArgs e)
     {
+        if (_firstSetup && !_settings.SetupWizardCompleted && !_settings.SetupWizardDismissed)
+            OpenSetupWizard();
+        if (_windowClosed) return;
         UpdateRunningStates();
         UpdateAppConfigButton();
-        if (_settings.CheckOnStartup)
+        if (_settings.CheckOnStartup && !_setupRestartRequired)
             await RunChecks();
     }
 
@@ -218,13 +236,16 @@ public partial class MainWindow : Window
         bool needsAttention = !ProfileService.IsConfigured(_settings) ||
             !ProfileService.IsInSync(_settings, _settings.EuroscopeDataPath);
 
-        AppConfigButton.Background = needsAttention
-            ? new SolidColorBrush((Color)ColorConverter.ConvertFromString("#ff9800"))
-            : new SolidColorBrush((Color)ColorConverter.ConvertFromString("#1a475f"));
+        AppConfigButton.Content = needsAttention ? "Controller profile · review" : "Controller profile";
+        AppConfigButton.ToolTip = needsAttention
+            ? "Review your controller identity and application configuration."
+            : "Your identity and optional EuroScope profile configuration";
     }
 
     private void ThemeToggle_Click(object sender, RoutedEventArgs e)
     {
+        if (!TryAcquireMaintenanceGuard(out var lease)) return;
+        using var guard = lease;
         _isDarkMode = !_isDarkMode;
         App.SetTheme(_isDarkMode);
         ThemeToggleButton.Content = _isDarkMode ? "☀" : "☽";
@@ -234,31 +255,33 @@ public partial class MainWindow : Window
         AppList.ItemsSource = _results;
 
         _settings.IsDarkMode = _isDarkMode;
-        SettingsService.Save(_settings);
+        SaveSessionSettings("Theme preference saved.");
     }
 
     private async void Check_Click(object sender, RoutedEventArgs e) => await RunChecks();
 
     private async Task RunChecks()
     {
-        if (_isChecking || _windowClosed) return;
+        if (_isChecking || _windowClosed || _softwareActionBusy || _softwareUpdates.IsBusy) return;
+        if (!TryAcquireMaintenanceGuard(out var lease)) return;
+        using var guard = lease;
         _isChecking = true;
         UpdateSelfUpdateActionEnabled();
         CheckButton.IsEnabled = false;
         CheckButton.Content   = "Checking...";
         try
         {
-            _settings = SettingsService.Load();
+            // Dialogs update the session copy explicitly. Reloading here would discard
+            // completed setup choices if their last write to settings.json failed.
+            ApplyLaunchPaths();
 
             foreach (var r in _results)
-                if (!r.IsWebApp && !r.HasSelfUpdate) r.Status = CheckStatus.Checking;
+                if (!r.IsWebApp && !r.HasSelfUpdate && !r.HasSoftwareUpdate) r.Status = CheckStatus.Checking;
 
             await Task.WhenAll(
                 UpdateChecker.CheckEuroscope(_results[0], _settings.EuroscopeExePath),
                 UpdateChecker.CheckGng(_results[1], _settings.EuroscopeDataPath),
-                UpdateChecker.CheckGitHub(_results[2], _settings.TrackAudioExePath, "pierr3/TrackAudio", skipPreRelease: true),
-                UpdateChecker.CheckGitHub(_results[3], _settings.VacsExePath,       "vacs-project/vacs"),
-                UpdateChecker.CheckGitHub(_results[4], _settings.VatisExePath,      "vatis-project/vatis"),
+                CheckSoftwareAsync(),
                 UpdateChecker.CheckVatEfs(_results[5], _settings.VatEfsPath),
                 CheckLaunchpadAsync()
             );
@@ -292,12 +315,15 @@ public partial class MainWindow : Window
 
     private void AppConfig_Click(object sender, RoutedEventArgs e)
     {
+        if (_setupRestartRequired || _isChecking || _softwareActionBusy || _softwareUpdates.IsBusy) return;
+        if (!TryAcquireMaintenanceGuard(out var lease)) return;
+        using var guard = lease;
         var win = new AppConfigWindow(_settings, _settings.EuroscopeDataPath) { Owner = this };
         if (ShowOwnedDialog(win) == true)
         {
             _settings            = win.Settings;
             _settings.IsDarkMode = _isDarkMode;
-            SettingsService.Save(_settings);
+            SaveSessionSettings("Controller profile choices saved.");
             UpdateAppConfigButton();
         }
     }
@@ -386,13 +412,17 @@ public partial class MainWindow : Window
         string.IsNullOrWhiteSpace(version) ? "—" : "v" + version.TrimStart('v', 'V');
 
     private bool CanRunSelfUpdateAction() =>
-        !_windowClosed && !_isChecking && !_selfUpdateActionBusy && _openDialogCount == 0 && IsEnabled &&
+        !_setupRestartRequired && !_windowClosed && !_isChecking && !_selfUpdateActionBusy && !_softwareActionBusy && !_softwareUpdates.IsBusy && _openDialogCount == 0 && IsEnabled &&
         !System.Windows.Interop.ComponentDispatcher.IsThreadModal &&
         OwnedWindows.Count == 0 &&
         !Application.Current.Windows.OfType<Window>().Any(window => window != this && window.IsVisible) &&
         _launchpadUpdates.State.Status is not (LaunchpadUpdateStatus.Checking or LaunchpadUpdateStatus.Downloading);
 
-    private void UpdateSelfUpdateActionEnabled() => _results[7].SelfUpdateActionEnabled = CanRunSelfUpdateAction();
+    private void UpdateSelfUpdateActionEnabled()
+    {
+        _results[7].SelfUpdateActionEnabled = CanRunSelfUpdateAction();
+        UpdateSoftwareActions();
+    }
 
     private async void SelfUpdate_Click(object sender, RoutedEventArgs e)
     {
@@ -402,6 +432,8 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (!TryAcquireMaintenanceGuard(out var lease)) return;
+        using var guard = lease;
         var status = _launchpadUpdates.State.Status;
         if (!_launchpadUpdates.IsInstalled || status == LaunchpadUpdateStatus.NoFeed)
         {
@@ -473,29 +505,48 @@ public partial class MainWindow : Window
         _windowClosed = true;
         _processTimer.Stop();
         _launchpadUpdates.StateChanged -= LaunchpadUpdate_StateChanged;
+        _softwareUpdates.StateChanged -= SoftwareUpdate_StateChanged;
         _windowLifetime.Cancel();
         _windowLifetime.Dispose();
+        _softwareHttp.Dispose();
         base.OnClosed(e);
     }
 
-    private void Settings_Click(object sender, RoutedEventArgs e)
+    private void Settings_Click(object sender, RoutedEventArgs e) => OpenSettings();
+    private void DiscoverInstallations_Click(object sender, RoutedEventArgs e) => OpenSettings(discover: true);
+
+    private void OpenSettings(bool discover = false)
     {
-        var win = new SettingsWindow(_settings) { Owner = this };
+        if (_isChecking || _softwareActionBusy || _softwareUpdates.IsBusy) return;
+        if (!TryAcquireMaintenanceGuard(out var lease)) return;
+        using var guard = lease;
+        var win = new SettingsWindow(_settings, discoverOnLoad: discover) { Owner = this };
         if (ShowOwnedDialog(win) == true)
         {
             _settings            = win.Settings;
             _settings.IsDarkMode = _isDarkMode;
-            SettingsService.Save(_settings);
+            SaveSessionSettings("Settings saved.");
             ApplyLaunchPaths();
             RefreshEuroscopeProfiles();
             UpdateRunningStates();
             UpdateAppConfigButton();
+            ResetSoftwareChecks();
         }
+    }
+
+    private void SaveSessionSettings(string successMessage)
+    {
+        LastCheckedText.Text = SettingsService.TrySave(_settings)
+            ? successMessage
+            : "Your Launchpad choices are kept for this session, but could not be saved. Open Settings and try saving again. Completed profile or application changes have not been undone.";
     }
 
     private void Launch_Click(object sender, RoutedEventArgs e)
     {
+        if (!TryAcquireMaintenanceGuard(out var lease)) return;
+        using var guard = lease;
         if (sender is not FrameworkElement { DataContext: CheckResult result }) return;
+        if (!result.LaunchEnabled || result.HasSoftwareUpdate && (_softwareActionBusy || _softwareUpdates.IsBusy)) return;
 
         try
         {
@@ -541,16 +592,14 @@ public partial class MainWindow : Window
                 }
                 result.IsRunning = false;
             }
-            else if (result.SelectedProfile?.FilePath is string prfPath)
+            else if (result.HasEuroScopeManagement)
             {
-                // EuroScope with a specific profile — launch directly with .prf argument
-                Process.Start(new ProcessStartInfo
-                {
-                    FileName        = result.LaunchPath,
-                    Arguments       = $"\"{prfPath}\"",
-                    UseShellExecute = false,
-                });
-                Logger.Log("LAUNCH", $"{result.AppName}: launched with profile \"{result.SelectedProfile.DisplayName}\" ({prfPath})");
+                // EuroScope resolves relative resources against its shortcut's Start in folder.
+                // Set it explicitly for both a selected profile and the no-profile launch.
+                var start = EuroScopeLaunchService.CreateStartInfo(
+                    result.LaunchPath, _settings.EuroscopeDataPath, result.SelectedProfile?.FilePath);
+                Process.Start(start);
+                Logger.Log("LAUNCH", $"{result.AppName}: launched (profile={result.SelectedProfile?.FilePath ?? "none"}, working directory={start.WorkingDirectory})");
             }
             else
             {
@@ -575,12 +624,18 @@ public partial class MainWindow : Window
 
     private void Header_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
+        if (e.ClickCount == 2) { ToggleMaximize(); return; }
         if (e.LeftButton == MouseButtonState.Pressed)
             DragMove();
     }
 
     private void Minimize_Click(object sender, RoutedEventArgs e) =>
         WindowState = WindowState.Minimized;
+
+    private void Maximize_Click(object sender, RoutedEventArgs e) => ToggleMaximize();
+
+    private void ToggleMaximize() =>
+        WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
 
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
 
@@ -606,9 +661,11 @@ public partial class MainWindow : Window
             var captured = profile;
             item.Click += (_, _) =>
             {
+                if (!TryAcquireMaintenanceGuard(out var lease)) return;
+                using var guard = lease;
                 result.SelectedProfile = captured;
                 _settings.LastEuroscopeProfile = captured.FilePath ?? string.Empty;
-                SettingsService.Save(_settings);
+                SaveSessionSettings("EuroScope profile choice saved.");
             };
             menu.Items.Add(item);
         }
@@ -625,6 +682,8 @@ public partial class MainWindow : Window
 
     private void Fonts_Click(object sender, RoutedEventArgs e)
     {
+        if (!TryAcquireMaintenanceGuard(out var lease)) return;
+        using var guard = lease;
         var result = FontService.Check(_settings.EuroscopeDataPath);
         switch (result.State)
         {

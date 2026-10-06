@@ -2,381 +2,218 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:models="clr-namespace:VatscaUpdateChecker.Models"
-        xmlns:services="clr-namespace:VatscaUpdateChecker.Services"
-        Icon="Assets/app.ico"
-        Title="Sweden FIR Launchpad"
-        Height="520" Width="695"
-        MinHeight="520" MinWidth="695"
-        ResizeMode="CanMinimize"
-        WindowStyle="None"
-        WindowStartupLocation="CenterScreen"
-        Loaded="Window_Loaded"
-        Background="{DynamicResource AppBg}">
-
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        Icon="Assets/app.ico" Title="Sweden FIR Launchpad"
+        Height="550" Width="880" Tag="Compact" MinHeight="480" MinWidth="760"
+        ResizeMode="CanResize" WindowStyle="SingleBorderWindow" WindowStartupLocation="CenterScreen"
+        Loaded="Window_Loaded" Background="{DynamicResource AppBg}" UseLayoutRounding="True">
+    <shell:WindowChrome.WindowChrome>
+        <shell:WindowChrome CaptionHeight="0" ResizeBorderThickness="6" GlassFrameThickness="0" CornerRadius="0"/>
+    </shell:WindowChrome.WindowChrome>
     <Window.Resources>
-
-        <!-- Flat button base style -->
-        <Style x:Key="FlatButton" TargetType="Button">
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}"
-                                Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Opacity" Value="0.85"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter Property="Opacity" Value="0.7"/>
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter Property="Opacity" Value="0.5"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
+        <Style x:Key="FlatButton" TargetType="Button" BasedOn="{StaticResource ThemedButton}">
+            <Setter Property="BorderThickness" Value="0"/><Setter Property="Background" Value="#1a475f"/>
+            <Setter Property="Foreground" Value="White"/><Setter Property="FontSize" Value="12"/>
+            <Setter Property="MinHeight" Value="28"/><Setter Property="Padding" Value="9,4"/>
         </Style>
-
-        <!-- Profile picker — ghost button with border, secondary to Launch -->
-        <Style x:Key="ProfilePickerButton" TargetType="Button">
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Opacity" Value="0.75"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter Property="Opacity" Value="0.55"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
+        <Style x:Key="RowActionButton" TargetType="Button" BasedOn="{StaticResource FlatButton}"/>
+        <Style x:Key="CloseButton" TargetType="Button" BasedOn="{StaticResource FlatButton}">
+            <Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="#b63f3f"/></Trigger></Style.Triggers>
         </Style>
-
-        <!-- Close button — turns red on hover -->
-        <Style x:Key="CloseButton" BasedOn="{StaticResource FlatButton}" TargetType="Button">
+        <Style x:Key="RowShell" TargetType="Border">
+            <Setter Property="Height" Value="38"/>
+            <Setter Property="Background" Value="{Binding IsFolder, Converter={StaticResource RowBgConverter}}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/><Setter Property="BorderThickness" Value="0,0,0,1"/>
             <Style.Triggers>
-                <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#b63f3f"/>
-                    <Setter Property="Opacity"    Value="1"/>
-                </Trigger>
+                <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource AncestorType=Window}}" Value="Comfortable"><Setter Property="Height" Value="56"/></DataTrigger>
+                <DataTrigger Binding="{Binding IsSelected}" Value="True"><Setter Property="Background" Value="{DynamicResource ApplicationSelectedBg}"/></DataTrigger>
             </Style.Triggers>
         </Style>
-
-        <!-- Status badge colours via DataTriggers — brand colours, same in both themes -->
-        <Style x:Key="StatusBadge" TargetType="Border">
-            <Setter Property="Padding" Value="9,3"/>
-            <Setter Property="Background" Value="#484b4c"/>
-            <Setter Property="HorizontalAlignment" Value="Left"/>
-            <Setter Property="VerticalAlignment" Value="Center"/>
+        <Style x:Key="RowStatusText" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/><Setter Property="FontSize" Value="13"/><Setter Property="FontWeight" Value="Medium"/>
             <Style.Triggers>
-                <DataTrigger Binding="{Binding Status}" Value="{x:Static models:CheckStatus.UpToDate}">
-                    <Setter Property="Background" Value="#41826e"/>
-                </DataTrigger>
-                <DataTrigger Binding="{Binding Status}" Value="{x:Static models:CheckStatus.UpdateAvailable}">
-                    <Setter Property="Background" Value="#b63f3f"/>
-                </DataTrigger>
-                <DataTrigger Binding="{Binding Status}" Value="{x:Static models:CheckStatus.Checking}">
-                    <Setter Property="Background" Value="#1a475f"/>
-                </DataTrigger>
-                <DataTrigger Binding="{Binding Status}" Value="{x:Static models:CheckStatus.Unsupported}">
-                    <Setter Property="Background" Value="#ff9800"/>
-                </DataTrigger>
-                <DataTrigger Binding="{Binding Status}" Value="{x:Static models:CheckStatus.Error}">
-                    <Setter Property="Background" Value="#ff9800"/>
-                </DataTrigger>
-                <DataTrigger Binding="{Binding Status}" Value="{x:Static models:CheckStatus.Installed}">
-                    <Setter Property="Background" Value="#41826e"/>
-                </DataTrigger>
+                <DataTrigger Binding="{Binding RowStatusKind}" Value="Warning"><Setter Property="Foreground" Value="{DynamicResource ApplicationWarningText}"/></DataTrigger>
+                <DataTrigger Binding="{Binding RowStatusKind}" Value="Update"><Setter Property="Foreground" Value="{DynamicResource ApplicationUpdateText}"/></DataTrigger>
+                <DataTrigger Binding="{Binding RowStatusKind}" Value="Success"><Setter Property="Foreground" Value="{DynamicResource ApplicationSuccessText}"/></DataTrigger>
             </Style.Triggers>
         </Style>
-
+        <Style x:Key="RowExplanationText" TargetType="TextBlock">
+            <Setter Property="Visibility" Value="Collapsed"/><Setter Property="Foreground" Value="{DynamicResource ApplicationSecondaryText}"/>
+            <Setter Property="FontSize" Value="12"/><Setter Property="Margin" Value="0,3,0,0"/><Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            <Style.Triggers><DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource AncestorType=Window}}" Value="Comfortable"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers>
+        </Style>
+        <Style x:Key="LaunchButton" TargetType="Button" BasedOn="{StaticResource RowActionButton}">
+            <Setter Property="Content" Value="{Binding LaunchActionText}"/><Setter Property="IsEnabled" Value="{Binding LaunchEnabled}"/>
+            <Setter Property="Padding" Value="4,4"/><Setter Property="ToolTip" Value="{Binding LaunchTooltip}"/>
+            <Setter Property="AutomationProperties.Name" Value="{Binding LaunchTooltip}"/>
+            <Style.Triggers><DataTrigger Binding="{Binding IsRunning}" Value="True"><Setter Property="Background" Value="#943b3b"/></DataTrigger></Style.Triggers>
+        </Style>
+        <Style x:Key="DetailAction" TargetType="Button" BasedOn="{StaticResource RowActionButton}"><Setter Property="Margin" Value="0,0,5,5"/></Style>
     </Window.Resources>
-
     <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1">
     <DockPanel>
-
-        <!-- ── Header ── -->
-        <Border DockPanel.Dock="Top" Background="{DynamicResource HeaderBg}" Padding="16,8"
-                MouseLeftButtonDown="Header_MouseLeftButtonDown">
+        <Border DockPanel.Dock="Top" Background="{DynamicResource HeaderBg}" Padding="12,2" MouseLeftButtonDown="Header_MouseLeftButtonDown">
             <Grid>
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <Image Source="Assets/logo-banner.png" Height="38" VerticalAlignment="Center"
-                           RenderOptions.BitmapScalingMode="HighQuality"/>
-                    <TextBlock Text=" Sweden FIR Launchpad" Foreground="White" FontSize="17" FontWeight="Light"
-                               VerticalAlignment="Center" Margin="8,0,0,0"/>
+                <Grid.RowDefinitions><RowDefinition Height="32"/><RowDefinition Height="32"/></Grid.RowDefinitions>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <DockPanel VerticalAlignment="Center">
+                    <Image DockPanel.Dock="Left" Source="Assets/logo-banner.png" Height="26" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality"/>
+                    <TextBlock Text="Sweden FIR Launchpad" Foreground="White" FontSize="16" FontWeight="Light" VerticalAlignment="Center" Margin="12,0,8,0"/>
+                </DockPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <Button x:Name="DensityToggleButton" Click="DensityToggle_Click" Margin="0,0,6,0"
+                            ToolTip="Switch between compact rows with details below and rows with short explanations" AutomationProperties.Name="Toggle compact or explanatory layout">
+                        <Button.Style><Style TargetType="Button" BasedOn="{StaticResource FlatButton}">
+                            <Setter Property="Content" Value="Compact"/>
+                            <Style.Triggers><DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource AncestorType=Window}}" Value="Comfortable"><Setter Property="Content" Value="Expanded"/></DataTrigger></Style.Triggers>
+                        </Style></Button.Style>
+                    </Button>
+                    <Button x:Name="ThemeToggleButton" Content="☽" Style="{StaticResource FlatButton}" FontSize="14" Margin="0,0,10,0"
+                            ToolTip="Toggle dark / light mode" AutomationProperties.Name="Toggle dark or light theme" Click="ThemeToggle_Click"/>
+                    <Button Content="─" Style="{StaticResource FlatButton}" Margin="0,0,2,0" ToolTip="Minimise" AutomationProperties.Name="Minimise Launchpad" Click="Minimize_Click"/>
+                    <Button Content="□" Style="{StaticResource FlatButton}" Margin="0,0,2,0" ToolTip="Maximise or restore" AutomationProperties.Name="Maximise or restore Launchpad" Click="Maximize_Click"/>
+                    <Button Content="✕" Style="{StaticResource CloseButton}" ToolTip="Close" AutomationProperties.Name="Close Launchpad" Click="Close_Click"/>
                 </StackPanel>
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                    <Button x:Name="ThemeToggleButton"
-                            Content="☽"
-                            Style="{StaticResource FlatButton}"
-                            Background="{DynamicResource ThemeToggleBg}" Foreground="White"
-                            Padding="10,6" FontSize="14" Margin="0,0,8,0"
-                            ToolTip="Toggle dark / light mode"
-                            Click="ThemeToggle_Click"/>
-                    <Button x:Name="AppConfigButton"
-                            Content="⚙  App Config"
-                            Style="{StaticResource FlatButton}"
-                            Background="#1a475f" Foreground="White"
-                            Padding="12,6" FontSize="12" Margin="0,0,8,0"
-                            Click="AppConfig_Click"/>
-                    <Button Content="⚙  Settings"
-                            Style="{StaticResource FlatButton}"
-                            Background="#1a475f" Foreground="White"
-                            Padding="12,6" FontSize="12"
-                            Click="Settings_Click"/>
-                    <!-- Window controls -->
-                    <Button Content="─"
-                            Style="{StaticResource FlatButton}"
-                            Background="#1a475f" Foreground="White"
-                            Padding="12,6" FontSize="12" Margin="12,0,2,0"
-                            ToolTip="Minimise"
-                            Click="Minimize_Click"/>
-                    <Button Content="✕"
-                            Style="{StaticResource CloseButton}"
-                            Background="#1a475f" Foreground="White"
-                            Padding="12,6" FontSize="12"
-                            ToolTip="Close"
-                            Click="Close_Click"/>
+                <TextBlock Grid.Row="1" Text="Applications" Foreground="White" FontSize="14" FontWeight="Medium" VerticalAlignment="Center"/>
+                <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <Button x:Name="AppConfigButton" Content="Controller profile" Style="{StaticResource FlatButton}" Margin="0,0,8,0"
+                            ToolTip="Your identity and optional EuroScope profile configuration" Click="AppConfig_Click"/>
+                    <Button x:Name="SettingsButton" Content="App settings" Style="{StaticResource FlatButton}" ToolTip="Launchpad preferences and application paths" Click="Settings_Click"/>
                 </StackPanel>
             </Grid>
         </Border>
-
-        <!-- ── Footer ── -->
-        <Border DockPanel.Dock="Bottom" Background="{DynamicResource FooterBg}"
-                BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,0,0" Padding="16,10">
+        <Border DockPanel.Dock="Bottom" Background="{DynamicResource FooterBg}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,0,0" Padding="12,7">
             <Grid>
-                <Button x:Name="CheckButton"
-                        Content="↻  Check for Updates"
-                        HorizontalAlignment="Left" VerticalAlignment="Center"
-                        Style="{StaticResource FlatButton}"
-                        Background="#1a475f" Foreground="White"
-                        Padding="14,7" FontSize="13" FontWeight="Medium"
-                        Click="Check_Click"/>
-                <TextBlock x:Name="LastCheckedText"
-                           Text="Last checked: never"
-                           HorizontalAlignment="Right" VerticalAlignment="Center"
-                           Foreground="{DynamicResource SecondaryText}" FontSize="12"/>
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                <Button x:Name="CheckButton" Content="↻  Check for updates" Style="{StaticResource FlatButton}" Click="Check_Click"/>
+                <Button x:Name="SetupButton" Grid.Column="1" Content="Setup guide…" Margin="8,0,0,0" Style="{StaticResource FlatButton}"
+                        ToolTip="Find existing applications, install missing software and review your configuration" AutomationProperties.Name="Open setup guide" Click="SetupWizard_Click"/>
+                <Button x:Name="MaintenanceButton" Grid.Column="2" Content="Remove / reset…" Margin="8,0" Style="{StaticResource FlatButton}"
+                        ToolTip="Review software removal, optional settings resets and recovery copies" Click="Maintenance_Click"/>
+                <TextBlock x:Name="LastCheckedText" Grid.Column="3" Text="Last checked: never" HorizontalAlignment="Right" VerticalAlignment="Center"
+                           Foreground="{DynamicResource ApplicationSecondaryText}" FontSize="12" TextTrimming="CharacterEllipsis" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+                <TextBox x:Name="RestartNotice" Grid.Row="1" Grid.ColumnSpan="4" Visibility="Collapsed"
+                         Text="An installer requested a Windows restart. Restart Windows before further setup, updates, removal or profile changes."
+                         AutomationProperties.Name="Windows restart required" IsReadOnly="True" IsReadOnlyCaretVisible="True" IsTabStop="True"
+                         TextWrapping="Wrap" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Disabled"
+                         Background="{DynamicResource WarningBg}" Foreground="{DynamicResource WarningFg}" CaretBrush="{DynamicResource WarningFg}" BorderBrush="{DynamicResource WarningFg}"
+                         FontSize="12" Margin="0,7,0,0" Padding="8,6"/>
             </Grid>
         </Border>
-
-        <!-- ── Column headers ── -->
-        <Border DockPanel.Dock="Top" Background="{DynamicResource ColumnHeaderBg}"
-                BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1">
+        <Border x:Name="ApplicationDetails" DockPanel.Dock="Bottom" Height="88" Background="{DynamicResource ColumnHeaderBg}"
+                BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,0,0" Padding="12,7" AutomationProperties.Name="Selected application details">
             <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="60"/>
-                    <ColumnDefinition Width="175"/>
-                    <ColumnDefinition Width="130"/>
-                    <ColumnDefinition Width="130"/>
-                    <ColumnDefinition Width="200"/>
-                </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="1" Text="Application" Padding="8,7"  FontWeight="SemiBold" Foreground="{DynamicResource PrimaryText}" FontSize="12"/>
-                <TextBlock Grid.Column="2" Text="Installed"   Padding="8,7"  FontWeight="SemiBold" Foreground="{DynamicResource PrimaryText}" FontSize="12"/>
-                <TextBlock Grid.Column="3" Text="Latest"      Padding="8,7"  FontWeight="SemiBold" Foreground="{DynamicResource PrimaryText}" FontSize="12"/>
-                <TextBlock Grid.Column="4" Text="Status"      Padding="8,7"  FontWeight="SemiBold" Foreground="{DynamicResource PrimaryText}" FontSize="12"/>
-            </Grid>
-        </Border>
-
-        <!-- ── App rows ── -->
-        <ItemsControl x:Name="AppList" Background="{DynamicResource AppBg}">
-            <ItemsControl.ItemTemplate>
-                <DataTemplate DataType="{x:Type models:CheckResult}">
-
-                    <Border Background="{Binding IsFolder, Converter={StaticResource RowBgConverter}}"
-                            BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Margin="0,0,0,2">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="60"/>
-                                <ColumnDefinition Width="175"/>
-                                <ColumnDefinition Width="130"/>
-                                <ColumnDefinition Width="130"/>
-                                <ColumnDefinition Width="200"/>
-                            </Grid.ColumnDefinitions>
-
-                            <!-- Icon button: Launch / Kill / Open Folder (non-EuroScope rows) -->
-                            <Button Grid.Column="0"
-                                    Visibility="{Binding ShowSimpleLaunch, Converter={StaticResource BoolToVisibility}}"
-                                    Click="Launch_Click"
-                                    Foreground="White"
-                                    Padding="9,5" Margin="8,8,4,8"
-                                    FontSize="11"
-                                    VerticalAlignment="Center"
-                                    ToolTip="{Binding LaunchTooltip}">
-                                <Button.Style>
-                                    <Style BasedOn="{StaticResource FlatButton}" TargetType="Button">
-                                        <Setter Property="Content" Value="▶"/>
-                                        <Setter Property="Background" Value="#1a475f"/>
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding IsRunning}" Value="True">
-                                                <Setter Property="Content" Value="■"/>
-                                                <Setter Property="Background" Value="#b63f3f"/>
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding IsFolder}" Value="True">
-                                                <Setter Property="Content" Value="📁"/>
-                                                <Setter Property="Background" Value="#484b4c"/>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Button.Style>
-                            </Button>
-
-                            <!-- Split button: Launch | Profile picker (EuroScope only) -->
-                            <StackPanel Grid.Column="0" Orientation="Horizontal"
-                                        Visibility="{Binding ShowSplitLaunch, Converter={StaticResource BoolToVisibility}}"
-                                        VerticalAlignment="Center" Margin="8,8,4,8">
-                                <Button Click="Launch_Click" Foreground="White"
-                                        Padding="9,5" FontSize="11"
-                                        ToolTip="{Binding LaunchTooltip}">
-                                    <Button.Style>
-                                        <Style BasedOn="{StaticResource FlatButton}" TargetType="Button">
-                                            <Setter Property="Content" Value="▶"/>
-                                            <Setter Property="Background" Value="#1a475f"/>
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding IsRunning}" Value="True">
-                                                    <Setter Property="Content" Value="■"/>
-                                                    <Setter Property="Background" Value="#b63f3f"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Button.Style>
-                                </Button>
-                                <Border Width="1" Background="White" Opacity="0.2" Margin="0,3"/>
-                                <Button Click="ProfileDropdown_Click" Foreground="White"
-                                        Content="▾" Padding="6,5" FontSize="10"
-                                        ToolTip="{Binding SelectedProfile.DisplayName}">
-                                    <Button.Style>
-                                        <Style BasedOn="{StaticResource FlatButton}" TargetType="Button">
-                                            <Setter Property="Background" Value="#1a475f"/>
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding IsRunning}" Value="True">
-                                                    <Setter Property="Background" Value="#b63f3f"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Button.Style>
-                                </Button>
-                            </StackPanel>
-
-                            <!-- App name + running indicator dot -->
-                            <StackPanel Grid.Column="1" Orientation="Horizontal"
-                                        VerticalAlignment="Center" Margin="8,0,8,0">
-                                <Ellipse Width="8" Height="8" Margin="0,0,8,0" VerticalAlignment="Center">
-                                    <Ellipse.Style>
-                                        <Style TargetType="Ellipse">
-                                            <Setter Property="Fill" Value="#D5D8DC"/>
-                                            <Setter Property="Visibility" Value="Visible"/>
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding IsRunning}" Value="True">
-                                                    <Setter Property="Fill" Value="#41826e"/>
-                                                </DataTrigger>
-                                                <DataTrigger Binding="{Binding IsFolder}" Value="True">
-                                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Ellipse.Style>
-                                </Ellipse>
-                                <TextBlock Text="{Binding AppName}"
-                                           FontWeight="Medium" Foreground="{DynamicResource PrimaryText}"
-                                           VerticalAlignment="Center" Padding="0,13"/>
-                            </StackPanel>
-
-                            <!-- Installed version -->
-                            <TextBlock Grid.Column="2"
-                                       Text="{Binding InstalledVersion}"
-                                       Padding="8,13" Foreground="{DynamicResource SecondaryText}"
-                                       VerticalAlignment="Center" FontFamily="Consolas" FontSize="12"/>
-
-                            <!-- Latest version -->
-                            <TextBlock Grid.Column="3"
-                                       Text="{Binding LatestVersion}"
-                                       Padding="8,13" Foreground="{DynamicResource SecondaryText}"
-                                       VerticalAlignment="Center" FontFamily="Consolas" FontSize="12"/>
-
-                            <!-- Status badge + inline download icon -->
-                            <StackPanel Grid.Column="4" Orientation="Horizontal"
-                                        Visibility="{Binding ShowStandardStatus, Converter={StaticResource BoolToVisibility}}"
-                                        VerticalAlignment="Center" Margin="8,0,0,0">
-                                <Border Style="{StaticResource StatusBadge}"
-                                        ToolTip="{Binding StatusMessage}">
-                                    <TextBlock Text="{Binding StatusText}"
-                                               Foreground="White" FontSize="11" FontWeight="Medium"/>
-                                </Border>
-
-                                <!-- Fonts check sub-button — only on rows with HasFontsCheck = true (GNG Pack) -->
-                                <Button Visibility="{Binding HasFontsCheck, Converter={StaticResource BoolToVisibility}}"
-                                        Click="Fonts_Click"
-                                        Foreground="White"
-                                        Padding="6,3" Margin="6,0,0,0"
-                                        FontSize="11" FontWeight="SemiBold"
-                                        Content="Aa"
-                                        VerticalAlignment="Center"
-                                        Cursor="Hand"
-                                        ToolTip="{Binding FontsTooltip}">
-                                    <Button.Style>
-                                        <Style BasedOn="{StaticResource FlatButton}" TargetType="Button">
-                                            <Setter Property="Background" Value="#484b4c"/>
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding FontsState}" Value="{x:Static services:FontsState.AllOk}">
-                                                    <Setter Property="Background" Value="#41826e"/>
-                                                </DataTrigger>
-                                                <DataTrigger Binding="{Binding FontsState}" Value="{x:Static services:FontsState.NeedsAction}">
-                                                    <Setter Property="Background" Value="#ff9800"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Button.Style>
-                                </Button>
-
-                                <Button Visibility="{Binding ShowDownload, Converter={StaticResource BoolToVisibility}}"
-                                        Tag="{Binding DownloadUrl}"
-                                        Click="Download_Click"
-                                        Content="↓"
-                                        Style="{StaticResource FlatButton}"
-                                        Background="#b63f3f" Foreground="White"
-                                        Padding="7,3" Margin="4,0,0,0"
-                                        FontSize="13" FontWeight="SemiBold"
-                                        VerticalAlignment="Center"
-                                        ToolTip="Download"/></StackPanel>
-                            <StackPanel Grid.Column="4" Margin="8,4,12,4" VerticalAlignment="Center"
-                                        Visibility="{Binding HasSelfUpdate, Converter={StaticResource BoolToVisibility}}">
-                                <TextBlock Text="{Binding SelfUpdateNotice}" ToolTip="{Binding StatusMessage}" FontSize="9.5"
-                                           Foreground="{DynamicResource SecondaryText}" TextTrimming="CharacterEllipsis" Margin="0,0,0,3"
-                                           Visibility="{Binding HasSelfUpdateNotice, Converter={StaticResource BoolToVisibility}}"/>
-                                <Border Style="{StaticResource StatusBadge}" ToolTip="{Binding StatusMessage}"
-                                        Visibility="{Binding ShowSelfUpdateStatus, Converter={StaticResource BoolToVisibility}}">
-                                    <TextBlock Text="{Binding SelfUpdateSummary}" Foreground="White" FontSize="11" FontWeight="Medium" TextTrimming="CharacterEllipsis"/>
-                                </Border>
-                                <Button Content="{Binding SelfUpdateActionText}" Click="SelfUpdate_Click" ToolTip="{Binding StatusMessage}"
-                                        Visibility="{Binding ShowSelfUpdateAction, Converter={StaticResource BoolToVisibility}}"
-                                        IsEnabled="{Binding SelfUpdateActionEnabled}" Style="{StaticResource FlatButton}"
-                                        HorizontalAlignment="Left" Padding="9,4" Background="#1a475f" Foreground="White" FontSize="11" FontWeight="SemiBold"/>
-                                <ProgressBar Height="3" Margin="0,4,0,0" Minimum="0" Maximum="100" Foreground="#41826e"
-                                             Visibility="{Binding SelfUpdateBusy, Converter={StaticResource BoolToVisibility}}"
-                                             IsIndeterminate="{Binding SelfUpdateProgressIndeterminate}" Value="{Binding SelfUpdateProgressValue}"/>
-                            </StackPanel>
-                        </Grid>
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="296"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <TextBlock x:Name="DetailHeading" Grid.ColumnSpan="2" Text="{Binding DetailHeading}" Foreground="{DynamicResource PrimaryText}" FontSize="13" FontWeight="Medium"
+                           TextTrimming="CharacterEllipsis" ToolTip="{Binding DetailHeading}" Margin="0,0,8,3" AutomationProperties.LiveSetting="Polite"/>
+                <Button x:Name="DetailsCloseButton" Grid.Column="2" Content="✕" Click="DetailsClose_Click" Style="{StaticResource FlatButton}"
+                        MinHeight="20" Padding="5,1" FontSize="11" ToolTip="Hide application details" AutomationProperties.Name="Hide application details" Visibility="Collapsed"/>
+                <TextBox x:Name="DetailMessage" Grid.Row="1" Text="{Binding DetailText, Mode=OneWay}" IsReadOnly="True" IsReadOnlyCaretVisible="True"
+                         AutomationProperties.Name="Application explanation" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                         Background="Transparent" Foreground="{DynamicResource ApplicationSecondaryText}" CaretBrush="{DynamicResource PrimaryText}" BorderThickness="0"
+                         Padding="0" Margin="0,0,14,0" FontSize="12"/>
+                <WrapPanel Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" VerticalAlignment="Center">
+                    <Button x:Name="DetailEuroScopeButton" Content="{Binding EuroScopeSetupText}" Click="EuroScopeManage_Click" Style="{StaticResource DetailAction}"
+                            Visibility="{Binding HasEuroScopeManagement, Converter={StaticResource BoolToVisibility}}" IsEnabled="{Binding SoftwareActionsAllowed}"
+                            ToolTip="Install, repair or review replacement with the supported EuroScope version"/>
+                    <Button x:Name="DetailConfigureButton" Content="Choose folder…" Click="Settings_Click" Style="{StaticResource DetailAction}"
+                            Visibility="{Binding ShowConfigure, Converter={StaticResource BoolToVisibility}}" IsEnabled="{Binding SoftwareActionsAllowed}" ToolTip="{Binding ConfigureTooltip}"/>
+                    <Border Visibility="{Binding ShowStandardStatus, Converter={StaticResource BoolToVisibility}}">
+                        <Button x:Name="DetailDownloadButton" Content="Get package ↗" Tag="{Binding DownloadUrl}" Click="Download_Click" Style="{StaticResource DetailAction}"
+                                Visibility="{Binding ShowDownload, Converter={StaticResource BoolToVisibility}}" ToolTip="Open the download page; GNG installation is manual in this version"/>
                     </Border>
-                </DataTemplate>
-            </ItemsControl.ItemTemplate>
-        </ItemsControl>
-
+                    <Button x:Name="DetailFontsButton" Content="Check fonts…" Click="Fonts_Click" Style="{StaticResource DetailAction}"
+                            Visibility="{Binding HasFontsCheck, Converter={StaticResource BoolToVisibility}}" ToolTip="{Binding FontsTooltip}" AutomationProperties.Name="Check GNG fonts"/>
+                    <Button x:Name="DetailSoftwareUpdateButton" Content="{Binding SoftwareActionText}" Click="SoftwareUpdate_Click" Style="{StaticResource DetailAction}"
+                            Visibility="{Binding ShowSoftwareAction, Converter={StaticResource BoolToVisibility}}" IsEnabled="{Binding SoftwareActionEnabled}"/>
+                    <Button x:Name="DetailSoftwareCancelButton" Content="Cancel preparation" Click="SoftwareCancel_Click" Style="{StaticResource DetailAction}"
+                            Visibility="{Binding SoftwareCanCancel, Converter={StaticResource BoolToVisibility}}" ToolTip="Cancel preparation before installation starts"/>
+                    <Button x:Name="DetailSoftwareDownloadsButton" Content="Downloads ↗" Click="SoftwareDownloads_Click" Style="{StaticResource DetailAction}"
+                            Visibility="{Binding ShowSoftwareDownloads, Converter={StaticResource BoolToVisibility}}" IsEnabled="{Binding SoftwareActionsAllowed}" ToolTip="Open the official vendor download page"/>
+                    <Button x:Name="DetailSoftwareSetupButton" Content="{Binding SoftwareSetupText}" Click="SoftwareInstall_Click" Style="{StaticResource DetailAction}"
+                            Visibility="{Binding ShowSoftwareSetup, Converter={StaticResource BoolToVisibility}}" IsEnabled="{Binding SoftwareActionsAllowed}" ToolTip="Review an existing installation or set up a missing application"/>
+                    <Button x:Name="DetailSelfUpdateButton" Content="{Binding SelfUpdateActionText}" Click="SelfUpdate_Click" Style="{StaticResource DetailAction}"
+                            Visibility="{Binding ShowSelfUpdateAction, Converter={StaticResource BoolToVisibility}}" IsEnabled="{Binding SelfUpdateActionEnabled}"/>
+                </WrapPanel>
+            </Grid>
+        </Border>
+        <Border x:Name="DiscoveryPrompt" DockPanel.Dock="Top" Background="{DynamicResource RowBg}" Padding="12,8" Visibility="Collapsed">
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Content="Find existing apps…" Style="{StaticResource FlatButton}" Click="DiscoverInstallations_Click"/>
+                <TextBlock Text="New here? Start with Setup guide below. Already have ATC software? Find and choose the copies you use."
+                           TextWrapping="Wrap" VerticalAlignment="Center" Foreground="{DynamicResource PrimaryText}" Margin="0,0,12,0"/>
+            </DockPanel>
+        </Border>
+        <ScrollViewer x:Name="ApplicationsScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
+        <StackPanel MinWidth="714" Width="{Binding ViewportWidth, ElementName=ApplicationsScroll}">
+            <Border Background="{DynamicResource ColumnHeaderBg}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Height="28">
+                <Grid Width="{Binding ActualWidth, ElementName=AppList}" HorizontalAlignment="Left">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="82"/><ColumnDefinition Width="1.55*" MinWidth="146"/>
+                        <ColumnDefinition Width="1.1*" MinWidth="104"/><ColumnDefinition Width="1.2*" MinWidth="122"/>
+                        <ColumnDefinition Width="1.6*" MinWidth="150"/><ColumnDefinition Width="84"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="Open" Margin="10,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource ApplicationSecondaryText}" FontSize="12"/>
+                    <TextBlock Grid.Column="1" Text="Application" VerticalAlignment="Center" Foreground="{DynamicResource ApplicationSecondaryText}" FontSize="12"/>
+                    <TextBlock Grid.Column="2" Text="Your version" VerticalAlignment="Center" Foreground="{DynamicResource ApplicationSecondaryText}" FontSize="12"/>
+                    <TextBlock Grid.Column="3" Text="Latest / supported" VerticalAlignment="Center" Foreground="{DynamicResource ApplicationSecondaryText}" FontSize="12"/>
+                    <TextBlock Grid.Column="4" Text="Status" VerticalAlignment="Center" Foreground="{DynamicResource ApplicationSecondaryText}" FontSize="12"/>
+                    <TextBlock Grid.Column="5" Text="Options" VerticalAlignment="Center" Foreground="{DynamicResource ApplicationSecondaryText}" FontSize="12"/>
+                </Grid>
+            </Border>
+            <ItemsControl x:Name="AppList" Background="{DynamicResource AppBg}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="{x:Type models:CheckResult}">
+                        <Border Style="{StaticResource RowShell}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="82"/><ColumnDefinition Width="1.55*" MinWidth="146"/>
+                                    <ColumnDefinition Width="1.1*" MinWidth="104"/><ColumnDefinition Width="1.2*" MinWidth="122"/>
+                                    <ColumnDefinition Width="1.6*" MinWidth="150"/><ColumnDefinition Width="84"/>
+                                </Grid.ColumnDefinitions>
+                                <Border Width="3" Background="{DynamicResource ApplicationUpdateText}" HorizontalAlignment="Left" Visibility="{Binding IsSelected, Converter={StaticResource BoolToVisibility}}"/>
+                                <Button Click="Launch_Click" Style="{StaticResource LaunchButton}" Margin="8,0,8,0" VerticalAlignment="Center"
+                                        Visibility="{Binding ShowSimpleLaunch, Converter={StaticResource BoolToVisibility}}"/>
+                                <Grid Margin="8,0,8,0" VerticalAlignment="Center" Visibility="{Binding ShowSplitLaunch, Converter={StaticResource BoolToVisibility}}">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="18"/></Grid.ColumnDefinitions>
+                                    <Button Click="Launch_Click" Style="{StaticResource LaunchButton}" Padding="2,4"/>
+                                    <Button Grid.Column="1" Content="▾" Click="ProfileDropdown_Click" Padding="2,4" Style="{StaticResource RowActionButton}"
+                                            IsEnabled="{Binding LaunchEnabled}" ToolTip="{Binding SelectedProfile.DisplayName}" AutomationProperties.Name="Choose EuroScope profile"/>
+                                </Grid>
+                                <TextBlock Grid.Column="1" Text="{Binding DisplayName}" Margin="0,0,8,0" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource PrimaryText}" FontSize="13" FontWeight="Medium" TextTrimming="CharacterEllipsis"
+                                           ToolTip="{Binding Description}" AutomationProperties.HelpText="{Binding Description}"/>
+                                <TextBlock Grid.Column="2" Text="{Binding DisplayInstalledVersion}" Margin="0,0,8,0" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource PrimaryText}" FontSize="12" TextTrimming="CharacterEllipsis" ToolTip="{Binding DisplayInstalledVersion}"/>
+                                <StackPanel Grid.Column="3" VerticalAlignment="Center" Margin="0,0,8,0">
+                                    <TextBlock Text="{Binding DisplayLatestVersion}" Foreground="{DynamicResource PrimaryText}" FontSize="12" TextTrimming="CharacterEllipsis" ToolTip="{Binding DisplayLatestVersion}"/>
+                                    <TextBlock Text="{Binding LatestVersionCaption}" Foreground="{DynamicResource ApplicationSecondaryText}" FontSize="11"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="4" VerticalAlignment="Center" Margin="0,0,8,0">
+                                    <DockPanel>
+                                        <TextBlock Text="{Binding RowStatusSymbol}" Style="{StaticResource RowStatusText}" Margin="0,0,5,0"/>
+                                        <TextBlock Text="{Binding RowStatusText}" Style="{StaticResource RowStatusText}" TextTrimming="CharacterEllipsis" ToolTip="{Binding DetailText}"/>
+                                    </DockPanel>
+                                    <TextBlock Text="{Binding RowExplanation}" Style="{StaticResource RowExplanationText}" ToolTip="{Binding DetailText}"/>
+                                </StackPanel>
+                                <Button x:Name="RowDetailsButton" Grid.Column="5" Content="{Binding RowOptionsText}" Click="Details_Click" Margin="0,0,10,0"
+                                        Style="{StaticResource ThemedButton}" FontSize="12" MinHeight="28" Padding="4,3" VerticalAlignment="Center"
+                                        AutomationProperties.Name="{Binding DisplayName, StringFormat=Details and actions for {0}}"/>
+                                <ProgressBar Grid.Column="4" Height="3" VerticalAlignment="Bottom" Margin="0,0,8,1" Minimum="0" Maximum="100" Foreground="{DynamicResource ApplicationUpdateText}" Background="{DynamicResource DividerBrush}" BorderThickness="0"
+                                             Visibility="{Binding SoftwareUpdateBusy, Converter={StaticResource BoolToVisibility}}" IsIndeterminate="{Binding SoftwareProgressIndeterminate}"
+                                             Value="{Binding SoftwareProgressValue, Mode=OneWay}" AutomationProperties.Name="{Binding SoftwareSummary}"/>
+                                <ProgressBar Grid.Column="4" Height="3" VerticalAlignment="Bottom" Margin="0,0,8,1" Minimum="0" Maximum="100" Foreground="{DynamicResource ApplicationUpdateText}" Background="{DynamicResource DividerBrush}" BorderThickness="0"
+                                             Visibility="{Binding SelfUpdateBusy, Converter={StaticResource BoolToVisibility}}" IsIndeterminate="{Binding SelfUpdateProgressIndeterminate}"
+                                             Value="{Binding SelfUpdateProgressValue, Mode=OneWay}" AutomationProperties.Name="{Binding SelfUpdateSummary}"/>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+        </ScrollViewer>
     </DockPanel>
     </Border>
 </Window>

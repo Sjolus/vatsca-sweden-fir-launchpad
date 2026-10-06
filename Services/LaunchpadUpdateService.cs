@@ -43,7 +43,7 @@ public sealed class LaunchpadUpdateService
         }, locator);
         State = IsInstalled
             ? NewState(LaunchpadUpdateStatus.Idle, "Check for Launchpad updates.")
-            : NewState(LaunchpadUpdateStatus.Unsupported, "Use the installer to enable automatic updates. Portable copies can be updated from Downloads.");
+            : NewState(LaunchpadUpdateStatus.Unsupported, "Use the installer to enable in-app updates. Portable copies can be updated from Downloads.");
     }
 
     public bool IsInstalled => _manager.IsInstalled && !_manager.IsPortable &&

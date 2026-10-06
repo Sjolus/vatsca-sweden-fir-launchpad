@@ -13,6 +13,11 @@
     <!-- ── Text brushes ── -->
     <SolidColorBrush x:Key="PrimaryText"      Color="#dfebeb"/>  <!-- Snow -->
     <SolidColorBrush x:Key="SecondaryText"    Color="#8ca0ad"/>
+    <SolidColorBrush x:Key="ApplicationSecondaryText" Color="#a9bdcb"/>
+    <SolidColorBrush x:Key="ApplicationSelectedBg" Color="#15394d"/>
+    <SolidColorBrush x:Key="ApplicationWarningText" Color="#ffcf79"/>
+    <SolidColorBrush x:Key="ApplicationUpdateText" Color="#7bd9f0"/>
+    <SolidColorBrush x:Key="ApplicationSuccessText" Color="#9acfb4"/>
 
     <!-- ── Input brushes ── -->
     <SolidColorBrush x:Key="InputBg"          Color="#0d2235"/>
@@ -21,6 +26,74 @@
 
     <!-- ── Theme toggle ── -->
     <SolidColorBrush x:Key="ThemeToggleBg"    Color="#1a475f"/>
+
+    <!-- Paired status and selection colors; text/background are always used together. -->
+    <SolidColorBrush x:Key="WarningBg" Color="#493413"/>
+    <SolidColorBrush x:Key="WarningFg" Color="#ffe3a1"/>
+    <SolidColorBrush x:Key="SuccessBg" Color="#123d31"/>
+    <SolidColorBrush x:Key="SuccessFg" Color="#d0f5e5"/>
+    <SolidColorBrush x:Key="SelectionBg" Color="#275771"/>
+    <SolidColorBrush x:Key="SelectionFg" Color="White"/>
+    <SolidColorBrush x:Key="ButtonFocusBorder" Color="#b8dcff"/>
+    <SolidColorBrush x:Key="ButtonFocusContrast" Color="#071828"/>
+
+    <!-- Own button states so native light hover chrome cannot hide dark-theme labels. -->
+    <SolidColorBrush x:Key="ButtonHoverBg" Color="#275771"/>
+    <SolidColorBrush x:Key="ButtonHoverFg" Color="White"/>
+    <SolidColorBrush x:Key="ButtonPressedBg" Color="#12394f"/>
+    <SolidColorBrush x:Key="ButtonPressedFg" Color="White"/>
+    <Style x:Key="ThemedButton" TargetType="Button">
+        <Setter Property="Background" Value="{DynamicResource InputBg}"/>
+        <Setter Property="Foreground" Value="{DynamicResource InputFg}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource InputBorder}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="8,5"/>
+        <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Grid>
+                        <Border x:Name="ButtonFace" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
+                                Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
+                            <ContentPresenter x:Name="ButtonContent" RecognizesAccessKey="True"
+                                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                              TextElement.Foreground="{TemplateBinding Foreground}"/>
+                        </Border>
+                        <Border x:Name="FocusOutline" BorderBrush="{DynamicResource ButtonFocusBorder}"
+                                BorderThickness="2" Margin="2" Opacity="0" IsHitTestVisible="False">
+                            <Border BorderBrush="{DynamicResource ButtonFocusContrast}" BorderThickness="1"/>
+                        </Border>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="ButtonFace" Property="Background" Value="{StaticResource ButtonHoverBg}"/>
+                            <Setter TargetName="ButtonContent" Property="TextElement.Foreground" Value="{StaticResource ButtonHoverFg}"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="ButtonFace" Property="Background" Value="{StaticResource ButtonPressedBg}"/>
+                            <Setter TargetName="ButtonContent" Property="TextElement.Foreground" Value="{StaticResource ButtonPressedFg}"/>
+                        </Trigger>
+                        <Trigger Property="IsDefaulted" Value="True">
+                            <Setter TargetName="FocusOutline" Property="Opacity" Value="0.65"/>
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="FocusOutline" Property="Opacity" Value="1"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="ButtonFace" Property="Opacity" Value="0.55"/>
+                            <Setter TargetName="FocusOutline" Property="Opacity" Value="0"/>
+                            <Setter Property="Cursor" Value="Arrow"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <Style TargetType="Button" BasedOn="{StaticResource ThemedButton}"/>
 
     <!-- ── Implicit input styles ── -->
     <Style TargetType="TextBox">
@@ -36,15 +109,89 @@
         <Setter Property="BorderBrush"  Value="{DynamicResource InputBorder}"/>
     </Style>
 
+    <!-- The profile rating selector is non-editable. Own its selected/dropdown states so
+         Windows' light default chrome never pairs with our dark-theme foreground. -->
     <Style TargetType="ComboBox">
-        <Setter Property="Background"   Value="{DynamicResource InputBg}"/>
-        <Setter Property="Foreground"   Value="{DynamicResource InputFg}"/>
-        <Setter Property="BorderBrush"  Value="{DynamicResource InputBorder}"/>
+        <Setter Property="Background" Value="{DynamicResource InputBg}"/>
+        <Setter Property="Foreground" Value="{DynamicResource InputFg}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource InputBorder}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="HorizontalContentAlignment" Value="Left"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ComboBox">
+                    <Grid>
+                        <ToggleButton x:Name="DropDownButton" Focusable="False"
+                                      IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
+                                      Background="{TemplateBinding Background}" Foreground="{TemplateBinding Foreground}"
+                                      BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
+                            <ToggleButton.Template>
+                                <ControlTemplate TargetType="ToggleButton">
+                                    <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                                            BorderThickness="{TemplateBinding BorderThickness}">
+                                        <Path Data="M 0 0 L 4 4 L 8 0 Z" Fill="{TemplateBinding Foreground}"
+                                              HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                    </Border>
+                                </ControlTemplate>
+                            </ToggleButton.Template>
+                        </ToggleButton>
+                        <Border Margin="0,0,28,0" Padding="{TemplateBinding Padding}" IsHitTestVisible="False">
+                            <ContentPresenter Content="{TemplateBinding SelectionBoxItem}"
+                                              ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                              ContentStringFormat="{TemplateBinding SelectionBoxItemStringFormat}"
+                                              TextElement.Foreground="{TemplateBinding Foreground}"
+                                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                        </Border>
+                        <Popup x:Name="PART_Popup" Placement="Bottom" IsOpen="{TemplateBinding IsDropDownOpen}"
+                               AllowsTransparency="True" Focusable="False">
+                            <Border Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputBorder}"
+                                    BorderThickness="1" MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}">
+                                <ScrollViewer MaxHeight="{TemplateBinding MaxDropDownHeight}" CanContentScroll="True"
+                                              VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                    <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained"/>
+                                </ScrollViewer>
+                            </Border>
+                        </Popup>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                            <Setter TargetName="DropDownButton" Property="BorderBrush" Value="{StaticResource SelectionBg}"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.55"/></Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
     <Style TargetType="ComboBoxItem">
-        <Setter Property="Background"   Value="{DynamicResource InputBg}"/>
-        <Setter Property="Foreground"   Value="{DynamicResource InputFg}"/>
+        <Setter Property="Background" Value="{DynamicResource InputBg}"/>
+        <Setter Property="Foreground" Value="{DynamicResource InputFg}"/>
+        <Setter Property="Padding" Value="8,6"/>
+        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ComboBoxItem">
+                    <Border Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          VerticalAlignment="Center" TextElement.Foreground="{TemplateBinding Foreground}"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="IsSelected" Value="True">
+                <Setter Property="Background" Value="{StaticResource SelectionBg}"/>
+                <Setter Property="Foreground" Value="{StaticResource SelectionFg}"/>
+            </Trigger>
+            <Trigger Property="IsHighlighted" Value="True">
+                <Setter Property="Background" Value="{StaticResource SelectionBg}"/>
+                <Setter Property="Foreground" Value="{StaticResource SelectionFg}"/>
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.55"/></Trigger>
+        </Style.Triggers>
     </Style>
 
     <Style TargetType="ContextMenu">

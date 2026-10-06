@@ -6,8 +6,8 @@ using System.Runtime.InteropServices;
 namespace VatscaUpdateChecker.Services;
 
 /// <summary>
-/// Native process-enumeration helpers used to reliably track browser processes that
-/// may relaunch themselves (e.g. Edge first-run profile setup).
+/// Native process-enumeration helpers used to find candidate Edge browser processes.
+/// Timestamp and parent checks are heuristics; they do not prove app/profile ownership.
 /// </summary>
 internal static class ProcessHelper
 {
@@ -61,7 +61,7 @@ internal static class ProcessHelper
     }
 
     /// <summary>
-    /// Finds the Edge browser process (msedge.exe) that was spawned at or after
+    /// Finds a candidate Edge browser process (msedge.exe) that was spawned at or after
     /// <paramref name="notBefore"/> and is the root of its process tree — i.e. its
     /// parent is not another msedge process (renderers/GPU/network processes are children
     /// of the browser, not the other way around).

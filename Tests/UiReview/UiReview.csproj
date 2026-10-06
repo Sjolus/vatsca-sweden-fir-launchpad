@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType><TargetFramework>net9.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
+    <AssemblyName>Launchpad.UiReview</AssemblyName><RootNamespace>VatscaUpdateChecker</RootNamespace>
+    <StartupObject>VatscaUpdateChecker.UiReviewProgram</StartupObject>
+    <EnableDefaultApplicationDefinition>false</EnableDefaultApplicationDefinition>
+  </PropertyGroup>
+  <ItemGroup>
+    <ApplicationDefinition Include="../../App.xaml" Link="App.xaml" />
+    <Page Include="../../MainWindow.xaml" Link="MainWindow.xaml" />
+    <EmbeddedResource Include="../../MainWindow.xaml" LogicalName="UiReview.MainWindowSource.xaml" />
+    <Page Include="../../SettingsWindow.xaml" Link="SettingsWindow.xaml" />
+    <Page Include="../../AppConfigWindow.xaml" Link="AppConfigWindow.xaml" />
+    <Page Include="../../MaintenanceWindow.xaml" Link="MaintenanceWindow.xaml" />
+    <Page Include="../../InstallationDiscoveryWindow.xaml" Link="InstallationDiscoveryWindow.xaml" />
+    <Page Include="../../EuroScopeInstallWindow.xaml" Link="EuroScopeInstallWindow.xaml" />
+    <Page Include="../../FreshSoftwareInstallWindow.xaml" Link="FreshSoftwareInstallWindow.xaml" />
+    <Page Include="../../SetupWizardWindow.xaml" Link="SetupWizardWindow.xaml" />
+    <Page Include="../../Themes/Light.xaml" Link="Themes/Light.xaml" />
+    <Page Include="../../Themes/Dark.xaml" Link="Themes/Dark.xaml" />
+    <Resource Include="../../Assets/app.ico" Link="Assets/app.ico" />
+    <Resource Include="../../Assets/logo-banner.png" Link="Assets/logo-banner.png" />
+    <Compile Include="../../Models/CheckResult.cs" Link="CheckResult.cs" />
+    <Compile Include="../../MainWindow.ApplicationDetails.cs" Link="MainWindow.ApplicationDetails.cs" />
+    <Compile Include="../../Models/SoftwareUpdate.cs" Link="SoftwareUpdate.cs" />
+    <Compile Include="../../Models/ProfileOption.cs" Link="ProfileOption.cs" />
+    <Compile Include="../../Models/ApplicationDescriptions.cs" Link="ApplicationDescriptions.cs" />
+    <Compile Include="../../Models/AppSettings.cs" Link="AppSettings.cs" />
+    <Compile Include="../../Models/SetupWizardState.cs" Link="SetupWizardState.cs" />
+    <Compile Include="../../Converters/RowBackgroundConverter.cs" Link="RowBackgroundConverter.cs" />
+    <Compile Include="../../ReviewScrollHelper.cs" Link="ReviewScrollHelper.cs" />
+  </ItemGroup>
+</Project>

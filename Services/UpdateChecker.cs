@@ -21,7 +21,7 @@ public static class UpdateChecker
     public static Task CheckEuroscope(CheckResult result, string exePath)
     {
         result.InstalledVersion = "—";
-        result.LatestVersion = "—";
+        result.LatestVersion = "v" + EuroScopePolicy.SupportedVersion;
         result.StatusMessage = string.Empty;
 
         if (string.IsNullOrWhiteSpace(exePath))
@@ -39,13 +39,13 @@ public static class UpdateChecker
                 return Task.CompletedTask;
             }
 
-            const string supportedVer = "3.2.3.2";
+            const string supportedVer = EuroScopePolicy.SupportedVersion;
 
             var fileInfo = FileVersionInfo.GetVersionInfo(exePath);
             var localVer = fileInfo.ProductVersion ?? fileInfo.FileVersion ?? "0.0.0";
             result.InstalledVersion = $"v{localVer}";
             result.LatestVersion    = $"v{supportedVer}";
-            result.DownloadUrl      = "https://www.euroscope.hu/wp/category/public-release/";
+            result.DownloadUrl      = EuroScopePolicy.DownloadUrl;
 
             if (!Version.TryParse(localVer, out var local) || !Version.TryParse(supportedVer, out var supported))
             {
@@ -56,6 +56,8 @@ public static class UpdateChecker
             result.Status = local < supported ? CheckStatus.UpdateAvailable
                           : local > supported ? CheckStatus.Unsupported
                           :                     CheckStatus.UpToDate;
+            result.StatusMessage = local == supported ? "Supported token-authentication build for the Swedish GNG package." :
+                "Sweden supports EuroScope " + supportedVer + ". Use Manage to review a switch; newer releases are not automatically recommended.";
 
             Logger.Log("CHECK", $"EuroScope: installed={result.InstalledVersion} latest={result.LatestVersion} → {result.Status}");
         }
