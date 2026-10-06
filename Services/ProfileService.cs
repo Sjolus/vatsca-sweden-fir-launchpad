@@ -47,9 +47,9 @@ public static class ProfileService
         CredentialManagerService.Has(CredentialManagerService.TargetVatsim);
 
     /// <summary>
-    /// Returns true when stored settings match what is actually written in the EuroScope files.
-    /// Returns true (no mismatch to report) if EuroscopeDataPath is not configured.
-    /// Returns false if the profile is not fully configured.
+    /// Compares selected stored fields with the first ES*.prf and primary support files.
+    /// A missing or unconfigured data folder returns true because no comparison is possible.
+    /// Does not verify every profile; returns false if the controller profile is incomplete.
     /// </summary>
     public static bool IsInSync(AppSettings s, string euroscopeDataPath)
     {
@@ -83,7 +83,8 @@ public static class ProfileService
 
     public static void Apply(AppSettings s, string euroscopeDataPath)
     {
-        if (!Directory.Exists(euroscopeDataPath)) return;
+        if (!Directory.Exists(euroscopeDataPath))
+            throw new DirectoryNotFoundException("The EuroScope data folder is unavailable. No profile files were updated.");
 
         var password = CredentialManagerService.Load(CredentialManagerService.TargetVatsim) ?? string.Empty;
         var prfFiles = Directory.GetFiles(euroscopeDataPath, "ES*.prf");

@@ -42,6 +42,7 @@ namespace LaunchpadPackaging {
 }
 
 $signatureChecks = [Collections.Generic.List[object]]::new()
+$iconExecutables = [Collections.Generic.List[string]]::new()
 function Assert-Signature([string] $Path, [string] $Label) {
     $signature = Get-AuthenticodeSignature -LiteralPath $Path
     if (-not $signature.SignerCertificate -or $signature.SignerCertificate.Thumbprint -ne $CertificateThumbprint) { throw "Unexpected or missing signing certificate: $Label" }
@@ -59,6 +60,7 @@ $portableFiles = @(Get-ChildItem -LiteralPath $ReleaseDirectory -Filter '*Portab
 $packages = @(Get-ChildItem -LiteralPath $ReleaseDirectory -Filter '*-full.nupkg' -File)
 if ($setupFiles.Count -ne 1 -or $portableFiles.Count -ne 1 -or $packages.Count -ne 1) { throw 'Expected one Setup, one portable ZIP and one full update package.' }
 Assert-Signature $setupFiles[0].FullName $setupFiles[0].Name
+$iconExecutables.Add($setupFiles[0].FullName)
 
 $entryCounter = 0
 foreach ($bundle in @($portableFiles[0], $packages[0])) {
@@ -72,6 +74,7 @@ foreach ($bundle in @($portableFiles[0], $packages[0])) {
             $output = [IO.File]::Create($destination)
             try { $source.CopyTo($output) } finally { $output.Dispose(); $source.Dispose() }
             Assert-Signature $destination ($bundle.Name + ':' + $entry.FullName)
+            $iconExecutables.Add($destination)
         }
         if ($bundle.Extension -eq '.nupkg') {
             $manifestEntry = $archive.Entries | Where-Object { $_.Name.EndsWith('.nuspec') } | Select-Object -First 1
@@ -83,6 +86,7 @@ foreach ($bundle in @($portableFiles[0], $packages[0])) {
             if ($metadata.title -ne 'Sweden FIR Launchpad' -or $metadata.mainExe -ne 'VatscaUpdateChecker.exe') { throw 'Unexpected package title or entry point.' }
             if ($metadata.channel -ne 'win-x64' -or $metadata.rid -ne 'win-x64' -or $metadata.machineArchitecture -ne 'x64') { throw 'Unexpected package release channel or architecture.' }
             if ($metadata.runtimeDependencies -ne 'webview2') { throw 'Expected WebView2 as the only bootstrap prerequisite for the self-contained app.' }
+            if ($metadata.shortcutLocations -ne 'StartMenuRoot' -or $metadata.shortcutAumid -ne 'velopack.SwedenFirLaunchpad') { throw 'Unexpected shortcut locations or taskbar application identity.' }
             $packageVersion = [string]$metadata.version
             if ($ExpectedVersion -and $packageVersion -ne $ExpectedVersion) { throw 'The package version differs from the requested build version.' }
             $mainFile = Get-ChildItem -LiteralPath $inspection -Filter '*-VatscaUpdateChecker.exe' -File | Select-Object -First 1
@@ -95,6 +99,9 @@ foreach ($bundle in @($portableFiles[0], $packages[0])) {
     }
     finally { $archive.Dispose() }
 }
+
+$iconChecks = & (Join-Path $PSScriptRoot 'Test-InstallerIcons.ps1') -ExecutablePaths $iconExecutables.ToArray() -FullPackagePath $packages[0].FullName
+$iconChecks | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $ReleaseDirectory 'icon-verification.json') -Encoding utf8
 
 $feedPath = Join-Path $ReleaseDirectory 'releases.win-x64.json'
 if (-not (Test-Path -LiteralPath $feedPath)) { throw 'The win-x64 update feed is missing.' }
@@ -126,4 +133,4 @@ if ($tamperStatus -eq 0) { throw 'Hash-only verification accepted modified signe
 $tamperTrustStatus = [LaunchpadPackaging.Authenticode]::Verify($tampered, $false)
 if ($tamperTrustStatus -ne -2146869232) { throw "The modified signed fixture did not produce TRUST_E_BAD_DIGEST (status $tamperTrustStatus)." }
 $signatureChecks | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $ReleaseDirectory 'signature-verification.json') -Encoding utf8
-Write-Host "Verified $($signatureChecks.Count) executable signatures, tamper rejection, package metadata and $(@($feed.Assets).Count) update-feed package hashes. No executable was launched."
+Write-Host "Verified $($signatureChecks.Count) executable signatures and icons, setup.ico, tamper rejection, package metadata and $(@($feed.Assets).Count) update-feed package hashes. No executable was launched."

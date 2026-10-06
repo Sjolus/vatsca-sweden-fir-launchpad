@@ -62,16 +62,16 @@ var tests = new (string Name, Func<Fixture, Task> Run)[]
         f.Feed(f.Package("2.0.0") with { PackageId = "OtherApp" });
         Equal(LaunchpadUpdateStatus.NoFeed, (await f.Service().CheckAsync()).Status);
     }),
-    ("download verifies and stages without starting a process", async f =>
+    ("major-version update verifies and stages without starting a process", async f =>
     {
-        var asset = f.Package("1.1.0");
+        var asset = f.Package("2.0.0");
         f.Feed(asset);
-        var service = f.Service();
+        var service = f.Service(version: "1.5.0-dev.1");
         var states = new List<LaunchpadUpdateState>();
         service.StateChanged += (_, state) => states.Add(state);
         Equal(LaunchpadUpdateStatus.Available, (await service.CheckAsync()).Status);
         Equal(LaunchpadUpdateStatus.Ready, (await service.DownloadAsync()).Status);
-        Equal("1.1.0", service.State.AvailableVersion);
+        Equal("2.0.0", service.State.AvailableVersion);
         True(states.Any(s => s.Status == LaunchpadUpdateStatus.Downloading && s.ProgressPercent == 100));
         Equal(asset.SHA256, Hash(Path.Combine(f.Packages, asset.FileName)));
         Equal(1, f.Source.Downloads);

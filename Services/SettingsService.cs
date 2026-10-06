@@ -11,6 +11,8 @@ public static class SettingsService
         "VatscaUpdateChecker",
         "settings.json");
 
+    public static bool HasSavedSettings => File.Exists(SettingsPath);
+
     public static AppSettings Load()
     {
         try
@@ -31,5 +33,16 @@ public static class SettingsService
         Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
         var json = JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true });
         File.WriteAllText(SettingsPath, json);
+    }
+
+    public static bool TrySave(AppSettings settings) => TrySave(settings, Save);
+
+    // A failed write must not replace the caller's current settings with older disk values.
+    // Inject the writer for isolated failure/retry tests without touching real settings.
+    internal static bool TrySave(AppSettings settings, Action<AppSettings> save)
+    {
+        try { save(settings); return true; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        { return false; }
     }
 }

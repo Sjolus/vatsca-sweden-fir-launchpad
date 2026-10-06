@@ -1,23 +1,23 @@
 <Window x:Class="VatscaUpdateChecker.AppConfigWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="App Configuration"
-        Height="660" Width="500"
-        ResizeMode="NoResize"
+        Title="Controller profile"
+        Height="720" Width="560" MinHeight="400" MinWidth="440"
+        ResizeMode="CanResize"
         WindowStartupLocation="CenterOwner"
         Background="{DynamicResource AppBg}">
 
     <DockPanel Margin="20">
 
         <!-- Buttons -->
-        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal"
+        <WrapPanel x:Name="FooterActions" DockPanel.Dock="Bottom" Orientation="Horizontal"
                     HorizontalAlignment="Right" Margin="0,16,0,0">
-            <Button Content="Preview" Width="80" Margin="0,0,8,0"
+            <Button x:Name="PreviewButton" Content="Preview" MinWidth="80" Margin="0,0,8,0"
                     Click="Preview_Click" Padding="0,7" Cursor="Hand"/>
-            <Button Content="Save &amp; Apply" Width="100" Margin="0,0,8,0"
+            <Button x:Name="SaveProfileButton" Content="Save &amp; apply" MinWidth="110" Margin="0,0,8,0"
                     Click="Save_Click"
                     Background="#1a475f" Foreground="White"
-                    BorderThickness="0" Padding="0,7" Cursor="Hand">
+                    BorderThickness="0" Padding="12,7" Cursor="Hand">
                 <Button.Template>
                     <ControlTemplate TargetType="Button">
                         <Border Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
@@ -26,18 +26,29 @@
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True"><Setter Property="Opacity" Value="0.85"/></Trigger>
                             <Trigger Property="IsPressed"   Value="True"><Setter Property="Opacity" Value="0.7"/></Trigger>
+                            <Trigger Property="IsEnabled"   Value="False"><Setter Property="Opacity" Value="0.5"/></Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Button.Template>
             </Button>
-            <Button Content="Cancel" Width="80" Click="Cancel_Click" Padding="0,7" Cursor="Hand"/>
-        </StackPanel>
+            <Button Content="Cancel" MinWidth="80" Click="Cancel_Click" IsCancel="True" Padding="0,7" Cursor="Hand"/>
+        </WrapPanel>
 
+        <ScrollViewer x:Name="ProfileFormScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel>
         <!-- Sync status banner -->
-        <Border x:Name="SyncBanner" DockPanel.Dock="Top"
+        <Border x:Name="SyncBanner"
                 Padding="10,8" Margin="0,0,0,16">
-            <TextBlock x:Name="SyncText" Foreground="White" FontSize="12" TextWrapping="Wrap"/>
+            <TextBlock x:Name="SyncText" Foreground="{DynamicResource WarningFg}" FontSize="12" TextWrapping="Wrap"/>
         </Border>
+
+        <TextBlock Text="EuroScope profile folder" FontWeight="SemiBold" Margin="0,0,0,4"
+                   Foreground="{DynamicResource PrimaryText}"/>
+        <TextBox x:Name="TargetPathText" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="80"
+                 VerticalScrollBarVisibility="Auto" Padding="6,5" FontSize="12"
+                 AutomationProperties.Name="EuroScope profile folder"/>
+        <TextBlock x:Name="ApplyHintText" TextWrapping="Wrap" Margin="0,6,0,16"
+                   Foreground="{DynamicResource SecondaryText}" FontSize="12"/>
 
         <!-- Fields -->
         <StackPanel>
@@ -45,17 +56,17 @@
             <!-- Name -->
             <TextBlock Text="Full Name" FontWeight="SemiBold" Margin="0,0,0,4"
                        Foreground="{DynamicResource PrimaryText}"/>
-            <TextBox x:Name="NameBox" Margin="0,0,0,14" Padding="6,5" FontFamily="Consolas" FontSize="12"/>
+            <TextBox x:Name="NameBox" Margin="0,0,0,14" Padding="6,5" FontFamily="Consolas" FontSize="12" AutomationProperties.Name="Full name"/>
 
             <!-- Rating -->
             <TextBlock Text="VATSIM Rating" FontWeight="SemiBold" Margin="0,0,0,4"
                        Foreground="{DynamicResource PrimaryText}"/>
-            <ComboBox x:Name="RatingBox" Margin="0,0,0,14" Padding="6,5" FontSize="12"/>
+            <ComboBox x:Name="RatingBox" Margin="0,0,0,14" Padding="6,5" FontSize="12" AutomationProperties.Name="VATSIM rating"/>
 
             <!-- CID -->
             <TextBlock Text="VATSIM CID" FontWeight="SemiBold" Margin="0,0,0,4"
                        Foreground="{DynamicResource PrimaryText}"/>
-            <TextBox x:Name="CidBox" Margin="0,0,0,14" Padding="6,5" FontFamily="Consolas" FontSize="12"/>
+            <TextBox x:Name="CidBox" Margin="0,0,0,14" Padding="6,5" FontFamily="Consolas" FontSize="12" AutomationProperties.Name="VATSIM CID"/>
 
             <!-- Password -->
             <TextBlock Text="VATSIM Password" FontWeight="SemiBold" Margin="0,0,0,4"
@@ -65,58 +76,61 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <PasswordBox x:Name="PasswordBox"    Padding="6,5" FontFamily="Consolas" FontSize="12"/>
+                <PasswordBox x:Name="PasswordBox"    Padding="6,5" FontFamily="Consolas" FontSize="12" AutomationProperties.Name="VATSIM password"/>
                 <TextBox    x:Name="PasswordBoxText" Padding="6,5" FontFamily="Consolas" FontSize="12"
-                             Visibility="Collapsed"/>
+                             Visibility="Collapsed" AutomationProperties.Name="VATSIM password, visible"/>
                 <Button Grid.Column="1" x:Name="TogglePassword" Content="Show"
                         Padding="8,5" Margin="4,0,0,0" Cursor="Hand"
-                        Click="TogglePassword_Click"/>
+                        Click="TogglePassword_Click" AutomationProperties.Name="Show VATSIM password"/>
             </Grid>
-            <TextBlock Text="Stored securely in Windows Credential Manager"
-                       FontSize="11" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,14"/>
+            <TextBlock Text="Stored in Windows Credential Manager. Applying also writes the password into EuroScope profile files."
+                       FontSize="11" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,14" TextWrapping="Wrap"/>
 
             <!-- Hoppie Code -->
-            <TextBlock Text="Hoppie ACARS Code" FontWeight="SemiBold" Margin="0,0,0,4"
+            <TextBlock Text="Hoppie ACARS Code (optional)" FontWeight="SemiBold" Margin="0,0,0,4"
                        Foreground="{DynamicResource PrimaryText}"/>
             <Grid Margin="0,0,0,4">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <PasswordBox x:Name="HoppieBox"     Padding="6,5" FontFamily="Consolas" FontSize="12"/>
+                <PasswordBox x:Name="HoppieBox"     Padding="6,5" FontFamily="Consolas" FontSize="12" AutomationProperties.Name="Hoppie ACARS code, optional"/>
                 <TextBox    x:Name="HoppieBoxText"  Padding="6,5" FontFamily="Consolas" FontSize="12"
-                             Visibility="Collapsed"/>
+                             Visibility="Collapsed" AutomationProperties.Name="Hoppie ACARS code, optional, visible"/>
                 <Button Grid.Column="1" x:Name="ToggleHoppie" Content="Show"
                         Padding="8,5" Margin="4,0,0,0" Cursor="Hand"
-                        Click="ToggleHoppie_Click"/>
+                        Click="ToggleHoppie_Click" AutomationProperties.Name="Show Hoppie ACARS code"/>
             </Grid>
-            <TextBlock Text="Stored securely in Windows Credential Manager"
-                       FontSize="11" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,14"/>
+            <TextBlock Text="For Hoppie data-link messaging. Stored in Windows Credential Manager; applying a code also writes it into plugin files. Leave blank if unused. This does not remove codes already in those files."
+                       FontSize="11" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,14" TextWrapping="Wrap"/>
 
             <!-- OBS Callsign -->
-            <TextBlock Text="OBS Callsign Prefix" FontWeight="SemiBold" Margin="0,0,0,4"
+            <TextBlock Text="OBS Callsign Prefix (optional)" FontWeight="SemiBold" Margin="0,0,0,4"
                        Foreground="{DynamicResource PrimaryText}"/>
             <Grid Margin="0,0,0,4">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <TextBox x:Name="ObsBox" Padding="6,5" FontFamily="Consolas" FontSize="12"/>
+                <TextBox x:Name="ObsBox" Padding="6,5" FontFamily="Consolas" FontSize="12" AutomationProperties.Name="OBS callsign prefix, optional"/>
                 <TextBlock Grid.Column="1" Text="_OBS" VerticalAlignment="Center"
                            Margin="6,0,0,0" Foreground="{DynamicResource SecondaryText}"
                            FontFamily="Consolas" FontSize="12"/>
             </Grid>
-            <TextBlock Text="e.g. enter ES → saved as ES_OBS in LoginProfiles.txt"
-                       FontSize="11" Foreground="{DynamicResource SecondaryText}"/>
+            <TextBlock Text="Creates an observer login callsign: enter ES for ES_OBS in LoginProfiles.txt. Leave blank to keep existing observer logins unchanged."
+                       FontSize="11" Foreground="{DynamicResource SecondaryText}" TextWrapping="Wrap"/>
 
             <!-- VatEFS plugin toggle -->
             <CheckBox x:Name="PatchVatEfsBox" Margin="0,18,0,0"
-                      Content="Enable VatEFS plugin in EuroScope .prf files"
-                      Foreground="{DynamicResource PrimaryText}"/>
+                      Foreground="{DynamicResource PrimaryText}" AutomationProperties.Name="Enable VatEFS plugin in EuroScope profiles">
+                <TextBlock Text="Enable VatEFS plugin in EuroScope .prf files" TextWrapping="Wrap"/>
+            </CheckBox>
             <TextBlock Text="Adds VatEFS.dll + draw permissions when checked, removes them when unchecked. Requires VatEFS folder set in Settings."
                        FontSize="11" Foreground="{DynamicResource SecondaryText}" Margin="22,2,0,0"
                        TextWrapping="Wrap"/>
 
         </StackPanel>
+        </StackPanel>
+        </ScrollViewer>
     </DockPanel>
 </Window>

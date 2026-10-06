@@ -1,29 +1,69 @@
 # Contributing
 
-Thanks for your interest in contributing to VATSCA Launchpad!
+Open an issue before a substantial change so its scope and approach can be discussed. Small bug fixes can go directly to a pull request against `main`.
 
-## Reporting bugs
+## Report a problem
 
-Open an issue using the **Bug report** template. Include your Windows version, .NET version, and steps to reproduce. Attach the log file from `%APPDATA%\VatscaUpdateChecker\launchpad.log` if relevant.
+Use the **Bug report** template. Include the Launchpad version, Windows version, installer or portable build, and steps to reproduce. Include the .NET runtime version only for a framework-dependent build. Describe the expected and actual results.
 
-## Suggesting features
+If logs help, share only the relevant, redacted excerpts from `%APPDATA%\VatscaUpdateChecker\launchpad.log`. Do not attach real profiles, credentials, browser sessions or recovery backups. Follow [SECURITY.md](SECURITY.md) for vulnerabilities.
 
-Open an issue using the **Feature request** template before writing any code, so we can discuss whether it fits the scope of the project.
+## Build and test
 
-## Submitting a pull request
+Use Windows and the [.NET 9 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/9.0).
 
-1. Fork the repo and create a branch from `main`.
-2. Make your changes — see [CLAUDE.md](CLAUDE.md) for architecture notes and things to avoid.
-3. Build and test locally:
-   ```bash
-   dotnet build vatsca-update-checker.sln
-   ```
-4. Test in both light and dark mode, and with and without tool paths configured.
-5. Open a PR against `main` using the pull request template.
+```powershell
+git clone https://github.com/Sjolus/vatsca-sweden-fir-launchpad.git
+cd vatsca-sweden-fir-launchpad
+dotnet build vatsca-update-checker.sln -c Release
+```
 
-## Code style
+Run the harnesses relevant to your change. They use synthetic data and injected installers; do not substitute a real ATC setup or saved credentials. The [CI workflow](.github/workflows/build.yml) lists all required checks. Useful starting points:
 
-- Follow the conventions already in the codebase (PascalCase methods, camelCase locals, no DI container, no MVVM framework).
-- Do not add NuGet dependencies without discussing it first — keeping the dependency footprint at zero is intentional.
-- Do not store secrets or credentials in `settings.json` — use Windows Credential Manager via `CredentialManagerService`.
-- See [CLAUDE.md](CLAUDE.md) for a full list of non-obvious decisions and things to avoid.
+- [Launchpad updates](Tests/LaunchpadUpdate.Tests/README.md) and [client updates](Tests/SoftwareUpdate.Tests/README.md)
+- [Fresh installs](Tests/FreshSoftwareInstall.Tests/README.md), [EuroScope management](Tests/EuroScopeInstall.Tests/README.md) and [removal/discovery](Tests/AtcRemoval.Tests/README.md)
+- [Profile writes](Tests/Profile.Tests/README.md) and [settings persistence](Tests/Settings.Tests/README.md)
+- [Isolated WPF layout review](Tests/UiReview/README.md)
+
+For example:
+
+```powershell
+dotnet run --project Tests/SoftwareUpdate.Tests/SoftwareUpdate.Tests.csproj -c Release
+dotnet build Tests/UiReview/UiReview.csproj -c Release
+dotnet Tests/UiReview/bin/Release/net9.0-windows/Launchpad.UiReview.dll --validate-layouts
+```
+
+UI changes need both themes, minimum window size, keyboard navigation, and configured/unconfigured paths. Hidden layout checks do not replace desktop testing. Use a controlled test account or VM for native installer, UAC, restart and recovery tests.
+
+## Keep changes focused
+
+- Follow the existing WPF code-behind and service structure; there is no DI container or MVVM framework.
+- Discuss new NuGet dependencies first. Velopack is the current packaging/updater dependency.
+- Keep secrets out of settings JSON, logs, tests and screenshots. Use fake credentials in fixtures and `CredentialManagerService` for actual saved secrets.
+- Keep build outputs, local tool state, test captures and signing keys out of Git.
+- Update the relevant user guide when behavior changes. Use [CLAUDE.md](CLAUDE.md) for architecture and repository instructions.
+
+In the pull request, describe the problem, behavior after the change, validation performed and remaining limitations. Use the PR template.
+
+## Package a development build
+
+A standalone, self-contained publish:
+
+```powershell
+dotnet publish VatscaUpdateChecker.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o artifacts/publish-check
+```
+
+The project enables native-library extraction and compression for single-file builds. Keep both settings when changing publishing.
+
+For Setup, portable and update packages, use PowerShell 7 on Windows:
+
+```powershell
+./scripts/New-DevelopmentCertificate.ps1
+./scripts/Build-Installer.ps1 -Version 2.0.0-dev.1
+```
+
+The certificate script creates or reuses a non-exportable key in the current user's Personal certificate store. Only its public certificate and thumbprint are saved under `%LOCALAPPDATA%\VatscaUpdateChecker\Signing`. It does not add trust. Never commit or distribute the private key.
+
+The build script restores the pinned `vpk` tool, publishes, signs and verifies the packages. Output is `artifacts/installer/<version>/releases`; use a fresh `-OutputRoot artifacts/<name>` for another build. It does not run Setup or publish a release. Development signatures are not timestamped and do not establish a trusted publisher.
+
+CI builds and verifies development packages on PRs and main builds. Version tags prepare a **draft** release. A published installer release needs Setup, the full update package and `releases.win-x64.json` together. Prerelease packages are not offered by the production updater.

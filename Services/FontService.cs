@@ -25,10 +25,8 @@ public sealed record FontsCheckResult(
 /// and at least as new as the source. Identification is by exact filename (case-insensitive)
 /// — stray "FOO (1).TTF" Windows duplicate artifacts are ignored.
 ///
-/// Version comparison uses the TTF `head.fontRevision` field via WPF's GlyphTypeface — this is
-/// the same value Windows Explorer shows in the Properties dialog. Byte-equality was too strict:
-/// the same font version can ship with slightly different bytes (signing metadata, build
-/// timestamps, etc.) and still be the same logical version.
+/// Version comparison uses WPF's GlyphTypeface.Version, interpreted from the font's NAME table.
+/// Files with matching reported versions can differ in metadata or timestamps.
 /// </summary>
 public static class FontService
 {
@@ -36,7 +34,7 @@ public static class FontService
     private static readonly string[] RequiredFonts = { "EuroScope.ttf", "SMR ESGG.ttf" };
     private const string EsaaSubdir = "ESAA";
 
-    // 16.16 fixed-point quantisation noise tolerance — well below any meaningful version delta.
+    // Small numeric comparison tolerance for the version reported by WPF.
     private const double VersionTolerance = 0.0001;
 
     private static readonly string SystemFontsDir =
@@ -128,7 +126,7 @@ public static class FontService
         try
         {
             var glyph = new GlyphTypeface(new Uri(ttfPath, UriKind.Absolute));
-            return glyph.Version;   // head.fontRevision — same value Windows Explorer shows
+            return glyph.Version;   // Font version interpreted from the NAME table.
         }
         catch
         {

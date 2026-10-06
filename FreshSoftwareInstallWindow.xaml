@@ -1,0 +1,62 @@
+<Window x:Class="VatscaUpdateChecker.FreshSoftwareInstallWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Set up an ATC application" Width="790" Height="690" MinWidth="580" MinHeight="450"
+        WindowStartupLocation="CenterOwner" Background="{DynamicResource AppBg}" Foreground="{DynamicResource PrimaryText}">
+    <DockPanel Margin="20">
+        <StackPanel DockPanel.Dock="Top" Margin="0,0,0,14">
+            <TextBlock x:Name="Heading" FontSize="24" FontWeight="SemiBold" TextWrapping="Wrap"/>
+            <TextBlock Text="Keep your current setup, bring it into Launchpad, or install a missing application. Nothing changes until you choose and confirm an action."
+                       TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,8,0,0"/>
+        </StackPanel>
+        <StackPanel DockPanel.Dock="Bottom" Margin="0,12,0,0">
+            <ProgressBar x:Name="Activity" Height="6" Minimum="0" Maximum="100" Visibility="Collapsed" Margin="0,0,0,8"/>
+            <TextBox x:Name="StatusText" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="100" VerticalScrollBarVisibility="Auto"
+                     BorderThickness="0" Background="Transparent" Foreground="{DynamicResource PrimaryText}"
+                     AutomationProperties.Name="Installation status"/>
+            <WrapPanel HorizontalAlignment="Right">
+                <Button x:Name="ReviewButton" Content="Review fresh install" Click="Review_Click" Padding="12,8" Margin="0,0,8,0"/>
+                <Button x:Name="ApplyButton" Content="Install application" Click="Apply_Click" IsEnabled="False"
+                        Padding="12,8" Margin="0,0,8,0" Background="#1a475f" Foreground="White"/>
+                <Button x:Name="CancelOperationButton" Content="Cancel preparation" Click="CancelOperation_Click" Visibility="Collapsed" Padding="12,8" Margin="0,0,8,0"/>
+                <Button x:Name="CloseButton" Content="Close" Click="Close_Click" IsCancel="True" Padding="12,8"/>
+            </WrapPanel>
+        </StackPanel>
+        <ScrollViewer x:Name="ContentScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel>
+                <StackPanel x:Name="OptionsPanel">
+                    <TextBlock x:Name="ConfiguredPath" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,12"/>
+                    <WrapPanel Margin="0,0,0,12">
+                        <Button Content="Find existing installations…" Click="Adopt_Click" Padding="10,6" Margin="0,0,8,6"/>
+                        <Button Content="Remove apps / settings…" Click="Removal_Click" Padding="10,6" Margin="0,0,0,6"/>
+                    </WrapPanel>
+                    <TextBlock Text="Installing a missing application" FontWeight="SemiBold" FontSize="16" Margin="0,0,0,6"/>
+                <TextBlock Text="Existing installations must be linked or removed first. Leftover settings are kept where supported; choose a private recovery folder if the review requires one. To reset settings, use Remove / reset on the main window."
+                               TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,12"/>
+                    <DockPanel Margin="0,0,0,12">
+                        <Button DockPanel.Dock="Right" Content="Recovery folder…" Click="ChooseBackup_Click" Padding="10,6" Margin="8,0,0,0"/>
+                        <TextBox x:Name="BackupPath" IsReadOnly="True" Padding="6" AutomationProperties.Name="Recovery folder"/>
+                    </DockPanel>
+                    <Button x:Name="PrerequisiteButton" Content="Check required runtime…" Click="Prerequisite_Click" HorizontalAlignment="Left"
+                            Padding="10,6" Margin="0,0,0,12"/>
+                    <CheckBox x:Name="AllowVatisBeta" Visibility="Collapsed" Checked="BetaChanged" Unchecked="BetaChanged"
+                              Foreground="{DynamicResource PrimaryText}" Margin="0,0,0,12">
+                        <TextBlock Text="Use the current official vATIS beta release (opt in before review)." TextWrapping="Wrap"/>
+                    </CheckBox>
+                </StackPanel>
+                <StackPanel x:Name="ReviewPanel" Margin="0,8,0,0">
+                    <TextBlock Text="Review" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                    <TextBox x:Name="ReviewText" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" Height="210"
+                             VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Reviewed installation plan"
+                             Background="{DynamicResource RowBg}" Foreground="{DynamicResource PrimaryText}" Padding="12"
+                             Text="Review checks the official release and the intended destination. Download and installation require a separate confirmation. The application remains closed afterward."/>
+                    <CheckBox x:Name="ConfirmInstall" IsEnabled="False" Checked="ConfirmationChanged" Unchecked="ConfirmationChanged"
+                              Foreground="{DynamicResource PrimaryText}" Margin="0,10,0,8"
+                              AutomationProperties.Name="Confirm the reviewed version, installation location and existing-data plan">
+                        <TextBlock Text="I reviewed the version, installation location and existing-data plan." TextWrapping="Wrap"/>
+                    </CheckBox>
+                </StackPanel>
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</Window>

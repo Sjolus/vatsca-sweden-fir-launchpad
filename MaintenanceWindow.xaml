@@ -1,0 +1,106 @@
+<Window x:Class="VatscaUpdateChecker.MaintenanceWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Remove or reset ATC software" Width="900" Height="780" MinWidth="720" MinHeight="580"
+        WindowStartupLocation="CenterOwner" Background="{DynamicResource AppBg}" Foreground="{DynamicResource PrimaryText}">
+    <Window.Resources>
+        <Style TargetType="Button" BasedOn="{StaticResource ThemedButton}">
+            <Setter Property="Padding" Value="12,7"/>
+            <Setter Property="Margin" Value="4"/>
+            <Setter Property="Background" Value="{DynamicResource InputBg}"/>
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource InputBorder}"/>
+        </Style>
+        <Style TargetType="CheckBox">
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
+            <Setter Property="Margin" Value="0,5,16,5"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+    </Window.Resources>
+    <Grid Margin="20">
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+        <StackPanel Grid.Row="0" Margin="0,0,0,12">
+            <TextBlock Text="Remove or reset ATC software" FontSize="23" FontWeight="SemiBold" TextWrapping="Wrap"/>
+            <TextBlock Text="Choose individual applications, or select all supported copies. Deleting settings is a separate choice. Nothing changes until you review and confirm."
+                       TextWrapping="Wrap" Margin="0,8,0,0" Foreground="{DynamicResource SecondaryText}"/>
+        </StackPanel>
+        <ScrollViewer x:Name="ContentScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel>
+                <StackPanel x:Name="SelectionPanel">
+                    <WrapPanel>
+                        <Button Content="Select all supported apps" Click="SelectApps_Click"/>
+                        <Button Content="Select settings for selected apps" Click="SelectData_Click"/>
+                        <Button Content="Clear selection" Click="Clear_Click"/>
+                    </WrapPanel>
+                    <ItemsControl x:Name="TargetsList" Margin="0,8">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Background="{DynamicResource RowBg}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1" Padding="12" Margin="0,0,0,8">
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Target.Name}" FontSize="15" FontWeight="SemiBold"/>
+                                        <TextBlock Text="{Binding Target.Description}" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,4"/>
+                                        <WrapPanel>
+                                            <CheckBox Content="Remove application / package" IsChecked="{Binding RemoveApplication}" IsEnabled="{Binding Target.CanRemoveApplication}" Click="SelectionChanged"
+                                                      AutomationProperties.Name="{Binding Target.Name, StringFormat='Remove {0} application or package'}"/>
+                                            <CheckBox Content="Delete settings and local data" IsChecked="{Binding RemoveData}" IsEnabled="{Binding Target.CanRemoveData}" Click="SelectionChanged"
+                                                      AutomationProperties.Name="{Binding Target.Name, StringFormat='Delete {0} settings and local data'}"/>
+                                        </WrapPanel>
+                                        <TextBlock Text="{Binding Details}" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}"/>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock Text="Launchpad" FontSize="16" FontWeight="SemiBold" Margin="0,8,0,4"/>
+                    <CheckBox x:Name="RemoveLaunchpad" Click="SelectionChanged" AutomationProperties.Name="Uninstall Launchpad after the selected work finishes">
+                        <TextBlock Text="Uninstall Launchpad after the selected work finishes" TextWrapping="Wrap"/>
+                    </CheckBox>
+                    <WrapPanel>
+                        <CheckBox x:Name="RemoveSettings" Content="Delete preferences and logs" Click="SelectionChanged"/>
+                        <CheckBox x:Name="RemoveSessions" Content="Delete browser sessions" Click="SelectionChanged"/>
+                        <CheckBox x:Name="RemoveCredentials" Content="Delete saved credentials" Click="SelectionChanged"/>
+                        <CheckBox x:Name="RemoveDownloads" Content="Clear cached downloads" Click="SelectionChanged"/>
+                        <CheckBox x:Name="RemoveBackups" Content="Delete existing update recovery backups" Click="SelectionChanged"/>
+                    </WrapPanel>
+                    <TextBlock Text="Settings and recovery copies can contain passwords. Deleting saved credentials does not erase copies in unselected profiles or backups. Launchpad keeps shared runtimes and online accounts; vendor uninstallers may remove their own registered components and fonts."
+                               TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,4,0,8"/>
+                    <CheckBox x:Name="ExportBackup" Content="Export a recovery copy before removal" IsChecked="True" Click="SelectionChanged"/>
+                    <TextBlock Text="Recovery copies are restored manually. Each completed export includes RESTORE.txt with instructions."
+                               TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,6"/>
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <TextBox x:Name="BackupPath" IsReadOnly="True" Padding="8" VerticalContentAlignment="Center" ToolTip="Choose a private folder outside the selected applications and data."
+                                 AutomationProperties.Name="Recovery export folder"/>
+                        <Button Grid.Column="1" Content="Choose folder…" Click="ChooseBackup_Click"/>
+                    </Grid>
+                </StackPanel>
+                <StackPanel x:Name="ReviewPanel" Margin="0,12,0,0">
+                    <TextBlock Text="Review" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                    <TextBox x:Name="ReviewText" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                             Height="230" Padding="10" AutomationProperties.Name="Reviewed removal plan"
+                             Text="Select what to remove, then choose Review removal."/>
+                    <CheckBox x:Name="ConfirmRemoval" IsEnabled="False" Click="ConfirmationChanged"
+                              AutomationProperties.Name="Confirm the reviewed paths and removal of selected files and settings">
+                        <TextBlock Text="I reviewed the paths and understand that selected files and settings will be removed." TextWrapping="Wrap"/>
+                    </CheckBox>
+                </StackPanel>
+            </StackPanel>
+        </ScrollViewer>
+        <StackPanel Grid.Row="2" Margin="0,12,0,0">
+            <ProgressBar x:Name="Activity" Height="5" IsIndeterminate="True" Visibility="Collapsed"/>
+            <TextBox x:Name="StatusText" Text="No changes made." IsReadOnly="True" TextWrapping="Wrap" MaxHeight="100"
+                     VerticalScrollBarVisibility="Auto" Margin="0,8" BorderThickness="0" Background="Transparent"
+                     Foreground="{DynamicResource SecondaryText}" AutomationProperties.Name="Removal status"/>
+            <TextBox x:Name="RecoveryText" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="70" Visibility="Collapsed"
+                     VerticalScrollBarVisibility="Auto" Margin="0,0,0,8" BorderThickness="0" Background="Transparent"
+                     Foreground="{DynamicResource PrimaryText}" AutomationProperties.Name="Completed recovery export locations"/>
+            <WrapPanel HorizontalAlignment="Right">
+                <Button x:Name="RefreshButton" Content="Refresh applications" Click="Refresh_Click"
+                        ToolTip="Reload application state and clear every removal selection."/>
+                <Button x:Name="ReviewButton" Content="Review removal" Click="Review_Click" IsEnabled="False"/>
+                <Button x:Name="ApplyButton" Content="Remove selected items" IsEnabled="False" Click="Apply_Click"/>
+                <Button x:Name="CloseButton" Content="Close" Click="Close_Click" IsCancel="True"/>
+            </WrapPanel>
+        </StackPanel>
+    </Grid>
+</Window>

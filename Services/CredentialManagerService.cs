@@ -37,6 +37,20 @@ public static class CredentialManagerService
     [DllImport("advapi32.dll", EntryPoint = "CredFree")]
     private static extern void CredFree(IntPtr buffer);
 
+    [DllImport("advapi32.dll", EntryPoint = "CredDeleteW", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern bool CredDelete(string target, uint type, uint flags);
+
+    public static void Delete(string target)
+    {
+        if (target is not (TargetVatsim or TargetHoppie))
+            throw new ArgumentException("Only Launchpad's own saved credentials can be removed.", nameof(target));
+        if (!CredDelete(target, CRED_TYPE_GENERIC, 0))
+        {
+            var error = Marshal.GetLastWin32Error();
+            if (error != 1168) throw new System.ComponentModel.Win32Exception(error, "Windows could not remove the selected saved credential.");
+        }
+    }
+
     public static void Save(string target, string secret)
     {
         var blob    = Encoding.Unicode.GetBytes(secret);
@@ -55,7 +69,11 @@ public static class CredentialManagerService
                 Persist            = CRED_PERSIST_LOCAL_MACHINE,
                 UserName           = userPtr,
             };
-            CredWrite(ref cred, 0);
+            if (!CredWrite(ref cred, 0))
+            {
+                var error = Marshal.GetLastWin32Error();
+                throw new System.ComponentModel.Win32Exception(error, "Windows could not save the controller credential.");
+            }
         }
         finally
         {
