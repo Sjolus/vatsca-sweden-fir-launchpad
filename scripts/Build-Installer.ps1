@@ -54,6 +54,7 @@ try {
         '--packDir', $publishDirectory, '--mainExe', 'VatscaUpdateChecker.exe',
         '--outputDir', $releaseDirectory, '--channel', 'win-x64', '--runtime', 'win-x64',
         '--framework', 'webview2', '--icon', (Join-Path $repository 'Assets\app.ico'),
+        '--splashImage', (Join-Path $repository 'Assets\installer-splash.png'), '--splashProgressColor', '#42BED9',
         '--shortcuts', 'StartMenuRoot', '--delta', 'None',
         '--signParams', "/sha1 $CertificateThumbprint /s My /fd SHA256",
         '--signExclude', '(?i)(?:^|[\\/])(?:Microsoft\..*\.dll|WebView2Loader\.dll)$')

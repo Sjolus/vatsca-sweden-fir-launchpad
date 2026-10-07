@@ -66,4 +66,6 @@ The certificate script creates or reuses a non-exportable key in the current use
 
 The build script restores the pinned `vpk` tool, publishes, signs and verifies the packages. Output is `artifacts/installer/<version>/releases`; use a fresh `-OutputRoot artifacts/<name>` for another build. It does not run Setup or publish a release. Development signatures are not timestamped and do not establish a trusted publisher.
 
+Regenerate the branded Setup image with `./scripts/Render-InstallerSplash.ps1` after editing its layout. Keep the bottom 12 pixels clear for Velopack's live progress bar. Package verification checks the image and the package embedded in Setup; interactive installation still needs a separate visual check.
+
 CI builds and verifies development packages on PRs and main builds. Version tags prepare a **draft** release with Setup, the portable ZIP, the full update package and `releases.win-x64.json`. The public certificate, verification reports and other packaging metadata remain in the CI artifact. Prerelease packages are not offered by the production updater.

@@ -1,5 +1,9 @@
 # Changelog
 
+## [2.0.2] — 2026-10-07
+
+- Replace Setup's plain progress dialog with a VATSIM Scandinavia splash and live progress bar, removing its unnecessary OK button during installation.
+
 ## [2.0.1] — 2026-10-07
 
 - Check `TopSky.ttf` alongside the EuroScope and SMR ESGG fonts, and offer the existing font installation action when it is missing or outdated.
