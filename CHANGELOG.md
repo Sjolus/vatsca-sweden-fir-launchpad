@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Check `TopSky.ttf` alongside the EuroScope and SMR ESGG fonts, and offer the existing font installation action when it is missing or outdated.
+
 ## [2.0.0] — 2026-10-06
 
 ### Installation and updates
