@@ -103,6 +103,9 @@ foreach ($bundle in @($portableFiles[0], $packages[0])) {
 $iconChecks = & (Join-Path $PSScriptRoot 'Test-InstallerIcons.ps1') -ExecutablePaths $iconExecutables.ToArray() -FullPackagePath $packages[0].FullName
 $iconChecks | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $ReleaseDirectory 'icon-verification.json') -Encoding utf8
 
+$splashCheck = & (Join-Path $PSScriptRoot 'Test-InstallerSplash.ps1') -FullPackagePath $packages[0].FullName -SetupPath $setupFiles[0].FullName
+$splashCheck | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $ReleaseDirectory 'splash-verification.json') -Encoding utf8
+
 $feedPath = Join-Path $ReleaseDirectory 'releases.win-x64.json'
 if (-not (Test-Path -LiteralPath $feedPath)) { throw 'The win-x64 update feed is missing.' }
 $feed = Get-Content -LiteralPath $feedPath -Raw | ConvertFrom-Json
@@ -133,4 +136,4 @@ if ($tamperStatus -eq 0) { throw 'Hash-only verification accepted modified signe
 $tamperTrustStatus = [LaunchpadPackaging.Authenticode]::Verify($tampered, $false)
 if ($tamperTrustStatus -ne -2146869232) { throw "The modified signed fixture did not produce TRUST_E_BAD_DIGEST (status $tamperTrustStatus)." }
 $signatureChecks | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $ReleaseDirectory 'signature-verification.json') -Encoding utf8
-Write-Host "Verified $($signatureChecks.Count) executable signatures and icons, setup.ico, tamper rejection, package metadata and $(@($feed.Assets).Count) update-feed package hashes. No executable was launched."
+Write-Host "Verified $($signatureChecks.Count) executable signatures and icons, setup.ico, installer splash, embedded package, tamper rejection, package metadata and $(@($feed.Assets).Count) update-feed package hashes. No executable was launched."

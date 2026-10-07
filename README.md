@@ -2,7 +2,7 @@
 
 A Windows desktop app for [VATSIM Scandinavia](https://vatsca.org) controllers. Check versions, launch configured ATC tools, manage supported installations and apply your controller details to EuroScope profiles.
 
-This README describes **Launchpad 2.0.1**. GNG package installation and old-package cleanup belong to later releases.
+This README describes **Launchpad 2.0.2**. GNG package installation and old-package cleanup belong to later releases.
 
 ![Launchpad's compact application list with TrackAudio selected and its update status shown below](Assets/screenshot.png)
 
