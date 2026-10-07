@@ -158,7 +158,11 @@ jobs:
       - name: Create draft GitHub Release for manual review
         uses: softprops/action-gh-release@v2
         with:
-          files: verified-release/*
+          files: |
+            verified-release/SwedenFirLaunchpad-win-x64-Setup.exe
+            verified-release/SwedenFirLaunchpad-win-x64-Portable.zip
+            verified-release/SwedenFirLaunchpad-*-win-x64-full.nupkg
+            verified-release/releases.win-x64.json
           fail_on_unmatched_files: true
           draft: true
           prerelease: ${{ contains(github.ref_name, '-') }}
