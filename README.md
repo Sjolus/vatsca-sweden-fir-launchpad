@@ -2,7 +2,7 @@
 
 A Windows desktop app for [VATSIM Scandinavia](https://vatsca.org) controllers. Check versions, launch configured ATC tools, manage supported installations and apply your controller details to EuroScope profiles.
 
-This README describes **Launchpad 2.0.0**. GNG package installation and old-package cleanup belong to later releases.
+This README describes **Launchpad 2.0.1**. GNG package installation and old-package cleanup belong to later releases.
 
 ![Launchpad's compact application list with TrackAudio selected and its update status shown below](Assets/screenshot.png)
 
@@ -12,7 +12,7 @@ This README describes **Launchpad 2.0.0**. GNG package installation and old-pack
 
 Use Windows 10 or 11 on an x64 PC. For installer [releases](https://github.com/Sjolus/vatsca-sweden-fir-launchpad/releases), download `SwedenFirLaunchpad-win-x64-Setup.exe`. Setup installs for your Windows user and creates a Start Menu shortcut. The installer and portable ZIP include .NET; framework-dependent builds require the [.NET 9 Desktop Runtime](https://dotnet.microsoft.com/en-us/download/dotnet/9.0). Setup can install WebView2 if it is missing. Microsoft Edge is used for the VatEFS and VATIRIS web-app windows.
 
-The 2.0.0 packages use a self-signed development certificate. Windows may show an unknown-publisher or SmartScreen warning; this signature does not establish a publicly trusted publisher. Do not add the certificate to a trusted certificate store to suppress those warnings.
+The release packages use a self-signed development certificate. Windows may show an unknown-publisher or SmartScreen warning; this signature does not establish a publicly trusted publisher. Do not add the certificate to a trusted certificate store to suppress those warnings.
 
 ## Set up your tools
 
