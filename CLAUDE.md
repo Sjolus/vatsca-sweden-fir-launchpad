@@ -1,6 +1,6 @@
 # CLAUDE.md — VATSCA Launchpad
 
-This file describes the current 2.0 implementation, its design constraints and known limits. Keep it focused on architecture rather than test-session results.
+This file describes the current implementation, its design constraints and known limits. Keep it focused on architecture rather than test-session results.
 
 Update the relevant architectural section when behavior changes. Keep execution plans in ignored `.codex/plans/`, research in `.codex/research/`, and logs or session handoffs in local notes; use Git history for the change chronology.
 
@@ -62,11 +62,11 @@ Registered and executable versions must agree before a VACS/TrackAudio update. A
 
 `MainWindow.SoftwareUpdates.cs` binds per-row progress and serializes software updates against settings/profile dialogs and Launchpad self-updates. Download/preparation cancellation is allowed; applying is not interrupted and closing is blocked until completion. No application auto-launch is requested. Unknown layouts use a vendor-download fallback. Vendor elevation/prerequisite prompts remain possible. The synthetic `Tests/SoftwareUpdate.Tests` harness must not launch processes or read real client data; run it in CI alongside the existing self-updater harness.
 
-This work belongs to the 2.0.0 scope, which also includes reviewed removal/reset and discovery of existing installations. GNG installation, additional font and old/new-package cleanup remain 2.1.0, 2.1.1 and 2.1.2 respectively. Full GNG package removal in the 2.0 maintenance dialog is separate from issue #4's selective obsolete-file cleanup.
+This work shipped in 2.0.0, which also includes reviewed removal/reset and discovery of existing installations. The additional font check (#3) and old/new-package cleanup (#4) are separate follow-ups ahead of authenticated GNG installation. Full GNG package removal in the 2.0 maintenance dialog is separate from issue #4's selective obsolete-file cleanup.
 
 ### Existing installations and maintenance
 
-Product direction: make Launchpad the common entry point for Swedish controllers without forcing existing users to migrate. Path adoption, configuration import/reuse, software replacement and data reset are distinct decisions. A saved path enables checking/launching; it does not authorize installation or deletion. Keep the legacy/manual path useful for copies that cannot be managed safely. Full GNG onboarding remains 2.1.0.
+Product direction: make Launchpad the common entry point for Swedish controllers without forcing existing users to migrate. Path adoption, configuration import/reuse, software replacement and data reset are distinct decisions. A saved path enables checking/launching; it does not authorize installation or deletion. Keep the legacy/manual path useful for copies that cannot be managed safely. Full GNG onboarding remains a separate feature.
 
 `FreshSoftwareInstallService` and `FreshSoftwareInstallWindow` handle explicitly confirmed fresh VACS/vATIS/TrackAudio installation separately from upgrade-only adapters. Preview selects official release metadata and validates absence, installation scope, destination and retained data; it does not download the installer. Existing copies/residue direct the user to adoption or reviewed removal. Fresh vATIS beta selection is an explicit flag, never a fake installed version; the verified Setup adapter refuses its existing root. `SoftwarePrerequisiteService` exposes separately confirmed Microsoft runtime preparation. Hold `MaintenanceLock` and block owner/dialog close until native installation completes. Reuse settings only where the vendor route permits, with verified external exports required by the plan. See [onboarding decisions](docs/product-onboarding.md).
 
@@ -223,7 +223,7 @@ GitHub requests are unauthenticated and already include a User-Agent. Handle rat
 
 ## Fonts, plugins and web-app rows
 
-The 2.0 `FontService` checks `EuroScope.ttf` and `SMR ESGG.ttf`; the additional TopSky check belongs to 2.1.1. It matches installed fonts by exact filename, ignoring duplicate names such as `FOO (1).TTF`. It compares `GlyphTypeface.Version` with a tolerance of 0.0001 and accepts an installed version newer than the bundled source. Byte equality is not the version test. The font action opens the source through the Windows shell for the user to install; it does not silently install fonts.
+`FontService` checks `EuroScope.ttf`, `SMR ESGG.ttf` and `TopSky.ttf` against the copies in the configured GNG `ESAA` folder. It matches installed fonts by exact filename, ignoring duplicate names such as `FOO (1).TTF`. It compares `GlyphTypeface.Version` with a tolerance of 0.0001 and accepts an installed version newer than the bundled source. Byte equality is not the version test. The font action opens the source through the Windows shell for the user to install; it does not silently install fonts.
 
 `ProfileService` identifies VatEFS by DLL basename. Enabling it adds both the plugin slot and display rows; disabling it removes those rows and renumbers later slots. A blank `VatEfsPath` leaves VatEFS references untouched. Screens come from existing profile display rows, with Ground Radar/Standard ES fallbacks. Existing display reconciliation and multi-profile sync have limitations; test them with synthetic profiles before changing them.
 

@@ -31,7 +31,7 @@ public sealed record FontsCheckResult(
 public static class FontService
 {
     // Fonts shipped inside the GNG Pack at <EuroscopeDataPath>\ESAA\<filename>.
-    private static readonly string[] RequiredFonts = { "EuroScope.ttf", "SMR ESGG.ttf" };
+    private static readonly string[] RequiredFonts = { "EuroScope.ttf", "SMR ESGG.ttf", "TopSky.ttf" };
     private const string EsaaSubdir = "ESAA";
 
     // Small numeric comparison tolerance for the version reported by WPF.

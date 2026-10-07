@@ -66,4 +66,4 @@ The certificate script creates or reuses a non-exportable key in the current use
 
 The build script restores the pinned `vpk` tool, publishes, signs and verifies the packages. Output is `artifacts/installer/<version>/releases`; use a fresh `-OutputRoot artifacts/<name>` for another build. It does not run Setup or publish a release. Development signatures are not timestamped and do not establish a trusted publisher.
 
-CI builds and verifies development packages on PRs and main builds. Version tags prepare a **draft** release. A published installer release needs Setup, the full update package and `releases.win-x64.json` together. Prerelease packages are not offered by the production updater.
+CI builds and verifies development packages on PRs and main builds. Version tags prepare a **draft** release with Setup, the portable ZIP, the full update package and `releases.win-x64.json`. The public certificate, verification reports and other packaging metadata remain in the CI artifact. Prerelease packages are not offered by the production updater.
