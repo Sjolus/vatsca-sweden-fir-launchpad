@@ -22,6 +22,40 @@ internal static class CoordinatorTests
                 Assert(!File.Exists(source) && File.Exists(other) && f.DeletedCredentials.Count == 0);
                 Assert(File.ReadAllText(Path.Combine(backup!, "Files", "0000", "settings.json")) == "FAKE-PRIVATE");
             }),
+            ("VatEFS installer diagnostics are removed only with preferences and logs", async () =>
+            {
+                using var f = new Case();
+                var log = f.File("local/VatscaUpdateChecker/SoftwareUpdates/VatEfsLogs/session/install.log", "FAKE-MSI-DIAGNOSTICS");
+                var recovery = f.File("local/VatscaUpdateChecker/SoftwareUpdates/VatEfsRecovery/session/Files/settings", "KEEP-RECOVERY");
+                var download = f.File("local/VatscaUpdateChecker/SoftwareUpdates/" + Guid.NewGuid().ToString("N") + "/vatefs.msi", "KEEP-DOWNLOAD");
+                var browser = f.File("roaming/VatscaUpdateChecker/VatEFSProfile/session", "KEEP-SESSION");
+                var plan = f.Service.Preview([], new(true, false, false, false, false), f.Recovery);
+                Assert(plan.BackupFiles.Files.Any(file => file.FullPath == log));
+                Assert(plan.BackupFiles.Files.Count == 1 && File.Exists(log));
+                var export = await f.Service.ApplyAsync(plan, null, default);
+                Assert(!File.Exists(log) && File.Exists(recovery) && File.Exists(download) && File.Exists(browser));
+                RemovalFileService.VerifyBackup(plan.BackupFiles, export!);
+            }),
+            ("download and recovery cleanup retain VatEFS installer diagnostics", async () =>
+            {
+                foreach (var selection in new[]
+                {
+                    new LaunchpadDataSelection(false, false, false, true, false),
+                    new LaunchpadDataSelection(false, false, false, false, true),
+                    new LaunchpadDataSelection(false, false, false, true, true)
+                })
+                {
+                    using var f = new Case();
+                    var log = f.File("local/VatscaUpdateChecker/SoftwareUpdates/VatEfsLogs/session/install.log", "KEEP-DIAGNOSTICS");
+                    var recovery = f.File("local/VatscaUpdateChecker/SoftwareUpdates/VatEfsRecovery/session/Files/settings", "RECOVERY");
+                    var download = f.File("local/VatscaUpdateChecker/SoftwareUpdates/" + Guid.NewGuid().ToString("N") + "/vatefs.msi", "DOWNLOAD");
+                    var plan = f.Service.Preview([], selection, null);
+                    Assert(plan.BackupFiles.Files.All(file => file.FullPath != log));
+                    await f.Service.ApplyAsync(plan, null, default);
+                    Assert(File.ReadAllText(log) == "KEEP-DIAGNOSTICS");
+                    Assert(File.Exists(download) == !selection.Downloads && File.Exists(recovery) == !selection.Backups);
+                }
+            }),
             ("only the two explicit Credential Manager targets are deleted", async () =>
             {
                 using var f = new Case();
@@ -49,15 +83,63 @@ internal static class CoordinatorTests
                 var download = f.File(folder + Guid.NewGuid().ToString("N") + "/package.exe", "download");
                 var verification = f.File(folder + "Verification/sample", "verify");
                 var backup = f.File(folder + "Backups/vATIS/Files/settings", "keep-backup");
+                var vatEfsBackup = f.File(folder + "VatEfsRecovery/dated/Files/settings", "keep-vatefs-backup");
                 var unknown = f.File(folder + "unknown/keep", "unknown");
                 await f.Service.ApplyAsync(f.Service.Preview([], new(false, false, false, true, false), null), null, default);
-                Assert(!File.Exists(download) && !File.Exists(verification) && File.Exists(backup) && File.Exists(unknown));
+                Assert(!File.Exists(download) && !File.Exists(verification) && File.Exists(backup) && File.Exists(vatEfsBackup) && File.Exists(unknown));
             }),
             ("existing backups require their own explicit selection", async () =>
             {
                 using var f = new Case(); var backup = f.File("local/VatscaUpdateChecker/SoftwareUpdates/Backups/vATIS/Files/settings", "old-backup");
                 await f.Service.ApplyAsync(f.Service.Preview([], new(false, false, false, false, true), null), null, default);
                 Assert(!File.Exists(backup));
+            }),
+            ("VatEFS recovery removal requires backup selection and preserves application data", async () =>
+            {
+                using var f = new Case();
+                var backup = f.File("local/VatscaUpdateChecker/SoftwareUpdates/VatEfsRecovery/dated/export/Files/0000/settings.json", "FAKE-RECOVERY");
+                var download = f.File("local/VatscaUpdateChecker/SoftwareUpdates/" + Guid.NewGuid().ToString("N") + "/vatefs.msi", "FAKE-PACKAGE");
+                var browser = f.File("roaming/VatscaUpdateChecker/VatEFSProfile/session", "FAKE-SESSION");
+                var program = f.File("program-files/VatEFS/settings.json", "FAKE-CURRENT-SETTINGS");
+                var plan = f.Service.Preview([], new(false, false, false, false, true), null);
+                Assert(plan.BackupFiles.Files.Any(file => file.FullPath == backup));
+                await f.Service.ApplyAsync(plan, null, default);
+                Assert(!File.Exists(backup) && File.Exists(download) && File.Exists(browser) && File.Exists(program));
+            }),
+            ("GNG temporary download cleanup preserves sign-in and recovery packages", async () =>
+            {
+                using var f = new Case();
+                var download = f.File("local/VatscaUpdateChecker/Gng/Downloads/test/package.zip", "FAKE-DOWNLOAD");
+                var session = f.File("local/VatscaUpdateChecker/Gng/Browser/session", "FAKE-SESSION");
+                var package = f.File("local/VatscaUpdateChecker/Gng/Installations/test/dated/package/full.zip", "FAKE-CACHE");
+                var original = f.File("local/VatscaUpdateChecker/Gng/Installations/test/dated/originals/profile.prf", "FAKE-ORIGINAL");
+                var cleanup = f.File("local/VatscaUpdateChecker/CleanupBackups/dated/profile.prf", "FAKE-CLEANUP");
+                await f.Service.ApplyAsync(f.Service.Preview([], new(false, false, false, true, false), null), null, default);
+                Assert(!File.Exists(download) && new[] { session, package, original, cleanup }.All(File.Exists));
+            }),
+            ("GNG recovery removal includes history and cleanup backups only when selected", async () =>
+            {
+                using var f = new Case();
+                var session = f.File("local/VatscaUpdateChecker/Gng/Browser/session", "FAKE-SESSION");
+                var download = f.File("local/VatscaUpdateChecker/Gng/Downloads/test/package.zip", "FAKE-DOWNLOAD");
+                var history = f.File("local/VatscaUpdateChecker/Gng/Installations/test/current-installation.json", "FAKE-HISTORY");
+                var original = f.File("local/VatscaUpdateChecker/Gng/Installations/test/dated/originals/profile.prf", "FAKE-ORIGINAL");
+                var cleanup = f.File("local/VatscaUpdateChecker/CleanupBackups/dated/profile.prf", "FAKE-CLEANUP");
+                await f.Service.ApplyAsync(f.Service.Preview([], new(false, false, false, false, true), null), null, default);
+                Assert(File.Exists(session) && File.Exists(download) && new[] { history, original, cleanup }.All(path => !File.Exists(path)));
+            }),
+            ("GNG browser reset removes only its dedicated session and refuses a live runtime", async () =>
+            {
+                using var f = new Case();
+                var session = f.File("local/VatscaUpdateChecker/Gng/Browser/session", "FAKE-SESSION");
+                var package = f.File("local/VatscaUpdateChecker/Gng/Installations/test/package.zip", "FAKE-CACHE");
+                var plan = f.Service.Preview([], new(false, true, false, false, false), null);
+                f.WebViewRunning = true;
+                await Reject(() => f.Service.ApplyAsync(plan, null, default));
+                Assert(File.Exists(session) && File.Exists(package));
+                f.WebViewRunning = false;
+                await f.Service.ApplyAsync(f.Service.Preview([], new(false, true, false, false, false), null), null, default);
+                Assert(!File.Exists(session) && File.Exists(package));
             }),
             ("fresh installer and runtime staging cleanup preserves unknown folders", async () =>
             {
@@ -384,6 +466,7 @@ internal static class CoordinatorTests
     {
         private readonly Fixture _files = new();
         public bool BrowserRunning { get; set; }
+        public bool WebViewRunning { get; set; }
         public List<string> DeletedCredentials { get; } = [];
         public string Recovery => _files.Backups;
         public AppSettings Settings { get; }
@@ -400,7 +483,8 @@ internal static class CoordinatorTests
             var environment = new AtcRemovalEnvironment
             {
                 RoamingAppData = PathOf("roaming"), LocalAppData = PathOf("local"), WindowsDirectory = PathOf("fake-windows"),
-                Software = software, ReadMsiRegistrations = () => [], IsProcessRunning = name => name == "msedge" && BrowserRunning,
+                Software = software, ReadMsiRegistrations = () => [], IsProcessRunning = name =>
+                    (name == "msedge" && BrowserRunning) || (name == "msedgewebview2" && WebViewRunning),
                 ReadMsiFootprint = (_, _, _, _) => throw new Exception("Unexpected installed MSI query"),
                 RunAsync = _ => throw new Exception("Unexpected uninstaller execution")
             };

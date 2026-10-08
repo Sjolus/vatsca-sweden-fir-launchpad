@@ -21,6 +21,7 @@ public partial class SetupWizardWindow : Window
     public bool HasSavedActions => _state.HasSavedActions;
     public bool RestartRequired => _state.RestartRequired;
     public bool RemovalRequested { get; private set; }
+    public bool GngSetupRequested { get; private set; }
 
     public SetupWizardWindow(AppSettings current)
     {
@@ -70,6 +71,7 @@ public partial class SetupWizardWindow : Window
         if (_page == 3)
         {
             Settings = _state.Finish();
+            GngSetupRequested = !_state.RestartRequired && GngAfterFinishChoice.IsChecked == true;
             Finished = true;
             DialogResult = true;
             return;
@@ -137,14 +139,18 @@ public partial class SetupWizardWindow : Window
             (Kind: ConfiguredPathKind.EuroScopeExecutable, Path: _state.Draft.EuroscopeExePath, Label: EuroScopePath),
             (Kind: ConfiguredPathKind.VacsExecutable, Path: _state.Draft.VacsExePath, Label: VacsPath),
             (Kind: ConfiguredPathKind.TrackAudioExecutable, Path: _state.Draft.TrackAudioExePath, Label: TrackAudioPath),
-            (Kind: ConfiguredPathKind.VatisExecutable, Path: _state.Draft.VatisExePath, Label: VatisPath)
+            (Kind: ConfiguredPathKind.VatisExecutable, Path: _state.Draft.VatisExePath, Label: VatisPath),
+            (Kind: ConfiguredPathKind.VatEfsFolder, Path: _state.Draft.VatEfsPath, Label: VatEfsPath)
         };
         foreach (var choice in choices)
             choice.Label.Text = string.IsNullOrWhiteSpace(choice.Path) ? "No program chosen. You can skip this program." : "Checking program file: " + choice.Path;
-        EuroScopeButton.IsEnabled = ProfileButton.IsEnabled = !_state.RestartRequired;
+        EuroScopeButton.IsEnabled = ProfileButton.IsEnabled = GngAfterFinishChoice.IsEnabled = !_state.RestartRequired;
+        if (_state.RestartRequired) GngAfterFinishChoice.IsChecked = false;
         SetFreshAvailability(VacsButton, _state.Draft.VacsExePath);
         SetFreshAvailability(TrackAudioButton, _state.Draft.TrackAudioExePath);
         SetFreshAvailability(VatisButton, _state.Draft.VatisExePath);
+        SetFreshAvailability(VatEfsButton, string.IsNullOrWhiteSpace(_state.Draft.VatEfsPath) ? "" : Path.Combine(_state.Draft.VatEfsPath, "efs.exe"),
+            !string.IsNullOrWhiteSpace(_state.Draft.VatEfsPath) && File.Exists(Path.Combine(_state.Draft.VatEfsPath, "VatEFS.dll")));
         try
         {
             var results = await Task.Run(() => choices.Select(c => _pathValidator.Validate(c.Kind, c.Path)).ToArray());
@@ -163,9 +169,9 @@ public partial class SetupWizardWindow : Window
         }
     }
 
-    private void SetFreshAvailability(System.Windows.Controls.Button button, string path)
+    private void SetFreshAvailability(System.Windows.Controls.Button button, string path, bool otherApplicationFileExists = false)
     {
-        bool executableExists = File.Exists(path);
+        bool executableExists = File.Exists(path) || otherApplicationFileExists;
         button.IsEnabled = _state.CanReviewFreshSetup(executableExists);
         button.ToolTip = _state.RestartRequired ? "Restart Windows before further setup." :
             executableExists ? "A file exists at the chosen program location. Use Check for Updates in Launchpad, or choose a different file in Settings." :
@@ -258,14 +264,17 @@ public partial class SetupWizardWindow : Window
                 {
                     SoftwareApp.Vacs => SetupWizardApplication.Vacs,
                     SoftwareApp.Vatis => SetupWizardApplication.Vatis,
+                    SoftwareApp.VatEfs => SetupWizardApplication.VatEfs,
                     _ => SetupWizardApplication.TrackAudio
                 };
                 _state.RecordInstallation(wizardApp, result.ExecutablePath, result.RestartRequired, result.BackupFolder);
-                SaveCompletedAction("Installation completed and the program location was saved. You can open it later from Launchpad.");
+                SaveCompletedAction(app == SoftwareApp.VatEfs
+                    ? "VatEFS installation completed and its folder was saved. Use Controller profile to enable its EuroScope plugin; its browser opens after the plugin starts."
+                    : "Installation completed and the program location was saved. You can open it later from Launchpad.");
             }
             else
             {
-                _state.RecordIncompleteSetup(app == SoftwareApp.Vacs ? "VACS" : app == SoftwareApp.Vatis ? "vATIS" : "TrackAudio");
+                _state.RecordIncompleteSetup(app == SoftwareApp.Vacs ? "VACS" : app == SoftwareApp.Vatis ? "vATIS" : app == SoftwareApp.VatEfs ? "VatEFS" : "TrackAudio");
                 StatusText.Text = "Setup closed without a confirmed installation. Follow any restart or recovery instructions from its setup window.";
             }
             RefreshPaths();

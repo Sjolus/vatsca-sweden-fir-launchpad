@@ -89,9 +89,9 @@ public sealed class AtcMaintenanceService
         deleteRoots.AddRange(localRoots);
         ValidateTargetOverlap(selected, localRoots);
         if (local.Settings) review.AppendLine("Launchpad: delete preferences, identity fields, log and process-tracking files.");
-        if (local.BrowserSessions) review.AppendLine("Launchpad: delete its dedicated VATIRIS/VatEFS browser sessions.");
-        if (local.Downloads) review.AppendLine("Launchpad: delete temporary client downloads and verification staging.");
-        if (local.Backups) review.AppendLine("Launchpad: delete existing software-update recovery backups. Review every listed path below.");
+        if (local.BrowserSessions) review.AppendLine("Launchpad: delete its dedicated VATIRIS/VatEFS and AeroNav sign-in browser sessions.");
+        if (local.Downloads) review.AppendLine("Launchpad: delete temporary client/GNG downloads and verification staging. Managed GNG package copies stay with their recovery backups.");
+        if (local.Backups) review.AppendLine("Launchpad: delete existing software-update, GNG installation and cleanup recovery backups, including saved GNG package history. Review every listed path below.");
         if (local.Credentials) review.AppendLine("Credential Manager: delete VatscaLaunchpad/VATSIM and VatscaLaunchpad/Hoppie. These secrets are not exported; copies in external profiles remain unless their files are selected.");
 
         var backup = RemovalFileService.Preview(MinimizeRoots(backupRoots));
@@ -186,6 +186,9 @@ public sealed class AtcMaintenanceService
     {
         if (selected.BrowserSessions && _environment.IsProcessRunning("msedge"))
             throw new InvalidOperationException("Close Microsoft Edge, including background processes, before deleting browser sessions. Launchpad will not close it for you.");
+        if (selected.BrowserSessions && Directory.Exists(Path.Combine(_environment.LocalAppData, "VatscaUpdateChecker", "Gng", "Browser")) &&
+            _environment.IsProcessRunning("msedgewebview2"))
+            throw new InvalidOperationException("Close GNG sign-in windows and applications using WebView2 before deleting browser sessions. Launchpad will not close them for you.");
     }
 
     private void ValidateTargetOverlap(IReadOnlyList<AtcRemovalSelection> selected, IReadOnlyList<string> localRoots)
@@ -258,11 +261,18 @@ public sealed class AtcMaintenanceService
     {
         var roaming = Path.Combine(_environment.RoamingAppData, "VatscaUpdateChecker");
         var software = Path.Combine(_environment.LocalAppData, "VatscaUpdateChecker", "SoftwareUpdates");
+        var gng = Path.Combine(_environment.LocalAppData, "VatscaUpdateChecker", "Gng");
         var roots = new List<string>();
         if (selected.Settings)
+        {
             roots.AddRange(new[] { "settings.json", "launchpad.log", "VATIRIS.pid", "VatEFS.pid" }.Select(name => Path.Combine(roaming, name)));
+            roots.Add(Path.Combine(software, "VatEfsLogs"));
+        }
         if (selected.BrowserSessions)
+        {
             roots.AddRange(new[] { "VATIRISProfile", "VatEFSProfile" }.Select(name => Path.Combine(roaming, name)));
+            roots.Add(Path.Combine(gng, "Browser"));
+        }
         if (selected.Downloads && Directory.Exists(software))
         {
             SoftwareInstaller.RejectReparse(software);
@@ -271,6 +281,7 @@ public sealed class AtcMaintenanceService
         }
         if (selected.Downloads)
         {
+            roots.Add(Path.Combine(gng, "Downloads"));
             foreach (var cache in new[]
             {
                 Path.Combine(_environment.LocalAppData, "VatscaUpdateChecker", "EuroScopeInstall"),
@@ -285,7 +296,13 @@ public sealed class AtcMaintenanceService
                     roots.AddRange(Directory.EnumerateDirectories(cache).Where(path => Guid.TryParseExact(Path.GetFileName(path), "N", out _)));
             }
         }
-        if (selected.Backups) roots.Add(Path.Combine(software, "Backups"));
+        if (selected.Backups)
+        {
+            roots.Add(Path.Combine(software, "Backups"));
+            roots.Add(Path.Combine(software, "VatEfsRecovery"));
+            roots.Add(Path.Combine(gng, "Installations"));
+            roots.Add(Path.Combine(_environment.LocalAppData, "VatscaUpdateChecker", "CleanupBackups"));
+        }
         return roots.Where(path => File.Exists(path) || Directory.Exists(path)).ToList();
     }
 

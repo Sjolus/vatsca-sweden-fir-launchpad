@@ -1,4 +1,5 @@
 using System.IO;
+using System.Globalization;
 using System.Net.Http;
 using System.Text.Json;
 using VatscaUpdateChecker.Models;
@@ -29,16 +30,16 @@ public sealed class SoftwareReleaseSource : ISoftwareReleaseSource
     public Task<SoftwareRelease?> GetLatestAsync(SoftwareApp app, string installedVersion,
         CancellationToken cancellationToken) => app switch
         {
-            SoftwareApp.Vacs or SoftwareApp.TrackAudio => ReadGitHubAsync(app, cancellationToken),
+            SoftwareApp.Vacs or SoftwareApp.TrackAudio or SoftwareApp.VatEfs => ReadGitHubAsync(app, cancellationToken),
             SoftwareApp.Vatis => ReadVatisAsync(installedVersion, cancellationToken),
             _ => throw new NotSupportedException("This application does not support managed updates.")
         };
 
-    /// <summary>Fresh installation selects beta only through an explicit, reviewed opt-in.</summary>
+    /// <summary>vATIS beta needs an explicit opt-in; VatEFS includes published prereleases.</summary>
     public Task<SoftwareRelease?> GetLatestFreshAsync(SoftwareApp app, bool allowVatisBeta,
         CancellationToken cancellationToken = default) => app switch
         {
-            SoftwareApp.Vacs or SoftwareApp.TrackAudio => ReadGitHubAsync(app, cancellationToken),
+            SoftwareApp.Vacs or SoftwareApp.TrackAudio or SoftwareApp.VatEfs => ReadGitHubAsync(app, cancellationToken),
             SoftwareApp.Vatis => ReadVatisCatalogAsync(allowVatisBeta, cancellationToken),
             _ => throw new NotSupportedException("This application does not support managed installation.")
         };
@@ -58,14 +59,22 @@ public sealed class SoftwareReleaseSource : ISoftwareReleaseSource
                 throw InvalidCatalog("GitHub returned an invalid release catalog.");
             foreach (var release in document.RootElement.EnumerateArray())
             {
-                if (IsBoolean(release, "draft", true) || IsBoolean(release, "prerelease", true)) continue;
+                if (IsBoolean(release, "draft", true) || app != SoftwareApp.VatEfs && IsBoolean(release, "prerelease", true)) continue;
                 string tag = Text(release, "tag_name");
                 string version = app == SoftwareApp.Vacs
                     ? tag.StartsWith("vacs-client-v", StringComparison.Ordinal) ? tag[13..] : ""
-                    : tag;
-                if (!SoftwareVersion.TryParse(version, out var parsed) || parsed.IsPrerelease) continue;
-                if (!IsBoolean(release, "draft", false) || !IsBoolean(release, "prerelease", false))
+                    : app == SoftwareApp.VatEfs && tag.StartsWith('v') ? tag[1..] : tag;
+                if (!SoftwareVersion.TryParse(version, out var parsed) || app != SoftwareApp.VatEfs && parsed.IsPrerelease) continue;
+                if (!IsBoolean(release, "draft", false) ||
+                    !(IsBoolean(release, "prerelease", false) || app == SoftwareApp.VatEfs && IsBoolean(release, "prerelease", true)))
                     throw InvalidCatalog("GitHub did not provide a complete release publication status.");
+                if (app == SoftwareApp.VatEfs)
+                {
+                    string published = Text(release, "published_at");
+                    if (string.IsNullOrEmpty(published)) continue;
+                    if (!DateTimeOffset.TryParse(published, CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
+                        throw InvalidCatalog("VatEFS published an invalid release date.");
+                }
                 int order = latestVersion is null ? 1 : parsed.CompareTo(latestVersion);
                 if (order == 0) throw InvalidCatalog("The vendor published ambiguous releases for the same version.");
                 if (order < 0) continue;
@@ -76,6 +85,11 @@ public sealed class SoftwareReleaseSource : ISoftwareReleaseSource
             if (page == 5) throw InvalidCatalog("The release catalog is too large to check safely. Open the vendor downloads page.");
         }
         if (latest is null || latestVersion is null) return null;
+
+        if (app == SoftwareApp.VatEfs &&
+            (!System.Version.TryParse(latestVersion.Value, out var msiVersion) || msiVersion.Revision != -1 ||
+                msiVersion.Major > 255 || msiVersion.Minor > 255 || msiVersion.Build < 0 || msiVersion.Build > 65535))
+            throw InvalidCatalog("The newest VatEFS release does not use a supported numeric MSI version. Open releases to review it manually.");
 
         var selected = latest.Value;
         string fileName = InstallerFileName(app, latestVersion.Value);
@@ -91,7 +105,7 @@ public sealed class SoftwareReleaseSource : ISoftwareReleaseSource
         if (!digest.StartsWith("sha256:", StringComparison.Ordinal))
             throw InvalidCatalog("The vendor has not supplied a SHA-256 checksum for this installer.");
         return ValidatedRelease(app, latestVersion.Value, Text(asset, "browser_download_url"),
-            fileName, digest[7..], Size(asset, "size"));
+            fileName, digest[7..], Size(asset, "size")) with { IsPrerelease = IsBoolean(selected, "prerelease", true) };
     }
 
     private async Task<SoftwareRelease?> ReadVatisAsync(string installedVersion, CancellationToken cancellationToken)
@@ -128,7 +142,7 @@ public sealed class SoftwareReleaseSource : ISoftwareReleaseSource
         if (fileName != InstallerFileName(SoftwareApp.Vatis, latestVersion.Value))
             throw InvalidCatalog("vATIS published an unsupported full-package filename.");
         return ValidatedRelease(SoftwareApp.Vatis, latestVersion.Value,
-            VatisDownloadBase + fileName, fileName, Text(selected, "SHA256"), Size(selected, "Size"));
+            VatisDownloadBase + fileName, fileName, Text(selected, "SHA256"), Size(selected, "Size")) with { IsPrerelease = latestVersion.IsPrerelease };
     }
 
     private static SoftwareRelease ValidatedRelease(SoftwareApp app, string version,
@@ -159,7 +173,7 @@ public sealed class SoftwareReleaseSource : ISoftwareReleaseSource
         string expected = release.App == SoftwareApp.Vatis
             ? VatisDownloadBase + release.FileName
             : $"https://github.com/{Repository(release.App)}/releases/download/" +
-                (release.App == SoftwareApp.Vacs ? "vacs-client-v" : "") + release.Version + "/" + release.FileName;
+                (release.App == SoftwareApp.Vacs ? "vacs-client-v" : release.App == SoftwareApp.VatEfs ? "v" : "") + release.Version + "/" + release.FileName;
         return uri.Query.Length == 0 && string.Equals(uri.AbsoluteUri, new Uri(expected).AbsoluteUri, StringComparison.Ordinal);
     }
 
@@ -204,6 +218,7 @@ public sealed class SoftwareReleaseSource : ISoftwareReleaseSource
     {
         SoftwareApp.Vacs => "vacs-project/vacs",
         SoftwareApp.TrackAudio => "pierr3/TrackAudio",
+        SoftwareApp.VatEfs => "minsulander/vatefs",
         _ => throw new NotSupportedException("This application does not use GitHub installer releases.")
     };
 
@@ -212,6 +227,7 @@ public sealed class SoftwareReleaseSource : ISoftwareReleaseSource
         SoftwareApp.Vacs => $"vacs_{version}_x64-setup.exe",
         SoftwareApp.TrackAudio => $"trackaudio-{version}-x64-setup.exe",
         SoftwareApp.Vatis => $"{VatisPackageId}-{version}-full.nupkg",
+        SoftwareApp.VatEfs => $"vatefs-{version}.msi",
         _ => ""
     };
     private static string Text(JsonElement value, string property) =>

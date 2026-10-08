@@ -33,6 +33,8 @@ public partial class MainWindow : Window
     private void Launch_Click(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "Launch_Click");
     private void ProfileDropdown_Click(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "ProfileDropdown_Click");
     private void Fonts_Click(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "Fonts_Click");
+    private void GngCleanup_Click(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "GngCleanup_Click");
+    private void GngUpdate_Click(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "GngUpdate_Click");
     private void EuroScopeManage_Click(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "EuroScopeManage_Click");
     private void Download_Click(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "Download_Click");
     private void SoftwareUpdate_Click(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "SoftwareUpdate_Click");
@@ -102,7 +104,8 @@ public partial class EuroScopeInstallWindow : Window
 
 public partial class FreshSoftwareInstallWindow : Window
 {
-    public FreshSoftwareInstallWindow() { InitializeComponent(); UiFixture.Initialize(this); }
+    public bool IsVatEfsFixture { get; }
+    public FreshSoftwareInstallWindow(bool vatEfs = false) { IsVatEfsFixture = vatEfs; InitializeComponent(); UiFixture.Initialize(this); }
     private void Adopt_Click(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "Adopt_Click");
     private void Apply_Click(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "Apply_Click");
     private void BetaChanged(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "BetaChanged");

@@ -10,7 +10,7 @@ If logs help, share only the relevant, redacted excerpts from `%APPDATA%\VatscaU
 
 ## Build and test
 
-Use Windows and the [.NET 9 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/9.0).
+Use Windows and the [.NET 9 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/9.0). The GNG browser harness also requires Node.js 20 or later on `PATH` to test page selection; it uses no npm packages.
 
 ```powershell
 git clone https://github.com/Sjolus/vatsca-sweden-fir-launchpad.git
@@ -21,8 +21,10 @@ dotnet build vatsca-update-checker.sln -c Release
 Run the harnesses relevant to your change. They use synthetic data and injected installers; do not substitute a real ATC setup or saved credentials. The [CI workflow](.github/workflows/build.yml) lists all required checks. Useful starting points:
 
 - [Launchpad updates](Tests/LaunchpadUpdate.Tests/README.md) and [client updates](Tests/SoftwareUpdate.Tests/README.md)
-- [Fresh installs](Tests/FreshSoftwareInstall.Tests/README.md), [EuroScope management](Tests/EuroScopeInstall.Tests/README.md) and [removal/discovery](Tests/AtcRemoval.Tests/README.md)
+- [Fresh installs](Tests/FreshSoftwareInstall.Tests/README.md), [EuroScope management](Tests/EuroScopeInstall.Tests/README.md), [VatEFS installation](Tests/VatEfsInstaller.Tests/README.md) and [removal/discovery](Tests/AtcRemoval.Tests/README.md)
 - [Profile writes](Tests/Profile.Tests/README.md) and [settings persistence](Tests/Settings.Tests/README.md)
+- [GNG comparison, cleanup and restore](Tests/GngCleanup.Tests/README.md)
+- [GNG installation and recovery](Tests/GngUpdate.Tests/README.md), [browser policy](Tests/GngBrowser.Tests/README.md) and [WebView2 integration](Tests/WebViewRuntime.Tests/README.md)
 - [Isolated WPF layout review](Tests/UiReview/README.md)
 
 For example:
@@ -38,7 +40,7 @@ UI changes need both themes, minimum window size, keyboard navigation, and confi
 ## Keep changes focused
 
 - Follow the existing WPF code-behind and service structure; there is no DI container or MVVM framework.
-- Discuss new NuGet dependencies first. Velopack is the current packaging/updater dependency.
+- Discuss new NuGet dependencies first. Velopack handles packaging/self-updates; Microsoft.Web.WebView2 provides the GNG sign-in browser.
 - Keep secrets out of settings JSON, logs, tests and screenshots. Use fake credentials in fixtures and `CredentialManagerService` for actual saved secrets.
 - Keep build outputs, local tool state, test captures and signing keys out of Git.
 - Update the relevant user guide when behavior changes. Use [CLAUDE.md](CLAUDE.md) for architecture and repository instructions.
@@ -59,7 +61,7 @@ For Setup, portable and update packages, use PowerShell 7 on Windows:
 
 ```powershell
 ./scripts/New-DevelopmentCertificate.ps1
-./scripts/Build-Installer.ps1 -Version 2.0.0-dev.1
+./scripts/Build-Installer.ps1 -Version 2.1.0-dev.1
 ```
 
 The certificate script creates or reuses a non-exportable key in the current user's Personal certificate store. Only its public certificate and thumbprint are saved under `%LOCALAPPDATA%\VatscaUpdateChecker\Signing`. It does not add trust. Never commit or distribute the private key.

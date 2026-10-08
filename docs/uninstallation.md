@@ -13,7 +13,7 @@ When opened from Windows' Launchpad uninstall command, only Launchpad removal is
 
 You can disable the recovery export for permanent deletion. Keeping GNG or vATIS data while removing the package/application always needs an export because the personal files are inside the folder being removed.
 
-Close affected applications first. Browser-session reset also requires Microsoft Edge to be closed. If a vendor uninstaller requests a restart, Launchpad stops before the remaining removals. Restart Windows, then review what remains. Launchpad itself is removed last.
+Close affected applications first. Browser-session reset also requires Microsoft Edge to be closed. When an AeroNav session exists, close applications using WebView2 before resetting it. If a vendor uninstaller requests a restart, Launchpad stops before the remaining removals. Restart Windows, then review what remains. Launchpad itself is removed last.
 
 ## What gets removed
 
@@ -37,13 +37,13 @@ Removing Launchpad deletes its managed installation, bundled .NET, self-update p
 
 | Option | Location or contents |
 | --- | --- |
-| Preferences and logs | Settings, log and browser tracking files in `%APPDATA%\VatscaUpdateChecker`. |
-| Browser sessions | Its `VATIRISProfile` and `VatEFSProfile` folders. |
+| Preferences and logs | Settings, log and browser tracking files in `%APPDATA%\VatscaUpdateChecker`, plus VatEFS installer diagnostics in `%LOCALAPPDATA%\VatscaUpdateChecker\SoftwareUpdates\VatEfsLogs`. |
+| Browser sessions | Its `VATIRISProfile` and `VatEFSProfile` folders, plus `%LOCALAPPDATA%\VatscaUpdateChecker\Gng\Browser`. |
 | Saved credentials | Launchpad's VATSIM password and Hoppie code in Windows Credential Manager. Credentials are not exported. |
-| Cached downloads | Known software installer, update and prerequisite downloads in `%LOCALAPPDATA%\VatscaUpdateChecker`. The review lists the exact folders. |
-| Existing update recovery backups | `SoftwareUpdates\Backups` under the same Local AppData folder. |
+| Cached downloads | Known software installer, update and prerequisite downloads in `%LOCALAPPDATA%\VatscaUpdateChecker`, including `Gng\Downloads`. GNG installation history and its retained ZIPs stay. The review lists the exact folders. |
+| Existing recovery backups | `SoftwareUpdates\Backups`, `SoftwareUpdates\VatEfsRecovery`, `Gng\Installations` (history, original ZIPs and installation backups) and `CleanupBackups` under the same Local AppData folder. |
 
-Unselected data remains available for a reinstall. Downloaded Setup/ZIP files, standalone copies, signing certificates, external recovery exports and GNG caches outside these choices remain. Velopack logs and temporary maintenance helpers may also remain for normal temporary-file cleanup.
+Unselected data remains available for a reinstall. Downloads saved through your normal browser, standalone copies, signing certificates and external recovery exports remain. Deleting GNG recovery history removes Launchpad's ability to restore those installations or automatically supply their original ZIPs for cleanup. Velopack logs and temporary maintenance helpers may also remain for normal temporary-file cleanup.
 
 Deleting saved credentials does not remove copies already written to ATC profiles or recovery backups.
 

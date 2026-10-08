@@ -84,6 +84,10 @@ internal static class CatalogTests
                 Check(es.VendorSpec!.RemovesData && es.DataRoots.Contains(Path.GetDirectoryName(sample)!));
                 var command = AtcRemovalVendor.BuildCommand(es.VendorSpec!, es.VendorSpec!.UninstallerPath);
                 Check(command.Arguments.SequenceEqual(new[] { "/x", f.Msi[0].ProductCode, "/qn", "/norestart" }));
+                Check(command.IsMsi);
+                var start = AtcRemovalVendor.BuildStartInfo(command);
+                Check(start.Arguments == "/x " + f.Msi[0].ProductCode + " /qn /norestart");
+                Check(start.WindowStyle == System.Diagnostics.ProcessWindowStyle.Normal && !start.CreateNoWindow);
                 f.Msi[0] = f.Msi[0] with { Publisher = "wrong" }; Check(!f.Find(AtcRemovalApp.EuroScope).CanRemoveApplication);
                 return Task.CompletedTask;
             }),

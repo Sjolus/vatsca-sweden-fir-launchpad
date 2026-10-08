@@ -12,6 +12,7 @@ public partial class MainWindow
     {
         if (!CanRunSoftwareAction() || !CanRunSelfUpdateAction() || !TryAcquireMaintenanceGuard(out var lease)) return;
         bool removalRequested = false;
+        bool gngRequested = false;
         _processTimer.Stop();
         try
         {
@@ -26,6 +27,7 @@ public partial class MainWindow
                 _settings.SetupWizardDismissed = !wizard.Finished;
                 _setupRestartRequired |= wizard.RestartRequired;
                 removalRequested = wizard.RemovalRequested && !_setupRestartRequired;
+                gngRequested = wizard.GngSetupRequested && !_setupRestartRequired;
                 bool saved = true;
                 try { SettingsService.Save(_settings); }
                 catch { saved = false; }
@@ -59,6 +61,7 @@ public partial class MainWindow
             }
         }
         if (removalRequested && !_windowClosed) Maintenance_Click(this, new RoutedEventArgs());
+        else if (gngRequested && !_windowClosed) GngUpdate_Click(this, new RoutedEventArgs());
     }
 
     private void ApplyDensity()

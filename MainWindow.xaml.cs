@@ -60,7 +60,7 @@ public partial class MainWindow : Window
             new() { AppName = "TrackAudio", SoftwareApp = SoftwareApp.TrackAudio },
             new() { AppName = "VACS", SoftwareApp = SoftwareApp.Vacs },
             new() { AppName = "vATIS", SoftwareApp = SoftwareApp.Vatis },
-            new() { AppName = "VatEFS", IsWebApp = true, IsLocalUrl = true, LaunchPath = "http://localhost:17770" },
+            new() { AppName = "VatEFS", SoftwareApp = SoftwareApp.VatEfs, IsWebApp = true, IsLocalUrl = true, LaunchPath = "http://localhost:17770" },
             new() { AppName = "VATIRIS", IsWebApp = true, LaunchPath = "https://vatiris.se", Status = CheckStatus.WebApp, InstalledVersion = "N/A", LatestVersion = "N/A" },
             new() { AppName = "Sweden FIR Launchpad", HasSelfUpdate = true },
         };
@@ -112,6 +112,7 @@ public partial class MainWindow : Window
         _results[2].LaunchPath = _settings.TrackAudioExePath;
         _results[3].LaunchPath = _settings.VacsExePath;
         _results[4].LaunchPath = _settings.VatisExePath;
+        _results[5].SoftwareExecutablePath = string.IsNullOrWhiteSpace(_settings.VatEfsPath) ? "" : Path.Combine(_settings.VatEfsPath, "efs.exe");
         DiscoveryPrompt.Visibility = new[] { _settings.EuroscopeExePath, _settings.TrackAudioExePath, _settings.VacsExePath, _settings.VatisExePath, _settings.VatEfsPath }
             .All(string.IsNullOrWhiteSpace) ? Visibility.Visible : Visibility.Collapsed;
     }
@@ -128,6 +129,7 @@ public partial class MainWindow : Window
             catch { listeners = Array.Empty<IPEndPoint>(); }
         }
 
+        _results[5].SoftwareBlockingReason = VatEfsInstaller.GetBlockingReason();
         foreach (var result in _results)
         {
             if (result.IsLocalUrl && !string.IsNullOrEmpty(result.LaunchPath))
@@ -282,7 +284,6 @@ public partial class MainWindow : Window
                 UpdateChecker.CheckEuroscope(_results[0], _settings.EuroscopeExePath),
                 UpdateChecker.CheckGng(_results[1], _settings.EuroscopeDataPath),
                 CheckSoftwareAsync(),
-                UpdateChecker.CheckVatEfs(_results[5], _settings.VatEfsPath),
                 CheckLaunchpadAsync()
             );
             if (_windowClosed) return;
@@ -598,6 +599,7 @@ public partial class MainWindow : Window
                 // Set it explicitly for both a selected profile and the no-profile launch.
                 var start = EuroScopeLaunchService.CreateStartInfo(
                     result.LaunchPath, _settings.EuroscopeDataPath, result.SelectedProfile?.FilePath);
+                GngUpdateService.RequireNoPendingUpdate(start.WorkingDirectory);
                 Process.Start(start);
                 Logger.Log("LAUNCH", $"{result.AppName}: launched (profile={result.SelectedProfile?.FilePath ?? "none"}, working directory={start.WorkingDirectory})");
             }

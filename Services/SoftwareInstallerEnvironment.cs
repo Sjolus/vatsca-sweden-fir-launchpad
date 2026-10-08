@@ -7,11 +7,15 @@ namespace VatscaUpdateChecker.Services;
 
 internal sealed record SoftwareBinary(string ProductVersion, string ProductName);
 internal sealed record SoftwareRegistration(string RootPath, string RestoreRootPath, string Scope, string Version, string MainBinaryName);
-internal sealed record SoftwareInstallCommand(string Executable, IReadOnlyList<string> Arguments, bool Elevate);
+internal sealed record SoftwareInstallCommand(string Executable, IReadOnlyList<string> Arguments, bool Elevate)
+{
+    public bool IsMsi { get; init; }
+}
 
 /// <summary>Small OS seams; the regression harness supplies synthetic registrations, trust, and a non-executing runner.</summary>
 internal sealed class SoftwareInstallerEnvironment
 {
+    public VatEfsInstallerEnvironment? VatEfs { get; init; }
     public string LocalAppData { get; init; } = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
     public Func<SoftwareApp, IReadOnlyList<SoftwareRegistration>> ReadRegistrations { get; init; } = ReadWindowsRegistrations;
     public Func<string, SoftwareBinary> ReadBinary { get; init; } = ReadFileIdentity;
@@ -28,6 +32,7 @@ internal sealed class SoftwareInstallerEnvironment
 
     private static IReadOnlyList<SoftwareRegistration> ReadWindowsRegistrations(SoftwareApp app)
     {
+        if (app == SoftwareApp.VatEfs) throw new InvalidOperationException("VatEFS MSI registration is checked by its installer adapter.");
         if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException();
         var registrations = new List<SoftwareRegistration>();
         var keyName = app == SoftwareApp.Vacs ? "vacs" : SoftwareInstaller.TrackAudioGuid;
@@ -76,6 +81,7 @@ internal sealed class SoftwareInstallerEnvironment
 
     private static bool AnyProductProcess(SoftwareApp app)
     {
+        if (app == SoftwareApp.VatEfs) return VatEfsInstaller.GetBlockingReason() is not null;
         // Process-name enumeration spans sessions without reading another user's credentials or profiles.
         // Any matching process blocks; we never terminate one on the user's behalf.
         var name = app switch { SoftwareApp.Vacs => "vacs-client", SoftwareApp.Vatis => "vATIS", _ => "trackaudio" };

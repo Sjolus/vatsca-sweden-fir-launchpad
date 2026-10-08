@@ -7,7 +7,7 @@
     <DefaultItemExcludes>$(DefaultItemExcludes);artifacts\**</DefaultItemExcludes>
     <UseWPF>true</UseWPF>
     <StartupObject>VatscaUpdateChecker.Program</StartupObject>
-    <Version>2.0.2</Version>
+    <Version>2.1.0</Version>
     <AssemblyName>VatscaUpdateChecker</AssemblyName>
     <AssemblyTitle>Sweden FIR Launchpad</AssemblyTitle>
     <Product>Sweden FIR Launchpad</Product>
@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <PackageReference Include="Velopack" Version="1.2.161" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" />
     <Compile Remove="Tests\**\*.cs"/>
     <Resource Include="Assets\app.ico"/>
 

@@ -13,6 +13,7 @@ public class CheckResult : INotifyPropertyChanged
     private ProfileOption? _selectedProfile;
     private string _installedVersion = "—";
     private string _latestVersion = "—";
+    private bool _latestIsPrerelease;
     private CheckStatus _status = CheckStatus.Unknown;
     private string _statusMessage = string.Empty;
     private string _downloadUrl = string.Empty;
@@ -47,7 +48,8 @@ public class CheckResult : INotifyPropertyChanged
     private bool SelfUpdatesNotPublished => HasSelfUpdate && SelfUpdateSummary == "Updates not published yet";
 
     public string LatestVersionCaption => HasEuroScopeManagement ? "Sweden supported" :
-        HasFontsCheck ? "Latest package" : IsLocalUrl ? "No update source" :
+        HasFontsCheck ? "Latest package" : IsLocalUrl ? LatestIsPrerelease ? "Latest prerelease" :
+            !IsEmptyVersion(LatestVersion) && !IsVersionDiagnostic(LatestVersion) ? "Latest release" : "Includes prereleases" :
         IsWebApp ? "Web service" :
         SoftwareApp == global::VatscaUpdateChecker.Models.SoftwareApp.Vatis ? "Compatible release" : "Latest stable";
 
@@ -58,7 +60,7 @@ public class CheckResult : INotifyPropertyChanged
             if (HasSoftwareUpdate)
             {
                 if (SoftwareNeedsSetup && !SoftwareUpdateBusy)
-                    return string.IsNullOrWhiteSpace(LaunchPath) ? "Not set up" : "File not found";
+                    return string.IsNullOrWhiteSpace(SoftwareCheckPath) ? "Not set up" : "File not found";
                 return SoftwareUpdate?.Phase switch
                 {
                     SoftwareUpdatePhase.Checking => "Checking…",
@@ -142,19 +144,19 @@ public class CheckResult : INotifyPropertyChanged
             if (HasSoftwareUpdate)
             {
                 if (SoftwareNeedsSetup && !SoftwareUpdateBusy)
-                    return string.IsNullOrWhiteSpace(LaunchPath)
+                    return string.IsNullOrWhiteSpace(SoftwareCheckPath)
                         ? "Find an existing copy or install"
                         : "Review the saved application path";
                 return SoftwareUpdate?.Phase switch
                 {
                     SoftwareUpdatePhase.Checking => "Checking this copy and releases",
-                    SoftwareUpdatePhase.Available => IsRunning ? "Close the app to update" : "Update when ready",
+                    SoftwareUpdatePhase.Available => !string.IsNullOrEmpty(SoftwareBlockingReason) ? "Close EuroScope and VatEFS first" : IsRunning && !IsWebApp ? "Close the app to update" : "Update when ready",
                     SoftwareUpdatePhase.Current => "No newer compatible release",
                     SoftwareUpdatePhase.Downloading => "Downloading in the background",
                     SoftwareUpdatePhase.Verifying => "Checking the downloaded installer",
                     SoftwareUpdatePhase.BackingUp => "Saving a recovery copy",
                     SoftwareUpdatePhase.Installing => "Keep Launchpad open",
-                    SoftwareUpdatePhase.Completed => "Ready to launch",
+                    SoftwareUpdatePhase.Completed => IsLocalUrl ? "Start the plugin in EuroScope" : "Ready to launch",
                     SoftwareUpdatePhase.Unavailable => "Review this installation",
                     SoftwareUpdatePhase.Cancelled => "Check again when ready",
                     SoftwareUpdatePhase.Error => "Review the error and recovery steps",
@@ -178,13 +180,15 @@ public class CheckResult : INotifyPropertyChanged
             if (Status == CheckStatus.Error) return "Review the failed check";
             if (Status == CheckStatus.Checking) return "Checking location and version";
             if (Status == CheckStatus.NotConfigured)
-                return HasFontsCheck ? "Choose your GNG package folder" :
+                return HasFontsCheck ? "Choose a folder or set up GNG" :
                     IsLocalUrl ? "Choose the VatEFS.dll folder" : "Find an existing copy or install";
             if (HasEuroScopeManagement && !IsEmptyVersion(LatestVersion))
                 return $"Sweden supports {LatestVersion.TrimStart('v', 'V')}";
             if (HasFontsCheck)
                 return FontsState == FontsState.NeedsAction ? "Review the required GNG fonts" :
-                    Status == CheckStatus.UpdateAvailable ? "Download from AeroNav" : "Swedish airspace data for EuroScope";
+                    Status == CheckStatus.UpdateAvailable ? "Review a GNG update" : "Swedish airspace data for EuroScope";
+            if (IsLocalUrl && Status == CheckStatus.UpdateAvailable) return "Review the VatEFS release";
+            if (IsLocalUrl && Status == CheckStatus.Installed && InstalledVersion == "Installed") return "Version not reported by this copy";
             if (IsLocalUrl) return IsLocalUrlReachable
                 ? "Local flight-strip service detected" : "Start the plugin in EuroScope";
             if (IsWebApp) return "Opens in a browser window";
@@ -200,6 +204,9 @@ public class CheckResult : INotifyPropertyChanged
             var paragraphs = new List<string>();
             AddDetail(paragraphs, StatusMessage);
             if (HasSoftwareUpdate) AddDetail(paragraphs, SoftwareUpdate?.Message);
+            if (HasSoftwareUpdate) AddDetail(paragraphs, SoftwareBlockingReason);
+            if (HasSoftwareUpdate && IsLocalUrl && LatestIsPrerelease) AddDetail(paragraphs, "This is an official VatEFS prerelease. Review the release notes before updating.");
+            if (HasSoftwareUpdate && IsLocalUrl) AddDetail(paragraphs, "After installation, use Controller profile to enable the VatEFS plugin. The browser opens when its local service is running.");
             if (SoftwareUpdate?.BackupFolder is { Length: > 0 } backup)
                 AddDetail(paragraphs, "Recovery copy: " + backup);
             if (IsVersionDiagnostic(InstalledVersion)) AddDetail(paragraphs, "Installed version check: " + InstalledVersion);
@@ -209,7 +216,7 @@ public class CheckResult : INotifyPropertyChanged
                     ? "Required GNG fonts need attention. Choose Fonts to review them."
                     : FontsTooltip);
             if (HasFontsCheck && Status == CheckStatus.UpdateAvailable)
-                AddDetail(paragraphs, "Download the package from AeroNav and install it manually. GNG installation is not handled by this version of Launchpad.");
+                AddDetail(paragraphs, "Choose Set up / update to sign in on AeroNav, download a GNG package and review its installation. Nothing installs without your confirmation.");
             if (SoftwareNeedsSetup && !SoftwareUpdateBusy) AddDetail(paragraphs, RowExplanation);
             if (paragraphs.Count == 0)
             {
@@ -272,9 +279,10 @@ public class CheckResult : INotifyPropertyChanged
     public bool HasEuroScopeManagement { get; init; }
     public string EuroScopeSetupText => string.IsNullOrWhiteSpace(LaunchPath) || !File.Exists(LaunchPath) ? "Set up…" : "Manage…";
     public bool ShowConfigure => (HasFontsCheck && string.IsNullOrWhiteSpace(LaunchPath)) ||
-        (IsLocalUrl && Status is CheckStatus.Unknown or CheckStatus.NotConfigured);
+        (IsLocalUrl && !HasSoftwareUpdate && Status is CheckStatus.Unknown or CheckStatus.NotConfigured);
+    public bool ShowGngMaintenance => HasFontsCheck && !string.IsNullOrWhiteSpace(LaunchPath);
     public string ConfigureTooltip => HasFontsCheck
-        ? "Choose your installed GNG package in App settings → Program files and data folders → EuroScope folder for Swedish GNG data. GNG installation is manual in this version."
+        ? "Choose an existing GNG package folder in App settings → Program files and data folders. To install a missing package, use Set up / update."
         : "Optional EuroScope plugin: choose the folder containing VatEFS.dll in App settings → Program files and data folders, then enable it in Controller profile.";
     public SoftwareApp? SoftwareApp { get; init; }
     public bool HasSoftwareUpdate => SoftwareApp.HasValue;
@@ -299,17 +307,41 @@ public class CheckResult : INotifyPropertyChanged
         }
     }
 
+    private string _softwareExecutablePath = string.Empty;
+    /// <summary>The installed program path for rows whose launch action opens a browser.</summary>
+    public string SoftwareExecutablePath
+    {
+        get => _softwareExecutablePath;
+        set { Set(ref _softwareExecutablePath, value); NotifySoftwareUpdate(); }
+    }
+    public string SoftwareCheckPath => IsLocalUrl ? SoftwareExecutablePath : LaunchPath;
+
+    private string? _softwareBlockingReason;
+    public string? SoftwareBlockingReason
+    {
+        get => _softwareBlockingReason;
+        set { Set(ref _softwareBlockingReason, value); NotifySoftwareUpdate(); }
+    }
+
     public bool SoftwareUpdateBusy => SoftwareUpdate?.IsBusy == true;
     public bool SoftwareCanCancel => SoftwareUpdate?.CanCancel == true;
     public double SoftwareProgressValue => SoftwareUpdate?.ProgressPercent ?? 0;
     public bool SoftwareProgressIndeterminate => SoftwareUpdateBusy && SoftwareUpdate?.ProgressPercent == null;
     public bool LaunchEnabled => !HasSoftwareUpdate || SoftwareActionsAllowed && !SoftwareUpdateBusy;
-    public bool SoftwareActionEnabled => SoftwareActionsAllowed && !(IsRunning && SoftwareUpdate?.CanUpdate == true);
-    public bool SoftwareNeedsSetup => HasSoftwareUpdate && (string.IsNullOrWhiteSpace(LaunchPath) || !File.Exists(LaunchPath));
+    public bool SoftwareActionEnabled => SoftwareActionsAllowed && !(SoftwareUpdate?.CanUpdate == true &&
+        ((!IsWebApp && IsRunning) || !string.IsNullOrEmpty(SoftwareBlockingReason)));
+    public bool SoftwareNeedsSetup => HasSoftwareUpdate && (string.IsNullOrWhiteSpace(SoftwareCheckPath) ||
+        !File.Exists(SoftwareCheckPath) && !(IsLocalUrl && HasLocalPluginFile()));
+    private bool HasLocalPluginFile()
+    {
+        // A copied plugin is an existing installation to review, never proof that fresh setup is safe.
+        try { return File.Exists(Path.Combine(Path.GetDirectoryName(SoftwareCheckPath) ?? "", "VatEFS.dll")); }
+        catch (ArgumentException) { return false; }
+    }
     public bool ShowSoftwareSetup => HasSoftwareUpdate && !SoftwareUpdateBusy;
-    public string SoftwareSetupText => SoftwareNeedsSetup ? "Set up…" : "Manage…";
+    public string SoftwareSetupText => SoftwareNeedsSetup ? "Install…" : "Manage…";
     public string SoftwareDetail => SoftwareNeedsSetup && SoftwareUpdate?.Phase is null or SoftwareUpdatePhase.Idle or SoftwareUpdatePhase.Unavailable
-        ? "Use Set up to find an existing copy or install this app."
+        ? "Use Install to find an existing copy or review installing this app."
         : StatusMessage;
     public bool HasSoftwareDetail => !string.IsNullOrWhiteSpace(SoftwareDetail);
     public bool ShowSoftwareDownloads => !SoftwareNeedsSetup && SoftwareUpdate?.Phase == SoftwareUpdatePhase.Error;
@@ -318,23 +350,23 @@ public class CheckResult : INotifyPropertyChanged
     public string SoftwareActionText => SoftwareUpdate?.Phase switch
     {
         SoftwareUpdatePhase.Available => "Update",
-        SoftwareUpdatePhase.Unavailable => "Open downloads ↗",
+        SoftwareUpdatePhase.Unavailable => IsLocalUrl ? "Open releases ↗" : "Open downloads ↗",
         SoftwareUpdatePhase.Error or SoftwareUpdatePhase.Cancelled => "Check again",
         _ => "Check for updates"
     };
     public string SoftwareSummary => SoftwareNeedsSetup && !SoftwareUpdateBusy
-        ? string.IsNullOrWhiteSpace(LaunchPath) ? "Not set up" : "Configured file not found"
+        ? string.IsNullOrWhiteSpace(SoftwareCheckPath) ? "Not set up" : "Configured file not found"
         : SoftwareUpdate?.Phase switch
     {
         SoftwareUpdatePhase.Checking => "Checking…",
-        SoftwareUpdatePhase.Available => IsRunning ? "Close the app to update" : "Update available",
+        SoftwareUpdatePhase.Available => !string.IsNullOrEmpty(SoftwareBlockingReason) ? "Close EuroScope and VatEFS first" : !IsWebApp && IsRunning ? "Close the app to update" : "Update available",
         SoftwareUpdatePhase.Current => "Up to date",
         SoftwareUpdatePhase.Downloading => SoftwareUpdate.ProgressPercent.HasValue
             ? $"Downloading {SoftwareUpdate.ProgressPercent:0}%" : "Downloading…",
         SoftwareUpdatePhase.Verifying => "Verifying download…",
         SoftwareUpdatePhase.BackingUp => "Creating recovery backup…",
         SoftwareUpdatePhase.Installing => "Installing — please wait…",
-        SoftwareUpdatePhase.Completed => "Updated · ready to launch",
+        SoftwareUpdatePhase.Completed => IsLocalUrl ? "Updated · start plugin in EuroScope" : "Updated · ready to launch",
         SoftwareUpdatePhase.Unavailable => "Manual update",
         SoftwareUpdatePhase.Cancelled => "Update cancelled",
         SoftwareUpdatePhase.Error => "Update needs attention",
@@ -462,6 +494,7 @@ public class CheckResult : INotifyPropertyChanged
             OnPropertyChanged(nameof(ShowSplitLaunch));
             OnPropertyChanged(nameof(EuroScopeSetupText));
             OnPropertyChanged(nameof(ShowConfigure));
+            OnPropertyChanged(nameof(ShowGngMaintenance));
             NotifySoftwareUpdate();
         }
     }
@@ -507,6 +540,12 @@ public class CheckResult : INotifyPropertyChanged
         set => Set(ref _latestVersion, value);
     }
 
+    public bool LatestIsPrerelease
+    {
+        get => _latestIsPrerelease;
+        set => Set(ref _latestIsPrerelease, value);
+    }
+
     public CheckStatus Status
     {
         get => _status;
@@ -548,8 +587,10 @@ public class CheckResult : INotifyPropertyChanged
         _                           => "—"
     };
 
+    public string DownloadActionText => IsLocalUrl ? "Open releases ↗" : "Get package ↗";
     public bool ShowDownload =>
-        !HasEuroScopeManagement && Status == CheckStatus.UpdateAvailable && !string.IsNullOrEmpty(DownloadUrl);
+        !HasEuroScopeManagement && !HasFontsCheck && !HasSoftwareUpdate && !string.IsNullOrEmpty(DownloadUrl) &&
+        (IsLocalUrl ? Status is not (CheckStatus.Unknown or CheckStatus.Checking) : Status == CheckStatus.UpdateAvailable);
 
     public event PropertyChangedEventHandler? PropertyChanged;
 

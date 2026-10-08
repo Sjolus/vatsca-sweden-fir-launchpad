@@ -85,9 +85,16 @@ public sealed class SoftwareUpdateService
             SetState(new(app, SoftwareUpdatePhase.Checking, "Checking installation and release…"));
             token.ThrowIfCancellationRequested();
             var installation = await Task.Run(() => _installer.Inspect(app, exePath), token).ConfigureAwait(false);
+            SetState(new(app, SoftwareUpdatePhase.Checking, "Checking release…", installation));
             if (!installation.CanUpdate)
+            {
+                // Missing/custom VatEFS copies still need its current release and fresh-install route.
+                var available = app == SoftwareApp.VatEfs
+                    ? await _source.GetLatestAsync(app, installation.Version, token).ConfigureAwait(false) : null;
+                if (available is not null) ValidateRelease(app, available);
                 return SetState(new(app, SoftwareUpdatePhase.Unavailable,
-                    installation.Reason ?? "This installation cannot be updated in Launchpad.", installation));
+                    installation.Reason ?? "This installation cannot be updated in Launchpad.", installation, available));
+            }
             ValidateInstallation(app, installation);
             var release = await _source.GetLatestAsync(app, installation.Version, token).ConfigureAwait(false);
             token.ThrowIfCancellationRequested();

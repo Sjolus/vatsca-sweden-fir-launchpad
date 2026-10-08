@@ -25,6 +25,8 @@ internal sealed class FreshSoftwareInstallEnvironment
     public Action<string>? ValidateVatisDestination { get; init; }
     public Action<SoftwareRelease>? ValidateVatisRelease { get; init; }
     public Func<SoftwareRelease, string, string, IProgress<string>?, CancellationToken, Func<Task>, Task<SoftwareInstallResult>>? InstallVatisAsync { get; init; }
+    public Action<string>? ValidateVatEfsDestination { get; init; }
+    public Func<SoftwareRelease, string, string, IProgress<string>?, CancellationToken, Func<Task>, Task<SoftwareInstallResult>>? InstallVatEfsAsync { get; init; }
 }
 
 /// <summary>Explicit reviewed fresh installs. Existing applications are adopted or updated separately.</summary>
@@ -37,6 +39,8 @@ public sealed class FreshSoftwareInstallService
     private readonly Action<string> _validateVatis;
     private readonly Action<SoftwareRelease> _validateVatisRelease;
     private readonly Func<SoftwareRelease, string, string, IProgress<string>?, CancellationToken, Func<Task>, Task<SoftwareInstallResult>> _installVatis;
+    private readonly Action<string> _validateVatEfs;
+    private readonly Func<SoftwareRelease, string, string, IProgress<string>?, CancellationToken, Func<Task>, Task<SoftwareInstallResult>> _installVatEfs;
     private readonly string _cacheRoot;
     private readonly TimeSpan _downloadTimeout;
     private readonly SemaphoreSlim _gate = new(1, 1);
@@ -63,6 +67,13 @@ public sealed class FreshSoftwareInstallService
             try { return await vatis.InstallAsync(release, package, root, progress, token, beforeInstall).ConfigureAwait(false); }
             finally { RestartRequired |= vatis.RestartRequired; }
         });
+        var vatEfs = new VatEfsInstaller(environment.Software.VatEfs ?? new());
+        _validateVatEfs = environment.ValidateVatEfsDestination ?? vatEfs.ValidateFreshDestination;
+        _installVatEfs = environment.InstallVatEfsAsync ?? (async (release, package, root, progress, token, beforeInstall) =>
+        {
+            try { return await vatEfs.InstallFreshAsync(release, package, root, progress, token, beforeInstall).ConfigureAwait(false); }
+            finally { RestartRequired |= vatEfs.RestartRequired; }
+        });
     }
 
     public bool IsBusy => _gate.CurrentCount == 0;
@@ -77,7 +88,9 @@ public sealed class FreshSoftwareInstallService
         try
         {
             // Copy only the relevant configured path; no live settings reference or credentials in the plan.
-            var configured = app switch { SoftwareApp.Vacs => settings.VacsExePath, SoftwareApp.Vatis => settings.VatisExePath, SoftwareApp.TrackAudio => settings.TrackAudioExePath, _ => throw new ArgumentOutOfRangeException(nameof(app)) };
+            var configured = app switch { SoftwareApp.Vacs => settings.VacsExePath, SoftwareApp.Vatis => settings.VatisExePath, SoftwareApp.TrackAudio => settings.TrackAudioExePath,
+                SoftwareApp.VatEfs => string.IsNullOrWhiteSpace(settings.VatEfsPath) ? string.Empty : Path.Combine(settings.VatEfsPath, "efs.exe"),
+                _ => throw new ArgumentOutOfRangeException(nameof(app)) };
             allowVatisBeta &= app == SoftwareApp.Vatis;
             var layout = Layout(app);
             await Task.Run(() => ValidateAbsent(app, configured, layout.Candidates, layout.Root), cancellationToken).ConfigureAwait(false);
@@ -107,13 +120,17 @@ public sealed class FreshSoftwareInstallService
                 if (data.Append(layout.Root).Any(path => Overlaps(path, _cacheRoot)) || destination != null && Overlaps(destination, _cacheRoot))
                     throw new InvalidOperationException("The download cache overlaps the reviewed installation, settings or recovery location.");
                 var text = new StringBuilder();
-                text.AppendLine($"Install {Name(app)} {release.Version}" + (release.Version.Contains('-') ? " — BETA RELEASE (explicitly selected)." : "."));
+                text.AppendLine($"Install {Name(app)} {release.Version}" + (release.IsPrerelease || release.Version.Contains('-')
+                    ? app == SoftwareApp.VatEfs ? " — PRERELEASE (review before installing)." : " — BETA RELEASE (explicitly selected)." : "."));
                 text.AppendLine("Installation folder: " + layout.Root);
                 text.AppendLine("Scope: " + layout.Scope + (layout.Scope == "AllUsers" ? " (Windows elevation required)" : ""));
                 text.AppendLine("Official package: " + release.DownloadUri);
                 text.AppendLine("Package size and SHA-256 must match the vendor's release metadata. " + (app == SoftwareApp.Vatis
                     ? "The signed vATIS package and separately verified Setup must agree exactly. Setup will not run over any existing vATIS folder."
+                    : app == SoftwareApp.VatEfs ? "The MSI product, version, upgrade identity and installation layout are checked. The package is not represented as having a trusted publisher signature."
                     : "The installer product/version is checked. VACS/TrackAudio packages are not represented as having a trusted publisher signature."));
+                if (app == SoftwareApp.VatEfs)
+                    text.AppendLine("Close every EuroScope instance and VatEFS backend before installing. The MSI installs the plugin and flight-strip application together. Your EuroScope profiles and external settings are not changed. After installation, use Controller profile to review enabling the plugin.");
                 text.AppendLine(destination == null ? "No existing known settings need an export." : "Private settings recovery export: " + destination);
                 text.AppendLine("Existing known settings remain in place. External/custom settings are not discovered. Launchpad does not delete a previous installation or start the client as part of installation.");
                 text.AppendLine("Required shared runtimes must be installed through their separate explicit action. Preparation can be cancelled; once the vendor installer starts, wait for completion. No Windows restart is requested.");
@@ -159,12 +176,13 @@ public sealed class FreshSoftwareInstallService
                 LastBackupFolder = await RemovalFileService.BackupAsync(plan.BackupFiles, plan.BackupDestination,
                     new InlineProgress(message => Report(FreshSoftwareInstallPhase.BackingUp, message)), token).ConfigureAwait(false);
             }
-            if (plan.App == SoftwareApp.Vatis)
+            if (plan.App is SoftwareApp.Vatis or SoftwareApp.VatEfs)
             {
-                await _installVatis(plan.Release, packagePath, plan.InstallRoot,
+                var installAdapter = plan.App == SoftwareApp.Vatis ? _installVatis : _installVatEfs;
+                await installAdapter(plan.Release, packagePath, plan.InstallRoot,
                     new InlineProgress(message => Report(_canCancel ? FreshSoftwareInstallPhase.Verifying : FreshSoftwareInstallPhase.Installing, message)),
                     token, BeforeInstall).ConfigureAwait(false);
-                if (_canCancel) throw new InvalidOperationException("The vATIS adapter did not enter its reviewed installation boundary.");
+                if (_canCancel) throw new InvalidOperationException("The installer adapter did not enter its reviewed installation boundary.");
             }
             else
             {
@@ -241,6 +259,7 @@ public sealed class FreshSoftwareInstallService
                 throw new InvalidOperationException("The configured executable is missing but its previous folder remains. Review that folder or clear the stale path in Settings before a fresh installation.");
         }
         if (app == SoftwareApp.Vatis) _validateVatis(root);
+        else if (app == SoftwareApp.VatEfs) _validateVatEfs(root);
         else if (_environment.HasInstallerResidue(app) || _environment.Software.ReadRegistrations(app).Count != 0)
             throw new InvalidOperationException("An existing registration or installer destination was found. Adopt the installation in Settings, or remove the old copy explicitly before fresh installation.");
         foreach (var path in candidates)
@@ -284,6 +303,9 @@ public sealed class FreshSoftwareInstallService
             case SoftwareApp.Vatis:
                 root = Path.Combine(local, "org.vatsim.vatis"); name = Path.Combine("current", "vATIS.exe"); scope = "CurrentUser";
                 candidates = [root, Path.Combine(local, "vATIS"), Path.Combine(_environment.ProgramFiles, "vATIS"), Path.Combine(_environment.ProgramFilesX86, "vATIS")]; break;
+            case SoftwareApp.VatEfs:
+                root = Path.Combine(_environment.ProgramFiles, "VatEFS"); name = "efs.exe"; scope = "AllUsers";
+                candidates = [root, Path.Combine(_environment.ProgramFilesX86, "VatEFS")]; break;
             default: throw new ArgumentOutOfRangeException(nameof(app));
         }
         return (SoftwareInstaller.FullPath(root), Path.Combine(root, name), scope,
@@ -294,6 +316,7 @@ public sealed class FreshSoftwareInstallService
         SoftwareApp.Vacs => [Path.Combine(_environment.RoamingAppData, "app.vacs.vacs-client"), Path.Combine(_environment.LocalAppData, "app.vacs.vacs-client")],
         SoftwareApp.TrackAudio => [Path.Combine(_environment.RoamingAppData, "trackaudio")],
         SoftwareApp.Vatis => [], // Any surviving vATIS root is refused by the Setup adapter, including data-only roots.
+        SoftwareApp.VatEfs => [], // External EuroScope/browser settings are not installer-managed; the installation root must be absent.
         _ => throw new ArgumentOutOfRangeException(nameof(app))
     };
     private async Task DownloadAsync(SoftwareRelease release, string path, IProgress<FreshSoftwareInstallProgress>? progress, CancellationToken token)
@@ -343,7 +366,8 @@ public sealed class FreshSoftwareInstallService
     private static bool Same(string a, string b) => a.Equals(b, StringComparison.OrdinalIgnoreCase);
     private static bool Within(string root, string path) => Same(root, path) || path.StartsWith(root.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
     private static bool Overlaps(string a, string b) => Within(a, b) || Within(b, a);
-    private static string Name(SoftwareApp app) => app == SoftwareApp.Vacs ? "VACS" : app == SoftwareApp.Vatis ? "vATIS" : "TrackAudio";
+    private static string Name(SoftwareApp app) => app switch
+    { SoftwareApp.Vacs => "VACS", SoftwareApp.Vatis => "vATIS", SoftwareApp.VatEfs => "VatEFS", _ => "TrackAudio" };
     private sealed class InlineProgress(Action<string> action) : IProgress<string> { public void Report(string value) => action(value); }
 }
 

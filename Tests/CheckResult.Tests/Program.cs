@@ -20,15 +20,81 @@ try
         Equal("Not found", row.DisplayInstalledVersion);
         True(row.DetailText.Contains("Executable not found"));
     });
-    Run("web service and detected plugin do not claim version checks", () =>
+    Run("web service and unknown plugin version remain distinct", () =>
     {
         var web = new CheckResult { AppName = "VATIRIS", IsWebApp = true, InstalledVersion = "N/A", LatestVersion = "N/A", Status = CheckStatus.WebApp };
         Equal("Not applicable", web.DisplayInstalledVersion);
         Equal("Not applicable", web.DisplayLatestVersion);
         var plugin = new CheckResult { AppName = "VatEFS", IsWebApp = true, IsLocalUrl = true, InstalledVersion = "Installed", Status = CheckStatus.Installed };
         Equal("Not reported", plugin.DisplayInstalledVersion);
-        Equal("No update source", plugin.LatestVersionCaption);
+        Equal("Includes prereleases", plugin.LatestVersionCaption);
         Equal("Plugin detected", plugin.RowStatusText);
+    });
+    Run("VatEFS prereleases and release links retain browser launch", () =>
+    {
+        var row = new CheckResult { AppName = "VatEFS", IsWebApp = true, IsLocalUrl = true, IsLocalUrlReachable = true,
+            LaunchPath = "http://localhost:17770", Status = CheckStatus.UpdateAvailable, InstalledVersion = "v0.0.14", LatestVersion = "v0.0.15",
+            LatestIsPrerelease = true, DownloadUrl = "https://github.com/minsulander/vatefs/releases/tag/v0.0.15" };
+        Equal("Latest prerelease", row.LatestVersionCaption);
+        Equal("Open releases ↗", row.DownloadActionText);
+        True(row.ShowDownload && row.ShowLaunch && row.ShowSimpleLaunch);
+        Equal("Open", row.LaunchActionText);
+        Equal("Review the VatEFS release", row.RowExplanation);
+        row.Status = CheckStatus.Installed;
+        row.InstalledVersion = "Installed";
+        True(row.ShowDownload && row.ShowLaunch);
+        Equal("Not reported", row.DisplayInstalledVersion);
+        row.Status = CheckStatus.Error;
+        True(row.ShowDownload && row.ShowLaunch);
+        row.LatestIsPrerelease = false;
+        Equal("Latest release", row.LatestVersionCaption);
+        row.Status = CheckStatus.Checking;
+        True(!row.ShowDownload && row.ShowLaunch);
+    });
+    Run("all four clients expose installation when absent", () =>
+    {
+        foreach (var app in Enum.GetValues<SoftwareApp>())
+        {
+            var row = Software(app, SoftwareUpdatePhase.Unavailable);
+            row.LaunchPath = app == SoftwareApp.VatEfs ? "http://localhost:17770" : "";
+            row.SoftwareExecutablePath = "";
+            True(row.SoftwareNeedsSetup && row.ShowSoftwareSetup && !row.ShowSoftwareAction);
+            Equal("Install…", row.SoftwareSetupText);
+            Equal("Not set up", row.RowStatusText);
+        }
+    });
+    Run("VatEFS browser URL is independent of installation and process guards", () =>
+    {
+        var row = Software(SoftwareApp.VatEfs, SoftwareUpdatePhase.Available);
+        row.SoftwareExecutablePath = fakeExe;
+        row.LaunchPath = "http://localhost:17770";
+        row.IsLocalUrlReachable = true;
+        row.IsRunning = true;
+        True(!row.SoftwareNeedsSetup && row.ShowSoftwareAction && row.SoftwareActionEnabled);
+        True(row.ShowLaunch && row.LaunchEnabled);
+        row.SoftwareBlockingReason = "EuroScope is running. Close all instances before changing VatEFS files.";
+        True(!row.SoftwareActionEnabled && row.DetailText.Contains(row.SoftwareBlockingReason));
+        True(row.ShowLaunch && row.LaunchEnabled);
+        row.SoftwareBlockingReason = null;
+        True(row.SoftwareActionEnabled);
+        row.SoftwareUpdate = row.SoftwareUpdate! with { Phase = SoftwareUpdatePhase.Downloading };
+        True(!row.LaunchEnabled && row.ShowLaunch);
+        Equal("http://localhost:17770", row.LaunchPath);
+    });
+    Run("copied VatEFS plugin needs review instead of fresh setup", () =>
+    {
+        var dll = Path.Combine(temporary, "VatEFS.dll");
+        File.WriteAllText(dll, "Synthetic plugin existence only.");
+        try
+        {
+            var row = Software(SoftwareApp.VatEfs, SoftwareUpdatePhase.Unavailable);
+            row.SoftwareExecutablePath = Path.Combine(temporary, "missing-efs.exe");
+            row.LaunchPath = "http://localhost:17770";
+            True(!row.SoftwareNeedsSetup && row.ShowSoftwareAction);
+            Equal("Manage…", row.SoftwareSetupText);
+            Equal("Open releases ↗", row.SoftwareActionText);
+        }
+        finally { File.Delete(dll); }
     });
     Run("supported policy and beta-compatible source are labelled separately", () =>
     {
@@ -42,14 +108,16 @@ try
         Equal("v4.1.0-beta.19", beta.DisplayInstalledVersion);
         Equal("v4.1.0-beta.19", beta.DisplayLatestVersion);
     });
-    Run("GNG remains a manual package download", () =>
+    Run("GNG uses its reviewed installation workflow instead of a download-only action", () =>
     {
         var gng = new CheckResult { AppName = "EuroScope (GNG Pack)", HasFontsCheck = true, IsFolder = true, Status = CheckStatus.UpdateAvailable, InstalledVersion = "2605/01  rev.1", LatestVersion = "2610/01  rev.3" };
         Equal("Swedish GNG package", gng.DisplayName);
         Equal("Latest package", gng.LatestVersionCaption);
         Equal("2605/01  rev.1", gng.DisplayInstalledVersion);
-        Equal("Download from AeroNav", gng.RowExplanation);
-        True(gng.DetailText.Contains("manually"));
+        Equal("Review a GNG update", gng.RowExplanation);
+        True(gng.DetailText.Contains("Nothing installs without your confirmation"));
+        gng.DownloadUrl = "https://files.aero-nav.com/ESAA";
+        True(!gng.ShowDownload && !gng.HasSoftwareUpdate);
         Equal("Folder", gng.LaunchActionText);
     });
     Run("unavailable is a review state without an inferred update", () =>
@@ -146,9 +214,9 @@ try
         Equal("Review the required GNG fonts", row.RowExplanation);
         row.Status = CheckStatus.UpdateAvailable;
         Equal("Update available", row.RowStatusText);
-        True(row.DetailText.Contains("install it manually"));
+        True(row.DetailText.Contains("Set up / update"));
         row.FontsState = VatscaUpdateChecker.Services.FontsState.AllOk;
-        Equal("Download from AeroNav", row.RowExplanation);
+        Equal("Review a GNG update", row.RowExplanation);
     });
     Run("software explanations fit the short second line", () =>
     {
@@ -196,8 +264,9 @@ finally
 
 CheckResult Software(SoftwareApp app, SoftwareUpdatePhase phase) => new()
 {
-    AppName = app switch { SoftwareApp.Vacs => "VACS", SoftwareApp.Vatis => "vATIS", _ => "TrackAudio" },
+    AppName = app switch { SoftwareApp.Vacs => "VACS", SoftwareApp.Vatis => "vATIS", SoftwareApp.VatEfs => "VatEFS", _ => "TrackAudio" },
     SoftwareApp = app, LaunchPath = fakeExe,
+    IsWebApp = app == SoftwareApp.VatEfs, IsLocalUrl = app == SoftwareApp.VatEfs,
     SoftwareUpdate = new(app, phase, "Synthetic operation state.")
 };
 

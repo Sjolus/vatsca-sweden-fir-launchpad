@@ -10,6 +10,7 @@
                        TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,8,0,0"/>
         </StackPanel>
         <StackPanel DockPanel.Dock="Bottom" Margin="0,12,0,0">
+            <TextBlock x:Name="ProcessNotice" Visibility="Collapsed" TextWrapping="Wrap" Foreground="{DynamicResource WarningFg}" Margin="0,0,0,8"/>
             <ProgressBar x:Name="Activity" Height="6" Minimum="0" Maximum="100" Visibility="Collapsed" Margin="0,0,0,8"/>
             <TextBox x:Name="StatusText" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="100" VerticalScrollBarVisibility="Auto"
                      BorderThickness="0" Background="Transparent" Foreground="{DynamicResource PrimaryText}"
@@ -39,6 +40,8 @@
                     </DockPanel>
                     <Button x:Name="PrerequisiteButton" Content="Check required runtime…" Click="Prerequisite_Click" HorizontalAlignment="Left"
                             Padding="10,6" Margin="0,0,0,12"/>
+                    <TextBlock x:Name="PrereleaseNotice" Visibility="Collapsed" Text="VatEFS releases include prereleases. The review shows the selected version before you confirm installation. The plugin needs the Microsoft x86 runtime, also used by EuroScope. Installing the plugin does not enable it in your EuroScope profiles."
+                               TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,12"/>
                     <CheckBox x:Name="AllowVatisBeta" Visibility="Collapsed" Checked="BetaChanged" Unchecked="BetaChanged"
                               Foreground="{DynamicResource PrimaryText}" Margin="0,0,0,12">
                         <TextBlock Text="Use the current official vATIS beta release (opt in before review)." TextWrapping="Wrap"/>

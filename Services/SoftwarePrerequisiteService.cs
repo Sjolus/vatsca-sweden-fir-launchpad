@@ -24,6 +24,7 @@ public static class SoftwarePrerequisiteService
     internal static string? GetProblem(SoftwareApp app, SoftwarePrerequisiteEnvironment environment)
     {
         ValidateApp(app);
+        if (app == SoftwareApp.VatEfs) return EuroScopePrerequisiteService.GetProblem(X86Environment(environment));
         if (app == SoftwareApp.Vatis) return null;
         try
         {
@@ -44,6 +45,12 @@ public static class SoftwarePrerequisiteService
         HttpClient http, IProgress<string>? progress = null, CancellationToken cancellationToken = default, Action? onRestartRequired = null)
     {
         ValidateApp(app);
+        if (app == SoftwareApp.VatEfs)
+        {
+            var result = await EuroScopePrerequisiteService.InstallAsync(X86Environment(environment), http,
+                progress, cancellationToken, onRestartRequired).ConfigureAwait(false);
+            return new(result.RestartRequired);
+        }
         if (environment.DownloadTimeout <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(environment.DownloadTimeout));
         await Gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         string? folder = null;
@@ -124,6 +131,11 @@ public static class SoftwarePrerequisiteService
     {
         ValidateApp(app);
         if (app == SoftwareApp.Vatis) throw new InvalidOperationException("vATIS has no Microsoft prerequisite package in this workflow.");
+        if (app == SoftwareApp.VatEfs)
+        {
+            EuroScopePrerequisiteService.VerifyPackage(path, X86Environment(environment));
+            return;
+        }
         var binary = environment.ReadBinary(path);
         // Microsoft's x64 Burn installer and architecture-selecting WebView bootstrapper are both x86 PE files.
         bool valid = binary.Machine == Machine.I386 && binary.CompanyName == "Microsoft Corporation" &&
@@ -139,7 +151,7 @@ public static class SoftwarePrerequisiteService
 
     internal static void ValidateAddress(SoftwareApp app, Uri address)
     {
-        if (app == SoftwareApp.TrackAudio) { EuroScopePrerequisiteService.ValidateAddress(address); return; }
+        if (app is SoftwareApp.TrackAudio or SoftwareApp.VatEfs) { EuroScopePrerequisiteService.ValidateAddress(address); return; }
         if (app != SoftwareApp.Vacs || !address.IsAbsoluteUri || address.Scheme != Uri.UriSchemeHttps || address.Port != 443 || address.UserInfo.Length != 0 ||
             !new[] { "go.microsoft.com", "msedge.sf.dl.delivery.mp.microsoft.com", "msedge.sf.tlu.dl.delivery.mp.microsoft.com", "download.microsoft.com" }.Contains(address.IdnHost, StringComparer.OrdinalIgnoreCase))
             throw new InvalidDataException("The Microsoft prerequisite download used an unsupported source. Use Microsoft's official download page.");
@@ -147,8 +159,19 @@ public static class SoftwarePrerequisiteService
 
     private static void ValidateApp(SoftwareApp app)
     {
-        if (app is not (SoftwareApp.Vacs or SoftwareApp.TrackAudio or SoftwareApp.Vatis)) throw new ArgumentOutOfRangeException(nameof(app));
+        if (app is not (SoftwareApp.Vacs or SoftwareApp.TrackAudio or SoftwareApp.Vatis or SoftwareApp.VatEfs)) throw new ArgumentOutOfRangeException(nameof(app));
     }
+
+    // VatEFS's EuroScope plugin uses the same x86 runtime as EuroScope itself.
+    private static EuroScopePrerequisiteEnvironment X86Environment(SoftwarePrerequisiteEnvironment environment) => new()
+    {
+        LocalAppData = environment.LocalAppData,
+        DownloadTimeout = environment.DownloadTimeout,
+        ReadInstalledVersion = () => environment.ReadInstalledVersion(SoftwareApp.VatEfs),
+        ReadBinary = environment.ReadBinary,
+        VerifyPublisher = environment.VerifyPublisher,
+        RunAsync = environment.RunAsync
+    };
 }
 
 internal sealed class SoftwarePrerequisiteEnvironment
@@ -164,6 +187,7 @@ internal sealed class SoftwarePrerequisiteEnvironment
     private static Version? ReadMachineVersion(SoftwareApp app)
     {
         if (app == SoftwareApp.TrackAudio) return EuroScopePrerequisiteEnvironment.ReadRuntimeVersion("x64");
+        if (app == SoftwareApp.VatEfs) return EuroScopePrerequisiteEnvironment.ReadRuntimeVersion("x86");
         if (app != SoftwareApp.Vacs) return null;
         // VACS fresh install uses AllUsers. HKCU alone is insufficient when UAC uses another account.
         using var machine = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry32);

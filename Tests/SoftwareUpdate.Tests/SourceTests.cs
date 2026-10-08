@@ -55,6 +55,48 @@ public static class SourceTests
             Assert(actual is not null, "Missing official stable release");
             Compare(actual!.Version, "1.5.0-beta.1", -1); // The coordinator refuses this comparison.
         });
+        await Run("VatEFS fresh installs and upgrades select the newest published prerelease MSI", async () =>
+        {
+            string catalog = GitHub(Release(SoftwareApp.VatEfs, "0.0.14"), Release(SoftwareApp.VatEfs, "0.0.15", prerelease: true),
+                Release(SoftwareApp.VatEfs, "0.0.16", draft: true));
+            var actual = await Latest(SoftwareApp.VatEfs, catalog, "0.0.12");
+            Assert(actual is { Version: "0.0.15", FileName: "vatefs-0.0.15.msi", IsPrerelease: true }, "VatEFS prerelease MSI was not selected");
+            using var client = Client((request, _) =>
+            {
+                Assert(request.RequestUri!.AbsoluteUri == "https://api.github.com/repos/minsulander/vatefs/releases?per_page=100&page=1", "Wrong VatEFS catalog");
+                return Task.FromResult(Response(catalog, request));
+            });
+            Assert(await new SoftwareReleaseSource(client).GetLatestFreshAsync(SoftwareApp.VatEfs, false) == actual, "Fresh/update catalogs differ");
+        });
+        await Run("VatEFS skips unpublished releases and rejects newer unsupported MSI versions", async () =>
+        {
+            var pending = Release(SoftwareApp.VatEfs, "0.0.16", prerelease: true); pending["published_at"] = null;
+            var actual = await Latest(SoftwareApp.VatEfs, GitHub(pending, Release(SoftwareApp.VatEfs, "0.0.15")));
+            Assert(actual is { Version: "0.0.15", IsPrerelease: false }, "An unpublished MSI version was used");
+            foreach (var unsupported in new[] { "0.0.17-beta.1", "300.0.0", "0.0.15+build" })
+                await Reject(GitHub(Release(SoftwareApp.VatEfs, unsupported, prerelease: true), Release(SoftwareApp.VatEfs, "0.0.14")), SoftwareApp.VatEfs);
+            var invalid = Release(SoftwareApp.VatEfs, "0.0.15"); invalid["published_at"] = "invalid";
+            await Reject(GitHub(invalid), SoftwareApp.VatEfs);
+        });
+        await Run("VatEFS rejects incomplete or ambiguous release assets", async () =>
+        {
+            var missingHash = Release(SoftwareApp.VatEfs, "0.0.15"); Asset(missingHash).Remove("digest");
+            await Reject(GitHub(missingHash), SoftwareApp.VatEfs);
+            var wrongAsset = Release(SoftwareApp.VatEfs, "0.0.15"); Asset(wrongAsset)["name"] = "VatEFS.dll";
+            await Reject(GitHub(wrongAsset), SoftwareApp.VatEfs);
+            var duplicateAsset = Release(SoftwareApp.VatEfs, "0.0.15"); duplicateAsset["assets"] = new[] { Asset(duplicateAsset), Asset(duplicateAsset) };
+            await Reject(GitHub(duplicateAsset), SoftwareApp.VatEfs);
+            await Reject(GitHub(Release(SoftwareApp.VatEfs, "0.0.15"), Release(SoftwareApp.VatEfs, "0.0.15")), SoftwareApp.VatEfs);
+        });
+        await Run("VatEFS download uses only the exact official versioned MSI and approved redirects", async () =>
+        {
+            var release = (await Latest(SoftwareApp.VatEfs, GitHub(Release(SoftwareApp.VatEfs, "0.0.15", prerelease: true))))!;
+            Assert(SoftwareReleaseSource.IsAllowedDownloadUri(release, new("https://github.com/minsulander/vatefs/releases/download/v0.0.15/vatefs-0.0.15.msi")), "Official MSI rejected");
+            foreach (var uri in new[] { "https://github.com/minsulander/vatefs/releases/download/v0.0.14/vatefs-0.0.15.msi", "https://github.com/other/vatefs/releases/download/v0.0.15/vatefs-0.0.15.msi", "https://example.invalid/vatefs-0.0.15.msi" })
+                Assert(!SoftwareReleaseSource.IsAllowedDownloadUri(release, new(uri), true), "Unrelated asset was accepted");
+            Assert(!SoftwareReleaseSource.IsAllowedDownloadUri(release, new("https://release-assets.githubusercontent.com/synthetic")) &&
+                SoftwareReleaseSource.IsAllowedDownloadUri(release, new("https://release-assets.githubusercontent.com/synthetic"), true), "CDN allowed before official redirect");
+        });
         await Run("latest incomplete GitHub asset is rejected without falling back", async () =>
         {
             var latest = Release(SoftwareApp.Vacs, "2.8.0");
@@ -218,10 +260,10 @@ public static class SourceTests
 
     private static Dictionary<string, object?> Release(SoftwareApp app, string version, bool draft = false, bool prerelease = false, string? tag = null)
     {
-        string releaseTag = tag ?? (app == SoftwareApp.Vacs ? "vacs-client-v" : "") + version;
-        string name = app == SoftwareApp.Vacs ? $"vacs_{version}_x64-setup.exe" : $"trackaudio-{version}-x64-setup.exe";
-        string repo = app == SoftwareApp.Vacs ? "vacs-project/vacs" : "pierr3/TrackAudio";
-        return new() { ["tag_name"] = releaseTag, ["draft"] = draft, ["prerelease"] = prerelease,
+        string releaseTag = tag ?? (app == SoftwareApp.Vacs ? "vacs-client-v" : app == SoftwareApp.VatEfs ? "v" : "") + version;
+        string name = app == SoftwareApp.Vacs ? $"vacs_{version}_x64-setup.exe" : app == SoftwareApp.VatEfs ? $"vatefs-{version}.msi" : $"trackaudio-{version}-x64-setup.exe";
+        string repo = app == SoftwareApp.Vacs ? "vacs-project/vacs" : app == SoftwareApp.VatEfs ? "minsulander/vatefs" : "pierr3/TrackAudio";
+        return new() { ["tag_name"] = releaseTag, ["draft"] = draft, ["prerelease"] = prerelease, ["published_at"] = "2026-10-07T20:54:00Z",
             ["assets"] = new[] { new Dictionary<string, object?> { ["name"] = name, ["state"] = "uploaded", ["size"] = 11164891,
                 ["digest"] = "sha256:" + Hash, ["browser_download_url"] = $"https://github.com/{repo}/releases/download/{releaseTag}/{name}" } } };
     }

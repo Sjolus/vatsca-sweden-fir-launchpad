@@ -95,6 +95,9 @@ public static class UpdateChecker
                 return;
             }
 
+            // A new sector filename alone cannot establish a completed installation.
+            GngUpdateService.RequireNoPendingUpdate(euroscopeDataPath);
+
             // Find the most recent ESAA-Sweden_*.sct file (filename contains timestamp so alpha sort = time sort)
             var sctFiles = Directory.GetFiles(euroscopeDataPath, "ESAA-Sweden_*.sct");
             if (sctFiles.Length == 0)
@@ -298,32 +301,4 @@ public static class UpdateChecker
         return string.Equals(local, remote, StringComparison.OrdinalIgnoreCase);
     }
 
-    // -------------------------------------------------------------------------
-    // VatEFS — plugin DLL detected by file presence (no online version source yet)
-    // -------------------------------------------------------------------------
-    public static Task CheckVatEfs(CheckResult result, string vatEfsPath)
-    {
-        result.LatestVersion = "—";
-        result.StatusMessage = string.Empty;
-        result.DownloadUrl   = string.Empty;
-
-        if (string.IsNullOrWhiteSpace(vatEfsPath))
-        {
-            result.InstalledVersion = "—";
-            result.Status = CheckStatus.NotConfigured;
-        }
-        else if (File.Exists(Path.Combine(vatEfsPath, "VatEFS.dll")))
-        {
-            result.InstalledVersion = "Installed";
-            result.Status = CheckStatus.Installed;
-        }
-        else
-        {
-            result.InstalledVersion = "Not installed";
-            result.Status = CheckStatus.NotConfigured;
-        }
-
-        Logger.Log("CHECK", $"VatEFS: {result.InstalledVersion} (path={vatEfsPath})");
-        return Task.CompletedTask;
-    }
 }

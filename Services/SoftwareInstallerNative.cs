@@ -9,7 +9,9 @@ namespace VatscaUpdateChecker.Services;
 
 internal static class SoftwareInstallerNative
 {
-    internal static void VerifyPublisher(string path, string expectedPublisher)
+    internal static void VerifyPublisher(string path, string expectedPublisher) => VerifyPublisher(path, expectedPublisher, expectedPublisher);
+
+    internal static void VerifyPublisher(string path, string expectedPublisher, string expectedSignerName)
     {
         SoftwareInstaller.RejectReparse(path);
         var file = new TrustFile { Size = (uint)Marshal.SizeOf<TrustFile>(), FilePath = Marshal.StringToCoTaskMemUni(path) };
@@ -30,9 +32,7 @@ internal static class SoftwareInstallerNative
 #pragma warning disable SYSLIB0057 // CreateFromSignedFile reads the verified Authenticode signer, not a PFX/private key.
             using var signer = new X509Certificate2(X509Certificate.CreateFromSignedFile(path));
 #pragma warning restore SYSLIB0057
-            if (!signer.GetNameInfo(X509NameType.SimpleName, false).Equals(expectedPublisher, StringComparison.Ordinal) ||
-                !signer.Subject.Split(',').Any(component => component.Trim() == "O=" + expectedPublisher))
-                throw new InvalidDataException("The executable is signed by an unexpected publisher.");
+            RequirePublisherIdentity(signer.GetNameInfo(X509NameType.SimpleName, false), signer.Subject, expectedPublisher, expectedSignerName);
         }
         finally
         {
@@ -43,18 +43,16 @@ internal static class SoftwareInstallerNative
         }
     }
 
+    internal static void RequirePublisherIdentity(string simpleName, string subject, string expectedPublisher, string expectedSignerName)
+    {
+        if (!simpleName.Equals(expectedSignerName, StringComparison.Ordinal) ||
+            !subject.Split(',').Any(component => component.Trim() == "O=" + expectedPublisher))
+            throw new InvalidDataException("The executable is signed by an unexpected publisher.");
+    }
+
     internal static async Task<int> RunAsync(SoftwareInstallCommand command)
     {
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = command.Executable,
-            Arguments = string.Join(" ", command.Arguments.Select(QuoteArgument)),
-            WorkingDirectory = Path.GetTempPath(),
-            UseShellExecute = command.Elevate,
-            Verb = command.Elevate ? "runas" : "",
-            CreateNoWindow = true,
-            WindowStyle = ProcessWindowStyle.Hidden
-        };
+        var startInfo = BuildStartInfo(command);
         Process? process;
         try
         {
@@ -77,6 +75,34 @@ internal static class SoftwareInstallerNative
             await process.WaitForExitAsync().ConfigureAwait(false);
             return process.ExitCode;
         }
+    }
+
+    internal static ProcessStartInfo BuildStartInfo(SoftwareInstallCommand command) => new()
+    {
+        FileName = command.Executable,
+        Arguments = FormatArguments(command.Arguments, command.IsMsi),
+        WorkingDirectory = Path.GetTempPath(),
+        UseShellExecute = command.Elevate,
+        Verb = command.Elevate ? "runas" : "",
+        // /qn requests silent MSI installation. Do not hide an unexpected native diagnostic.
+        CreateNoWindow = !command.IsMsi,
+        WindowStyle = command.IsMsi ? ProcessWindowStyle.Normal : ProcessWindowStyle.Hidden
+    };
+
+    internal static string FormatArguments(IReadOnlyList<string> arguments, bool isMsi) =>
+        string.Join(" ", arguments.Select(value => isMsi ? QuoteMsiArgument(value) : QuoteArgument(value)));
+
+    internal static string QuoteMsiArgument(string value)
+    {
+        int equals = value.IndexOf('=');
+        bool property = equals > 0 && (char.IsAsciiLetter(value[0]) || value[0] == '_') &&
+            value[..equals].All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '.');
+        if (!property) return QuoteArgument(value);
+        string content = value[(equals + 1)..];
+        // MSI parses properties separately from ordinary argv. Quote only the value, double
+        // embedded quotes, and leave a trailing backslash unchanged (it is not a CRT escape).
+        return value[..(equals + 1)] + (content.Length == 0 || content.Any(c => char.IsWhiteSpace(c) || c == '"')
+            ? "\"" + content.Replace("\"", "\"\"", StringComparison.Ordinal) + "\"" : content);
     }
 
     internal static string QuoteArgument(string value)

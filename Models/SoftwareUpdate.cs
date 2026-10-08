@@ -1,9 +1,12 @@
 namespace VatscaUpdateChecker.Models;
 
-public enum SoftwareApp { Vacs, Vatis, TrackAudio }
+public enum SoftwareApp { Vacs, Vatis, TrackAudio, VatEfs }
 
 public sealed record SoftwareRelease(SoftwareApp App, string Version, Uri DownloadUri,
-    string FileName, string Sha256, long Size);
+    string FileName, string Sha256, long Size)
+{
+    public bool IsPrerelease { get; init; }
+}
 
 public sealed record SoftwareInstallation(SoftwareApp App, string ExePath, string Version,
     string RootPath, string Scope, string? UpdaterPath, bool CanUpdate, string? Reason);

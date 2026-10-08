@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using VatscaUpdateChecker.Models;
 using VatscaUpdateChecker.Services;
@@ -29,11 +30,12 @@ public partial class MainWindow
                         case SoftwareApp.Vacs: _settings.VacsExePath = result.ExecutablePath; break;
                         case SoftwareApp.Vatis: _settings.VatisExePath = result.ExecutablePath; break;
                         case SoftwareApp.TrackAudio: _settings.TrackAudioExePath = result.ExecutablePath; break;
+                        case SoftwareApp.VatEfs: _settings.VatEfsPath = Path.GetDirectoryName(result.ExecutablePath)!; break;
                     }
                     try
                     {
                         SettingsService.Save(_settings);
-                        string name = app switch { SoftwareApp.Vacs => "VACS", SoftwareApp.Vatis => "vATIS", _ => "TrackAudio" };
+                        string name = app switch { SoftwareApp.Vacs => "VACS", SoftwareApp.Vatis => "vATIS", SoftwareApp.VatEfs => "VatEFS", _ => "TrackAudio" };
                         LastCheckedText.Text = name + " installation verified. The application remains closed. Check for updates to refresh versions.";
                     }
                     catch { LastCheckedText.Text = failureMessage = "Installation succeeded, but its path could not be saved. Set it in Settings."; }

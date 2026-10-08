@@ -29,4 +29,14 @@
     <Compile Include="..\..\Services\CredentialManagerService.cs" Link="CredentialManagerService.cs" />
     <Compile Include="..\..\Services\SettingsService.cs" Link="SettingsService.cs" />
   </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../Services/VatEfsInstaller.cs" Link="VatEfsInstaller.cs" />
+    <Compile Include="../../Services/VatEfsMsiPackage.cs" Link="VatEfsMsiPackage.cs" />
+    <Compile Include="../../Services/VatEfsMsiPathLease.cs" Link="VatEfsMsiPathLease.cs" />
+    <Compile Include="../../Services/VatEfsInstallation.cs" Link="VatEfsInstallation.cs" />
+    <Compile Include="../../Services/EuroScopeProcessGuard.cs" Link="EuroScopeProcessGuard.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../Services/VatEfsMsiTrust.cs" Link="VatEfsMsiTrust.cs" />
+  </ItemGroup>
 </Project>
