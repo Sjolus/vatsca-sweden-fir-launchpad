@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\..\Services\EuroScopeProcessGuard.cs" Link="EuroScopeProcessGuard.cs" />
+    <Compile Include="..\..\Services\GngUpdateService.cs" Link="GngUpdateService.cs" />
+    <Compile Include="..\..\Services\GngUpdateService.Diff.cs" Link="GngUpdateService.Diff.cs" />
+    <Compile Include="..\..\Services\GngUpdateService.ListLayouts.cs" Link="GngUpdateService.ListLayouts.cs" />
+    <Compile Include="..\..\Services\GngTextDiff.cs" Link="GngTextDiff.cs" />
+    <Compile Include="..\..\Services\GngPackageCache.cs" Link="GngPackageCache.cs" />
+    <Compile Include="..\..\Services\GngBrowserPolicy.cs" Link="GngBrowserPolicy.cs" />
+    <Compile Include="..\..\Services\GngPackageSelection.cs" Link="GngPackageSelection.cs" />
+    <Compile Include="..\..\Models\GngUpdatePlan.cs" Link="GngUpdatePlan.cs" />
+    <Compile Include="..\..\Models\GngFilePreview.cs" Link="GngFilePreview.cs" />
+    <Compile Include="..\..\Services\MaintenanceLock.cs" Link="MaintenanceLock.cs" />
+    <Compile Include="..\..\Services\PreservationPath.cs" Link="PreservationPath.cs" />
+  </ItemGroup>
+</Project>

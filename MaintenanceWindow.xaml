@@ -60,7 +60,7 @@
                         <CheckBox x:Name="RemoveSessions" Content="Delete browser sessions" Click="SelectionChanged"/>
                         <CheckBox x:Name="RemoveCredentials" Content="Delete saved credentials" Click="SelectionChanged"/>
                         <CheckBox x:Name="RemoveDownloads" Content="Clear cached downloads" Click="SelectionChanged"/>
-                        <CheckBox x:Name="RemoveBackups" Content="Delete existing update recovery backups" Click="SelectionChanged"/>
+                        <CheckBox x:Name="RemoveBackups" Content="Delete existing recovery backups" Click="SelectionChanged"/>
                     </WrapPanel>
                     <TextBlock Text="Settings and recovery copies can contain passwords. Deleting saved credentials does not erase copies in unselected profiles or backups. Launchpad keeps shared runtimes and online accounts; vendor uninstallers may remove their own registered components and fonts."
                                TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,4,0,8"/>

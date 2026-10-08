@@ -17,19 +17,23 @@ public sealed class SoftwareInstaller : ISoftwareInstaller
     private const int MaximumFiles = 25000;
     private const long MaximumBytes = 4L * 1024 * 1024 * 1024;
     private readonly SoftwareInstallerEnvironment _environment;
+    private readonly VatEfsInstaller _vatEfs;
     private readonly string _storage;
     private BackupReceipt? _backup;
-    public bool RestartRequired { get; private set; }
+    private bool _restartRequired;
+    public bool RestartRequired { get => _restartRequired || _vatEfs.RestartRequired; private set => _restartRequired = value; }
 
     public SoftwareInstaller() : this(new SoftwareInstallerEnvironment()) { }
     internal SoftwareInstaller(SoftwareInstallerEnvironment environment)
     {
         _environment = environment;
+        _vatEfs = new VatEfsInstaller(environment.VatEfs ?? new());
         _storage = Path.Combine(environment.LocalAppData, "VatscaUpdateChecker", "SoftwareUpdates");
     }
 
     public SoftwareInstallation Inspect(SoftwareApp app, string exePath)
     {
+        if (app == SoftwareApp.VatEfs) return _vatEfs.Inspect(exePath);
         try
         {
             var exe = FullPath(exePath);
@@ -95,10 +99,16 @@ public sealed class SoftwareInstaller : ISoftwareInstaller
         return new(SoftwareApp.Vatis, configuredExe, manifest.Version, root, "CurrentUser", updater, true, null);
     }
 
-    public bool IsRunning(SoftwareInstallation installation) => _environment.IsRunning(installation.App);
+    public bool IsRunning(SoftwareInstallation installation) => installation.App == SoftwareApp.VatEfs
+        ? _vatEfs.IsRunning(installation) : _environment.IsRunning(installation.App);
 
     public async Task VerifyPackageAsync(SoftwareRelease release, string packagePath, CancellationToken cancellationToken)
     {
+        if (release.App == SoftwareApp.VatEfs)
+        {
+            await _vatEfs.VerifyPackageAsync(release, packagePath, cancellationToken).ConfigureAwait(false);
+            return;
+        }
         ValidateRelease(release);
         RequireFile(packagePath);
         await using var stream = new FileStream(packagePath, FileMode.Open, FileAccess.Read, FileShare.Read);
@@ -164,6 +174,8 @@ public sealed class SoftwareInstaller : ISoftwareInstaller
 
     public async Task<string?> BackupAsync(SoftwareInstallation installation, IProgress<string>? progress, CancellationToken cancellationToken)
     {
+        if (installation.App == SoftwareApp.VatEfs)
+            return await _vatEfs.BackupAsync(installation, progress, cancellationToken).ConfigureAwait(false);
         _backup = null;
         Revalidate(installation);
         RequireStopped(installation);
@@ -205,6 +217,8 @@ public sealed class SoftwareInstaller : ISoftwareInstaller
         string packagePath, IProgress<string>? progress)
     {
         if (RestartRequired) throw new InvalidOperationException("Restart Windows before further application updates.");
+        if (installation.App == SoftwareApp.VatEfs)
+            return await _vatEfs.InstallAsync(installation, release, packagePath, progress).ConfigureAwait(false);
         if (release.App != installation.App) throw new InvalidDataException("Installation and package products differ.");
         Revalidate(installation);
         await using var packageLock = new FileStream(packagePath, FileMode.Open, FileAccess.Read, FileShare.Read);

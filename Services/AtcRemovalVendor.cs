@@ -83,7 +83,7 @@ public sealed class AtcRemovalVendor
         {
             if (!Guid.TryParseExact(spec.MsiProductCode, "B", out _) || spec.MsiScope is not ("CurrentUser" or "AllUsers"))
                 throw new InvalidDataException("Invalid Windows Installer product identity or scope.");
-            return new(executable, new[] { "/x", spec.MsiProductCode!, "/qn", "/norestart" }, spec.MsiScope == "AllUsers");
+            return new(executable, new[] { "/x", spec.MsiProductCode!, "/qn", "/norestart" }, spec.MsiScope == "AllUsers") { IsMsi = true };
         }
         var installation = spec.Installation ?? throw new InvalidDataException("The vendor installation identity is missing.");
         if (spec.Kind == AtcRemovalVendorKind.Velopack && installation.App == SoftwareApp.Vatis)
@@ -153,20 +153,7 @@ public sealed class AtcRemovalVendor
 
     internal static async Task<int> RunNativeAsync(AtcRemovalCommand command)
     {
-        var arguments = string.Join(" ", command.Arguments.Select(SoftwareInstallerNative.QuoteArgument));
-        if (command.NsisInstallDirectory is { } root)
-        {
-            root = SoftwareInstaller.FullPath(root);
-            if (root.Any(c => c is '"' or '\r' or '\n')) throw new InvalidDataException("The NSIS installation directory contains unsupported characters.");
-            // NSIS consumes the remaining command line after _?=; it must be last and must not be quoted.
-            arguments += " _?=" + root;
-        }
-        var info = new ProcessStartInfo
-        {
-            FileName = command.Executable, Arguments = arguments, WorkingDirectory = Path.GetTempPath(),
-            UseShellExecute = command.Elevate, Verb = command.Elevate ? "runas" : "",
-            CreateNoWindow = true, WindowStyle = ProcessWindowStyle.Hidden
-        };
+        var info = BuildStartInfo(command);
         Process? process;
         try { process = Process.Start(info); }
         catch (Win32Exception ex) when (ex.NativeErrorCode == 1223) { return 1223; }
@@ -179,5 +166,24 @@ public sealed class AtcRemovalVendor
             await process.WaitForExitAsync().ConfigureAwait(false);
             return process.ExitCode;
         }
+    }
+
+    internal static ProcessStartInfo BuildStartInfo(AtcRemovalCommand command)
+    {
+        var arguments = SoftwareInstallerNative.FormatArguments(command.Arguments, command.IsMsi);
+        if (command.NsisInstallDirectory is { } root)
+        {
+            if (command.IsMsi) throw new InvalidDataException("An MSI command cannot contain an NSIS installation directory.");
+            root = SoftwareInstaller.FullPath(root);
+            if (root.Any(c => c is '"' or '\r' or '\n')) throw new InvalidDataException("The NSIS installation directory contains unsupported characters.");
+            // NSIS consumes the remaining command line after _?=; it must be last and must not be quoted.
+            arguments += " _?=" + root;
+        }
+        return new ProcessStartInfo
+        {
+            FileName = command.Executable, Arguments = arguments, WorkingDirectory = Path.GetTempPath(),
+            UseShellExecute = command.Elevate, Verb = command.Elevate ? "runas" : "",
+            CreateNoWindow = !command.IsMsi, WindowStyle = command.IsMsi ? ProcessWindowStyle.Normal : ProcessWindowStyle.Hidden
+        };
     }
 }

@@ -1,7 +1,9 @@
+using System.IO;
+
 namespace VatscaUpdateChecker.Models;
 
 public enum SetupWizardRoute { Existing, Fresh, Manual }
-public enum SetupWizardApplication { EuroScope, Vacs, Vatis, TrackAudio }
+public enum SetupWizardApplication { EuroScope, Vacs, Vatis, TrackAudio, VatEfs }
 public enum SetupWizardGuide { EuroScopeGng, TrackAudio, Vatis }
 
 /// <summary>
@@ -67,6 +69,13 @@ public sealed class SetupWizardState
     {
         if (!Enum.IsDefined(app)) throw new ArgumentOutOfRangeException(nameof(app));
         if (string.IsNullOrWhiteSpace(executablePath)) throw new ArgumentException("A verified executable path is required.", nameof(executablePath));
+        string? vatEfsFolder = null;
+        if (app == SetupWizardApplication.VatEfs)
+        {
+            vatEfsFolder = Path.GetDirectoryName(executablePath);
+            if (string.IsNullOrWhiteSpace(vatEfsFolder) || !Path.GetFileName(executablePath).Equals("efs.exe", StringComparison.OrdinalIgnoreCase))
+                throw new ArgumentException("A verified VatEFS executable path is required.", nameof(executablePath));
+        }
         foreach (var target in new[] { Draft, _saved })
         {
             switch (app)
@@ -75,6 +84,7 @@ public sealed class SetupWizardState
                 case SetupWizardApplication.Vacs: target.VacsExePath = executablePath; break;
                 case SetupWizardApplication.Vatis: target.VatisExePath = executablePath; break;
                 case SetupWizardApplication.TrackAudio: target.TrackAudioExePath = executablePath; break;
+                case SetupWizardApplication.VatEfs: target.VatEfsPath = vatEfsFolder!; break;
             }
         }
         HasSavedActions = true;
@@ -126,8 +136,8 @@ public sealed class SetupWizardState
             PathLine("vATIS", Draft.VatisExePath),
             PathLine("TrackAudio", Draft.TrackAudioExePath),
             PathLine("EuroScope / GNG data folder", Draft.EuroscopeDataPath),
-            PathLine("VatEFS plugin folder", Draft.VatEfsPath),
-            "GNG packages and plugins must be installed separately; Launchpad 2.0 only uses folders you already have.",
+            PathLine("VatEFS folder", Draft.VatEfsPath),
+            "GNG setup is available after this guide. Downloading and installing a package need separate actions.",
             "Theme: " + (Draft.IsDarkMode ? "dark" : "light") + "; application list: " + (Draft.CompactLayout ? "compact" : "expanded") + ".",
             "Startup update checks: " + (Draft.CheckOnStartup ? "on (checks only)." : "off."),
         };
@@ -143,6 +153,7 @@ public sealed class SetupWizardState
         SetupWizardApplication.EuroScope => "EuroScope",
         SetupWizardApplication.Vacs => "VACS",
         SetupWizardApplication.Vatis => "vATIS",
+        SetupWizardApplication.VatEfs => "VatEFS",
         _ => "TrackAudio"
     };
 }

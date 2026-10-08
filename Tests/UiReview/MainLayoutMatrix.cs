@@ -61,7 +61,7 @@ internal static partial class LayoutMatrix
             var bounds = Bounds(button, panel);
             Require(bounds.Width > 18 && bounds.Height >= 19.5 && bounds.Left >= -.5 && bounds.Top >= -.5 &&
                 bounds.Right <= panel.ActualWidth + .5 && bounds.Bottom <= panel.ActualHeight + .5,
-                button.Name + " is clipped or unreachable inside the application details panel.");
+                $"{button.Name} is clipped or unreachable inside the application details panel: {bounds}, panel {panel.ActualWidth}×{panel.ActualHeight}.");
         }
     }
 
@@ -79,7 +79,7 @@ internal static partial class LayoutMatrix
         {
             panel = SelectDetails(window, row);
             var configure = Required<Button>(window, "DetailConfigureButton");
-            Require(IsPresented(configure) == UiFixture.Blank,
+            Require(IsPresented(configure) == (UiFixture.Blank && !row.HasSoftwareUpdate),
                 "Package/plugin configuration action does not match the synthetic path state.");
             Require(!string.IsNullOrWhiteSpace(configure.ToolTip as string),
                 "Configuration action needs folder-specific guidance.");
@@ -87,7 +87,22 @@ internal static partial class LayoutMatrix
             row.SoftwareActionsAllowed = false;
             DrainBindings();
             Require(!configure.IsEnabled, "Configuration must be disabled during another guarded operation.");
+            if (row.HasFontsCheck)
+            {
+                var cleanup = Required<Button>(window, "DetailCleanupButton");
+                Require(IsPresented(cleanup) == row.ShowGngMaintenance && !cleanup.IsEnabled && cleanup.Focusable && cleanup.IsTabStop,
+                    "GNG cleanup needs a configured data folder and must obey the guarded-operation gate.");
+                var update = Required<Button>(window, "DetailGngUpdateButton");
+                Require(IsPresented(update) && !update.IsEnabled && update.Focusable && update.IsTabStop,
+                    "GNG setup/update must remain discoverable and obey SoftwareActionsAllowed.");
+                Require(!string.IsNullOrWhiteSpace(System.Windows.Automation.AutomationProperties.GetName(update)),
+                    "GNG setup/update must have an accessible action name.");
+            }
             row.SoftwareActionsAllowed = previous;
+            DrainBindings();
+            if (row.HasFontsCheck)
+                Require(Required<Button>(window, "DetailGngUpdateButton").IsEnabled == previous,
+                    "GNG setup/update did not follow the released operation gate.");
         }
         foreach (var row in list.Items.Cast<CheckResult>().Where(row => row.HasSoftwareUpdate))
         {

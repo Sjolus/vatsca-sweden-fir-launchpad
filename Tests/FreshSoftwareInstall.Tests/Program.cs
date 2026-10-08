@@ -19,6 +19,29 @@ var tests = new (string Name, Func<Task> Run)[]
         using var f = new Fixture(); f.Settings.VacsExePath = f.File("Existing/vacs-client.exe");
         await Reject(() => f.Preview()); Check(f.SourceCalls == 0 && f.Downloads == 0);
     }),
+    ("VatEFS fresh install reviews its prerelease and installs the plugin and backend without starting them", async () =>
+    {
+        using var f = new Fixture(SoftwareApp.VatEfs); var plan = await f.Preview();
+        Check(plan.Scope == "AllUsers" && plan.InstallRoot == f.TargetRoot && plan.Release.IsPrerelease);
+        Check(plan.Review.Contains("PRERELEASE") && plan.Review.Contains("EuroScope") && f.Downloads == 0 && f.VatEfsRuns == 0);
+        var result = await f.Service.ApplyAsync(plan);
+        Check(f.VatEfsRuns == 1 && f.Commands.Count == 0 && result.ExecutablePath == Path.Combine(f.TargetRoot, "efs.exe"));
+        Check(File.Exists(Path.Combine(f.TargetRoot, "VatEFS.dll")) && !f.Running);
+    }),
+    ("VatEFS refuses a plugin-only copy and a process appearing after fresh-install review", async () =>
+    {
+        using var f = new Fixture(SoftwareApp.VatEfs);
+        var plan = await f.Preview(); f.Running = true;
+        await Reject(() => f.Service.ApplyAsync(plan)); Check(f.Downloads == 0 && f.VatEfsRuns == 0);
+        f.Running = false; f.Settings.VatEfsPath = f.Dir("Custom VatEFS"); f.File("Custom VatEFS/VatEFS.dll");
+        await Reject(() => f.Preview()); Check(f.VatEfsRuns == 0);
+    }),
+    ("VatEFS rechecks processes at the native installation boundary", async () =>
+    {
+        using var f = new Fixture(SoftwareApp.VatEfs); var plan = await f.Preview();
+        f.BeforeVatEfsBoundary = () => { f.Running = true; return Task.CompletedTask; };
+        await Reject(() => f.Service.ApplyAsync(plan)); Check(f.Downloads == 1 && f.VatEfsRuns == 0);
+    }),
     ("stale configured folders require explicit review before fresh installation", async () =>
     {
         using var f = new Fixture(); f.Settings.VacsExePath = f.PathOf("Existing/missing.exe"); f.Dir("Existing");
@@ -245,7 +268,7 @@ sealed class Fixture : IDisposable
     public string Root { get; } = Path.Combine(Path.GetTempPath(), "LaunchpadFreshSynthetic-" + Guid.NewGuid().ToString("N"));
     public SoftwareApp App { get; }
     public string Recovery => PathOf("Recovery");
-    public string TargetRoot => App switch { SoftwareApp.Vacs => PathOf("Program Files/vacs"), SoftwareApp.TrackAudio => PathOf("Local/Programs/trackaudio"), _ => PathOf("Local/org.vatsim.vatis") };
+    public string TargetRoot => App switch { SoftwareApp.Vacs => PathOf("Program Files/vacs"), SoftwareApp.TrackAudio => PathOf("Local/Programs/trackaudio"), SoftwareApp.VatEfs => PathOf("Program Files/VatEFS"), _ => PathOf("Local/org.vatsim.vatis") };
     public AppSettings Settings { get; } = new();
     public List<SoftwareRegistration> Registrations { get; } = [];
     public List<FreshSoftwareCommand> Commands { get; } = [];
@@ -253,23 +276,26 @@ sealed class Fixture : IDisposable
     public bool Running, Residue, BadProduct, BadSignature, UnreviewedVatis;
     public string? Problem;
     public int SourceCalls, Downloads, VatisRuns, TrustChecks;
+    public int VatEfsRuns;
+    public bool VatEfsInstalled;
     public byte[] Bytes { get; }
     public byte[]? ResponseBytes;
     public SoftwareRelease Release;
     public Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>>? Respond;
     public Func<FreshSoftwareCommand, Task<int>>? OnRun;
     public Func<Task>? BeforeVatisBoundary;
+    public Func<Task>? BeforeVatEfsBoundary;
     public FreshSoftwareInstallService Service { get; }
     private readonly HttpClient _http;
     public Fixture(SoftwareApp app = SoftwareApp.Vacs, TimeSpan? timeout = null)
     {
         App = app; Dir("Recovery");
-        string version = app == SoftwareApp.Vacs ? "2.8.0" : app == SoftwareApp.TrackAudio ? "1.4.0" : "4.1.0-beta.19";
-        string fileName = app == SoftwareApp.Vacs ? "vacs_2.8.0_x64-setup.exe" : app == SoftwareApp.TrackAudio ? "trackaudio-1.4.0-x64-setup.exe" : "org.vatsim.vatis-4.1.0-beta.19-full.nupkg";
+        string version = app == SoftwareApp.Vacs ? "2.8.0" : app == SoftwareApp.TrackAudio ? "1.4.0" : app == SoftwareApp.VatEfs ? "0.0.15" : "4.1.0-beta.19";
+        string fileName = app == SoftwareApp.Vacs ? "vacs_2.8.0_x64-setup.exe" : app == SoftwareApp.TrackAudio ? "trackaudio-1.4.0-x64-setup.exe" : app == SoftwareApp.VatEfs ? "vatefs-0.0.15.msi" : "org.vatsim.vatis-4.1.0-beta.19-full.nupkg";
         string uri = app == SoftwareApp.Vacs ? "https://github.com/vacs-project/vacs/releases/download/vacs-client-v2.8.0/" + fileName :
-            app == SoftwareApp.TrackAudio ? "https://github.com/pierr3/TrackAudio/releases/download/1.4.0/" + fileName : "https://vatis.app/updates/windows/" + fileName;
+            app == SoftwareApp.TrackAudio ? "https://github.com/pierr3/TrackAudio/releases/download/1.4.0/" + fileName : app == SoftwareApp.VatEfs ? "https://github.com/minsulander/vatefs/releases/download/v0.0.15/" + fileName : "https://vatis.app/updates/windows/" + fileName;
         Bytes = app == SoftwareApp.Vatis ? Package() : Encoding.UTF8.GetBytes("Synthetic inert installer " + app);
-        Release = new(app, version, new(uri), fileName, Convert.ToHexString(SHA256.HashData(Bytes)), Bytes.Length);
+        Release = new(app, version, new(uri), fileName, Convert.ToHexString(SHA256.HashData(Bytes)), Bytes.Length) { IsPrerelease = app == SoftwareApp.VatEfs };
         _http = new(new Handler(async (request, token) =>
         {
             Downloads++;
@@ -291,6 +317,15 @@ sealed class Fixture : IDisposable
             RunAsync = command => { Commands.Add(command); return OnRun?.Invoke(command) ?? Task.FromResult(Simulate(command)); },
             ValidateVatisDestination = root => { if (Directory.Exists(root) || System.IO.File.Exists(root) || Residue) throw new InvalidDataException("Synthetic vATIS residue"); },
             ValidateVatisRelease = _ => { if (UnreviewedVatis) throw new InvalidDataException("Unreviewed Setup generation"); },
+            ValidateVatEfsDestination = root => { if (Directory.Exists(root) || System.IO.File.Exists(root) || Residue || VatEfsInstalled) throw new InvalidDataException("Synthetic VatEFS residue"); },
+            InstallVatEfsAsync = async (_, _, root, _, token, beforeInstall) =>
+            {
+                if (BeforeVatEfsBoundary != null) await BeforeVatEfsBoundary(); token.ThrowIfCancellationRequested();
+                await beforeInstall(); VatEfsRuns++; Directory.CreateDirectory(root);
+                System.IO.File.WriteAllText(Path.Combine(root, "efs.exe"), "synthetic backend");
+                System.IO.File.WriteAllText(Path.Combine(root, "VatEFS.dll"), "synthetic plugin");
+                VatEfsInstalled = true; return new(Path.Combine(root, "efs.exe"));
+            },
             InstallVatisAsync = async (_, _, root, _, token, beforeInstall) =>
             {
                 if (BeforeVatisBoundary != null) await BeforeVatisBoundary(); token.ThrowIfCancellationRequested();
@@ -300,7 +335,7 @@ sealed class Fixture : IDisposable
             }
         };
         Service = new(_http, environment, (_, beta, token) => { token.ThrowIfCancellationRequested(); SourceCalls++; SourceBetaFlags.Add(beta); return Task.FromResult<SoftwareRelease?>(Release); },
-            cacheRoot: PathOf("Cache"), downloadTimeout: timeout);
+            installer: app == SoftwareApp.VatEfs ? new SyntheticVatEfsInstaller(this) : null, cacheRoot: PathOf("Cache"), downloadTimeout: timeout);
     }
     public Task<FreshSoftwareInstallPlan> Preview() => Service.PreviewAsync(App, Settings, Recovery, App == SoftwareApp.Vatis);
     public string AddSettings() => File(App == SoftwareApp.TrackAudio ? "Roaming/trackaudio/settings.json" : "Roaming/app.vacs.vacs-client/settings.json", "FAKE-PRIVATE-SETTINGS");
@@ -332,6 +367,14 @@ sealed class Fixture : IDisposable
             !Path.GetFileName(root).StartsWith("LaunchpadFreshSynthetic-", StringComparison.Ordinal)) throw new Exception("Fixture cleanup refused.");
         if (Directory.Exists(root)) Directory.Delete(root, true);
     }
+}
+sealed class SyntheticVatEfsInstaller(Fixture fixture) : ISoftwareInstaller
+{
+    public SoftwareInstallation Inspect(SoftwareApp app, string path) => new(app, path, fixture.Release.Version, fixture.TargetRoot, "AllUsers", null, fixture.VatEfsInstalled, null);
+    public bool IsRunning(SoftwareInstallation installation) => fixture.Running;
+    public Task VerifyPackageAsync(SoftwareRelease release, string package, CancellationToken token) { token.ThrowIfCancellationRequested(); return Task.CompletedTask; }
+    public Task<string?> BackupAsync(SoftwareInstallation installation, IProgress<string>? progress, CancellationToken token) => throw new Exception("Fresh fixture used upgrade backup");
+    public Task<SoftwareInstallResult> InstallAsync(SoftwareInstallation installation, SoftwareRelease release, string package, IProgress<string>? progress) => throw new Exception("Fresh fixture used upgrade installer");
 }
 sealed class Handler(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> send) : HttpMessageHandler
 { protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token) => send(request, token); }

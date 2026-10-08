@@ -33,7 +33,7 @@
                         <TextBlock TextWrapping="Wrap"><Run FontWeight="SemiBold" Text="I already have ATC software"/><LineBreak/><Run Text="Find installed EuroScope, TrackAudio, VACS or vATIS, plus existing GNG and VatEFS folders. Choose which copies Launchpad should use."/></TextBlock>
                     </RadioButton>
                     <RadioButton x:Name="FreshChoice" GroupName="SetupRoute" Checked="Route_Changed" Margin="0,0,0,18" Foreground="{DynamicResource PrimaryText}">
-                        <TextBlock TextWrapping="Wrap"><Run FontWeight="SemiBold" Text="I need to install ATC software"/><LineBreak/><Run Text="Review installation of EuroScope, TrackAudio, VACS or vATIS one at a time. Each installation needs your confirmation."/></TextBlock>
+                        <TextBlock TextWrapping="Wrap"><Run FontWeight="SemiBold" Text="I need to install ATC software"/><LineBreak/><Run Text="Review installation of EuroScope, TrackAudio, VACS, vATIS or VatEFS one at a time. Each installation needs your confirmation."/></TextBlock>
                     </RadioButton>
                     <RadioButton x:Name="ManualChoice" GroupName="SetupRoute" Checked="Route_Changed" Margin="0,0,0,18" Foreground="{DynamicResource PrimaryText}">
                         <TextBlock TextWrapping="Wrap"><Run FontWeight="SemiBold" Text="I'll choose programs later"/><LineBreak/><Run Text="Skip program choices and choose Launchpad preferences. You can return to this guide or use Settings at any time."/></TextBlock>
@@ -102,10 +102,22 @@
                             <TextBlock x:Name="VatisPath" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,5,0,0"/>
                         </StackPanel>
                     </Border>
-                    <TextBlock Text="Existing GNG and VatEFS folders" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryText}" Margin="0,0,0,6"/>
+                    <Border Background="{DynamicResource RowBg}" Padding="12" Margin="0,0,0,14">
+                        <StackPanel>
+                            <DockPanel LastChildFill="True">
+                                <Button x:Name="VatEfsButton" DockPanel.Dock="Right" Content="Review VatEFS installation…" Tag="VatEfs" Click="Software_Click" Padding="10,6" Margin="10,0,0,0"/>
+                                <TextBlock Text="VatEFS" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryText}" VerticalAlignment="Center"/>
+                            </DockPanel>
+                            <TextBlock Text="{x:Static models:ApplicationDescriptions.VatEfs}" TextWrapping="Wrap" Foreground="{DynamicResource PrimaryText}" Margin="0,6,0,0"/>
+                            <TextBlock Text="Optional. Includes the EuroScope plugin and local flight-strip service. Official prereleases are included. Close EuroScope before installing; Windows may ask for administrator approval."
+                                       TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,6,0,0"/>
+                            <TextBlock x:Name="VatEfsPath" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,5,0,0"/>
+                        </StackPanel>
+                    </Border>
+                    <TextBlock Text="Swedish GNG package" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryText}" Margin="0,0,0,6"/>
                     <TextBlock Text="{x:Static models:ApplicationDescriptions.SwedishGng}" TextWrapping="Wrap"
                                Foreground="{DynamicResource PrimaryText}" Margin="0,0,0,6"/>
-                    <TextBlock Text="In Settings, choose the EuroScope data folder containing ESAA for GNG, and the folder containing VatEFS.dll for VatEFS. If you do not have them yet, follow their installation instructions separately. Launchpad 2.0 does not download GNG or install these plugins. Your existing settings are not imported or moved."
+                    <TextBlock Text="Already have GNG? Choose its EuroScope data folder in Settings. Need to install or update it? You can open GNG setup after finishing this guide: sign in on AeroNav, download a package and review its installation. Choosing folders alone does not import or move settings."
                                TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}"/>
                 </StackPanel>
 
@@ -128,8 +140,13 @@
 
                 <StackPanel x:Name="SummaryPage" Visibility="Collapsed">
                     <TextBlock Text="Review your choices" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryText}" Margin="0,0,0,10"/>
-                    <TextBlock Text="You do not need every program. Finish saves your choices and returns to Launchpad; it does not download, install or open programs. You can run this guide again later."
+                    <TextBlock Text="You do not need every program. Finish saves your choices. It does not download, install or launch ATC applications. You can run this guide again later."
                                TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,14"/>
+                    <CheckBox x:Name="GngAfterFinishChoice" Foreground="{DynamicResource PrimaryText}" Margin="0,0,0,6">
+                        <TextBlock Text="Open GNG setup after I choose Finish" TextWrapping="Wrap"/>
+                    </CheckBox>
+                    <TextBlock Text="Optional. The next window lets you sign in, download and review a GNG package. Nothing installs until you confirm there."
+                               TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="22,0,0,14"/>
                     <StackPanel x:Name="NextStepsPanel" Visibility="Collapsed" Margin="0,0,0,18">
                         <TextBlock Text="Next steps (optional)" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryText}" Margin="0,0,0,6"/>
                         <TextBlock Text="These VATSIM Scandinavia guides cover setup inside the applications. Each button opens your browser."

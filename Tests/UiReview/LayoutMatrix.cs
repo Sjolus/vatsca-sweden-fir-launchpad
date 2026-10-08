@@ -15,7 +15,7 @@ internal static partial class LayoutMatrix
     [
         () => new MainWindow(), () => new SettingsWindow(), () => new AppConfigWindow(),
         () => new MaintenanceWindow(), () => new InstallationDiscoveryWindow(),
-        () => new EuroScopeInstallWindow(), () => new FreshSoftwareInstallWindow()
+        () => new EuroScopeInstallWindow(), () => new FreshSoftwareInstallWindow(), () => new FreshSoftwareInstallWindow(vatEfs: true), () => new GngCleanupWindow()
     ];
 
     public static string Run()
@@ -34,6 +34,8 @@ internal static partial class LayoutMatrix
             {
                 if (UiFixture.Dark != dark) UiFixture.ToggleTheme();
                 CheckThemeReadability();
+                layouts += CheckGngUpdateLayouts();
+                layouts += CheckGngFileDiffLayouts();
                 CheckCompactDensity();
                 layouts++;
                 CheckRestartNotice();
@@ -56,6 +58,7 @@ internal static partial class LayoutMatrix
                             if (window is MainWindow main) { CheckRowReadability(main); CheckFirstRunActions(main); CheckSoftwareStates(main); CheckLongStatusWidth(main); }
                             if (window is SettingsWindow settings) CheckSettingsExpansion(settings);
                             if (window is AppConfigWindow profile) CheckProfileScroll(profile, minimum);
+                            if (window is GngCleanupWindow cleanup) CheckCleanupLayout(cleanup);
                             if (window is MaintenanceWindow or EuroScopeInstallWindow or FreshSoftwareInstallWindow)
                                 CheckReviewLocation(window);
                             DrainBindings();
@@ -88,7 +91,7 @@ internal static partial class LayoutMatrix
             }
             Require(UiFixture.ErrorCount == errorsBefore, "An unhandled fixture exception was logged.");
             Require(trace.Errors.Count == 0, "WPF binding errors: " + string.Join(" | ", trace.Errors));
-            return $"PASS: {layouts} hidden layout cases; both themes, blank/mixed paths, default/minimum sizes, uniform compact/comfortable rows, compact eight-row fit, selected application details, persistent restart notice, profile and wizard scrolling/footer reachability, warning/input contrast, read-only progress bindings, missing/stale paths and update/cancellation states. No windows shown.";
+            return $"PASS: {layouts} hidden layout cases; both themes, blank/mixed paths, default/minimum sizes, uniform compact/comfortable rows, compact eight-row fit, selected application details, persistent restart notice, profile and wizard scrolling/footer reachability, optional GNG setup, inert GNG start/sign-in/download/cancel/review/completion/runtime fallback, production changes-only review filter/counts/reset/empty state, warning/input contrast, read-only progress bindings, missing/stale paths and update/cancellation states. No windows shown.";
         }
         finally
         {
@@ -136,6 +139,9 @@ internal static partial class LayoutMatrix
             MaintenanceWindow => new[] { "ReviewButton", "ApplyButton", "CloseButton", "RefreshButton" },
             EuroScopeInstallWindow or FreshSoftwareInstallWindow => new[] { "ReviewButton", "ApplyButton", "CloseButton" },
             SetupWizardWindow => new[] { "SkipButton", "BackButton", "NextButton" },
+            GngCleanupWindow => new[] { "RestoreButton", "ArchiveButton", "CloseButton" },
+            GngUpdateWindow => new[] { "ImportButton", "ExternalBrowserButton", "RestoreButton", "CloseButton" },
+            GngFileDiffWindow => new[] { "CloseButton" },
             _ => Array.Empty<string>()
         };
         foreach (var name in names)
@@ -246,10 +252,10 @@ internal static partial class LayoutMatrix
                     {
                         var descriptions = LayoutValidation.Descendants(page).OfType<TextBlock>().Select(label => label.Text).ToArray();
                         foreach (var description in new[] { ApplicationDescriptions.EuroScope, ApplicationDescriptions.Vacs,
-                            ApplicationDescriptions.TrackAudio, ApplicationDescriptions.Vatis, ApplicationDescriptions.SwedishGng })
+                            ApplicationDescriptions.TrackAudio, ApplicationDescriptions.Vatis, ApplicationDescriptions.VatEfs, ApplicationDescriptions.SwedishGng })
                             Require(descriptions.Contains(description), "Wizard application purpose description is missing: " + description);
                         foreach (var label in LayoutValidation.Descendants(page).OfType<TextBlock>().Where(label =>
-                            label.Text is "EuroScope" or "VACS" or "TrackAudio" or "vATIS"))
+                            label.Text is "EuroScope" or "VACS" or "TrackAudio" or "vATIS" or "VatEFS"))
                         {
                             var natural = new FormattedText(label.Text, System.Globalization.CultureInfo.CurrentCulture,
                                 label.FlowDirection, new Typeface(label.FontFamily, label.FontStyle, label.FontWeight, label.FontStretch),
@@ -257,13 +263,13 @@ internal static partial class LayoutMatrix
                             Require(label.ActualWidth + 1 >= natural.WidthIncludingTrailingWhitespace,
                                 $"Wizard application name '{label.Text}' is clipped: width {label.ActualWidth}, text {natural.WidthIncludingTrailingWhitespace}, scale {scale}.");
                         }
-                        foreach (var name in new[] { "VacsButton", "TrackAudioButton", "VatisButton" })
+                        foreach (var name in new[] { "VacsButton", "TrackAudioButton", "VatisButton", "VatEfsButton" })
                             Require(Required<Button>(window, name).IsEnabled == blank, "Configured clients must use their existing application row, not fresh setup.");
                         if (!blank)
                         {
                             window.SetSyntheticExecutablePresence(false);
                             LayoutValidation.CheckWindowContent(window); CheckFooter(window);
-                            foreach (var (buttonName, pathName) in new[] { ("VacsButton", "VacsPath"), ("TrackAudioButton", "TrackAudioPath"), ("VatisButton", "VatisPath") })
+                            foreach (var (buttonName, pathName) in new[] { ("VacsButton", "VacsPath"), ("TrackAudioButton", "TrackAudioPath"), ("VatisButton", "VatisPath"), ("VatEfsButton", "VatEfsPath") })
                             {
                                 var button = Required<Button>(window, buttonName);
                                 var path = Required<TextBlock>(window, pathName);
@@ -280,13 +286,14 @@ internal static partial class LayoutMatrix
                         window.SetSyntheticRestart(true);
                         LayoutValidation.CheckWindowContent(window); CheckFooter(window);
                         Require(scroll.ViewportHeight > 25, "Wizard restart status leaves no usable scrolling body.");
-                        foreach (var name in new[] { "EuroScopeButton", "VacsButton", "TrackAudioButton", "VatisButton", "ProfileButton" })
+                        foreach (var name in new[] { "EuroScopeButton", "VacsButton", "TrackAudioButton", "VatisButton", "VatEfsButton", "ProfileButton" })
                             Require(!Required<Button>(window, name).IsEnabled, "Further setup remained available after a synthetic restart requirement.");
                         window.SetSyntheticRestart(false);
                         window.SetSyntheticExecutablePresence(null);
                     }
                     if (step == 3)
                     {
+                        CheckWizardGngChoice(window);
                         CheckWizardGuides(window, blank ? [] : [SetupWizardGuide.EuroScopeGng, SetupWizardGuide.TrackAudio, SetupWizardGuide.Vatis]);
                         if (!blank)
                         {

@@ -114,18 +114,24 @@
                          AutomationProperties.Name="Application explanation" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                          Background="Transparent" Foreground="{DynamicResource ApplicationSecondaryText}" CaretBrush="{DynamicResource PrimaryText}" BorderThickness="0"
                          Padding="0" Margin="0,0,14,0" FontSize="12"/>
-                <WrapPanel Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" VerticalAlignment="Center">
+                <WrapPanel Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" MaxWidth="296" HorizontalAlignment="Left" VerticalAlignment="Center">
                     <Button x:Name="DetailEuroScopeButton" Content="{Binding EuroScopeSetupText}" Click="EuroScopeManage_Click" Style="{StaticResource DetailAction}"
                             Visibility="{Binding HasEuroScopeManagement, Converter={StaticResource BoolToVisibility}}" IsEnabled="{Binding SoftwareActionsAllowed}"
                             ToolTip="Install, repair or review replacement with the supported EuroScope version"/>
                     <Button x:Name="DetailConfigureButton" Content="Choose folder…" Click="Settings_Click" Style="{StaticResource DetailAction}"
                             Visibility="{Binding ShowConfigure, Converter={StaticResource BoolToVisibility}}" IsEnabled="{Binding SoftwareActionsAllowed}" ToolTip="{Binding ConfigureTooltip}"/>
                     <Border Visibility="{Binding ShowStandardStatus, Converter={StaticResource BoolToVisibility}}">
-                        <Button x:Name="DetailDownloadButton" Content="Get package ↗" Tag="{Binding DownloadUrl}" Click="Download_Click" Style="{StaticResource DetailAction}"
-                                Visibility="{Binding ShowDownload, Converter={StaticResource BoolToVisibility}}" ToolTip="Open the download page; GNG installation is manual in this version"/>
+                        <Button x:Name="DetailDownloadButton" Content="{Binding DownloadActionText}" Tag="{Binding DownloadUrl}" Click="Download_Click" Style="{StaticResource DetailAction}"
+                                Visibility="{Binding ShowDownload, Converter={StaticResource BoolToVisibility}}" ToolTip="Open the official download page"/>
                     </Border>
+                    <Button x:Name="DetailGngUpdateButton" Content="Set up / update…" Click="GngUpdate_Click" Style="{StaticResource DetailAction}"
+                            Visibility="{Binding HasFontsCheck, Converter={StaticResource BoolToVisibility}}" IsEnabled="{Binding SoftwareActionsAllowed}"
+                            ToolTip="Sign in on AeroNav, download a GNG package, then review its installation" AutomationProperties.Name="Set up or update the Swedish GNG package"/>
                     <Button x:Name="DetailFontsButton" Content="Check fonts…" Click="Fonts_Click" Style="{StaticResource DetailAction}"
-                            Visibility="{Binding HasFontsCheck, Converter={StaticResource BoolToVisibility}}" ToolTip="{Binding FontsTooltip}" AutomationProperties.Name="Check GNG fonts"/>
+                            Visibility="{Binding ShowGngMaintenance, Converter={StaticResource BoolToVisibility}}" ToolTip="{Binding FontsTooltip}" AutomationProperties.Name="Check GNG fonts"/>
+                    <Button x:Name="DetailCleanupButton" Content="Clean up…" Click="GngCleanup_Click" Style="{StaticResource DetailAction}"
+                            Visibility="{Binding ShowGngMaintenance, Converter={StaticResource BoolToVisibility}}" IsEnabled="{Binding SoftwareActionsAllowed}"
+                            ToolTip="Compare old and new complete GNG ZIPs, then review files to move into a backup" AutomationProperties.Name="Review old GNG files for cleanup"/>
                     <Button x:Name="DetailSoftwareUpdateButton" Content="{Binding SoftwareActionText}" Click="SoftwareUpdate_Click" Style="{StaticResource DetailAction}"
                             Visibility="{Binding ShowSoftwareAction, Converter={StaticResource BoolToVisibility}}" IsEnabled="{Binding SoftwareActionEnabled}"/>
                     <Button x:Name="DetailSoftwareCancelButton" Content="Cancel preparation" Click="SoftwareCancel_Click" Style="{StaticResource DetailAction}"

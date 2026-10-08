@@ -107,7 +107,7 @@ internal static class InstallerTests
             }),
             ("silent command plans preserve scope and never run client", () =>
             {
-                foreach (var app in Enum.GetValues<SoftwareApp>())
+                foreach (var app in new[] { SoftwareApp.Vacs, SoftwareApp.Vatis, SoftwareApp.TrackAudio })
                 {
                     using var f = new Fixture(app);
                     var command = SoftwareInstaller.BuildCommand(f.Inspect(), f.PackagePath);
@@ -227,7 +227,7 @@ internal static class InstallerTests
             }),
             ("explicit install uses fake runner and verifies resulting identity", async () =>
             {
-                foreach (var app in Enum.GetValues<SoftwareApp>())
+                foreach (var app in new[] { SoftwareApp.Vacs, SoftwareApp.Vatis, SoftwareApp.TrackAudio })
                 {
                     using var f = new Fixture(app); var release = f.CreatePackage(); var before = f.Inspect();
                     await f.Installer.BackupAsync(before, null, default);
@@ -264,7 +264,7 @@ internal static class InstallerTests
             }),
             ("unrecognized restart exit stays an error but latches and blocks native retry", async () =>
             {
-                foreach (var app in Enum.GetValues<SoftwareApp>())
+                foreach (var app in new[] { SoftwareApp.Vacs, SoftwareApp.Vatis, SoftwareApp.TrackAudio })
                 {
                     using var f = new Fixture(app); var release = f.CreatePackage(); var before = f.Inspect();
                     await f.Installer.BackupAsync(before, null, default);

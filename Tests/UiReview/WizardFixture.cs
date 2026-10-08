@@ -12,6 +12,7 @@ public partial class SetupWizardWindow : Window
     private bool? _syntheticExecutableExists;
     private AppSettings? _syntheticGuideSettings;
     internal int SyntheticPage { get; private set; }
+    internal bool SyntheticGngSetupRequested { get; private set; }
 
     public SetupWizardWindow()
     {
@@ -51,7 +52,14 @@ public partial class SetupWizardWindow : Window
 
     internal void SyntheticNext()
     {
-        if (SyntheticPage == 3) { StatusText.Text = "Synthetic finish only. No preferences were saved and no clients were started."; return; }
+        if (SyntheticPage == 3)
+        {
+            SyntheticGngSetupRequested = !_restartRequired && GngAfterFinishChoice.IsChecked == true;
+            StatusText.Text = SyntheticGngSetupRequested
+                ? "Synthetic finish: GNG setup was explicitly requested. No window, browser, download or installer was started."
+                : "Synthetic finish only. No preferences were saved and no clients were started.";
+            return;
+        }
         SyntheticPage = SyntheticPage == 0 && ManualChoice.IsChecked == true ? 2 : SyntheticPage + 1;
         RenderSyntheticPage();
     }
@@ -77,7 +85,7 @@ public partial class SetupWizardWindow : Window
         ApplicationsHint.Text = ExistingChoice.IsChecked == true
             ? "First choose the copies you already use. You can also review installing a missing program below."
             : "Choose a program to install below. If it is already on your PC, find or choose that copy instead. Each installation needs your confirmation.";
-        foreach (var (button, path) in new[] { (EuroScopeButton, EuroScopePath), (VacsButton, VacsPath), (TrackAudioButton, TrackAudioPath), (VatisButton, VatisPath) })
+        foreach (var (button, path) in new[] { (EuroScopeButton, EuroScopePath), (VacsButton, VacsPath), (TrackAudioButton, TrackAudioPath), (VatisButton, VatisPath), (VatEfsButton, VatEfsPath) })
         {
             bool exists = _syntheticExecutableExists ?? !UiFixture.Blank;
             button.IsEnabled = !_restartRequired && (ReferenceEquals(button, EuroScopeButton) || !exists);
@@ -90,6 +98,8 @@ public partial class SetupWizardWindow : Window
                 : "The chosen program file was not found. You can review an installation; setup will first check for remaining program folders and settings.";
         }
         ProfileButton.IsEnabled = !_restartRequired;
+        GngAfterFinishChoice.IsEnabled = !_restartRequired;
+        if (_restartRequired) GngAfterFinishChoice.IsChecked = false;
         var guideSettings = _syntheticGuideSettings ?? (UiFixture.Blank ? new AppSettings() : new AppSettings
         {
             EuroscopeExePath = @"C:\Synthetic ATC applications\EuroScope.exe",

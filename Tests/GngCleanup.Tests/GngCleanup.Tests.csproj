@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\..\Services\EuroScopeProcessGuard.cs" Link="EuroScopeProcessGuard.cs" />
+    <Compile Include="..\..\Services\GngCleanupService.cs" Link="GngCleanupService.cs" />
+    <Compile Include="..\..\Services\MaintenanceLock.cs" Link="MaintenanceLock.cs" />
+    <Compile Include="..\..\Services\PreservationPath.cs" Link="PreservationPath.cs" />
+    <Compile Include="..\..\Models\GngCleanupPlan.cs" Link="GngCleanupPlan.cs" />
+    <Compile Include="..\..\Services\GngUpdateService.cs" Link="GngUpdateService.cs" />
+    <Compile Include="..\..\Services\GngUpdateService.ListLayouts.cs" Link="GngUpdateService.ListLayouts.cs" />
+    <Compile Include="..\..\Services\GngUpdateService.Diff.cs" Link="GngUpdateService.Diff.cs" />
+    <Compile Include="..\..\Models\GngFilePreview.cs" Link="GngFilePreview.cs" />
+    <Compile Include="..\..\Models\GngUpdatePlan.cs" Link="GngUpdatePlan.cs" />
+  </ItemGroup>
+</Project>

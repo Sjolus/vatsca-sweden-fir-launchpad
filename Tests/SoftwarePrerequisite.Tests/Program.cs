@@ -42,6 +42,32 @@ var tests = new (string Name, Func<Task> Run)[]
         Check(SoftwarePrerequisiteService.GetProblem(f.App, f.Environment()) == null);
         Check(!(await f.Install()).RestartRequired && f.Requests == 0 && f.Runs == 0);
     }),
+    ("VatEFS uses the shared x86 runtime route without launching the client", async () =>
+    {
+        using var f = new Fixture(SoftwareApp.VatEfs);
+        Check(SoftwarePrerequisiteService.GetProblem(f.App, f.Environment())!.Contains("x86"));
+        f.Response = (request, _) =>
+        {
+            Check(request.RequestUri!.AbsoluteUri == EuroScopePrerequisiteService.DownloadUrl);
+            return Fixture.Bytes();
+        };
+        await f.Install();
+        Check(f.TrustChecks == 1 && f.Runs == 1 && f.Command!.Elevate);
+        Check(Path.GetFileName(f.Command!.Executable) == "vc_redist.x86.exe");
+        Check(f.Command.Arguments.SequenceEqual(new[] { "/install", "/quiet", "/norestart" }));
+        Check(SoftwarePrerequisiteService.GetProblem(f.App, f.Environment()) == null);
+        await f.Install(); Check(f.Runs == 1);
+    }),
+    ("VatEFS rejects an x64 runtime package and retains restart after failed verification", async () =>
+    {
+        using var wrong = new Fixture(SoftwareApp.VatEfs);
+        wrong.Binary = wrong.Binary with { OriginalFilename = "VC_redist.x64.exe" };
+        await Reject(() => wrong.Install(), "supported Microsoft"); Check(wrong.Runs == 0);
+        using var restart = new Fixture(SoftwareApp.VatEfs);
+        restart.ExitCode = 3010; restart.SetInstalled = false;
+        bool latched = false; restart.OnRestartRequired = () => latched = true;
+        await Reject(() => restart.Install(), "could not be confirmed"); Check(latched && restart.Runs == 1);
+    }),
     ("inaccessible check returns actionable problem", () =>
     {
         using var f = new Fixture(SoftwareApp.Vacs); f.ReadVersion = () => throw new UnauthorizedAccessException();
@@ -220,7 +246,9 @@ sealed class Fixture : IDisposable
         App = app;
         Binary = app == SoftwareApp.Vacs
             ? new(Machine.I386, "Microsoft Edge Update", "1.3.275.13", "Microsoft Corporation", "MicrosoftEdgeUpdateSetup.exe")
-            : new(Machine.I386, "Microsoft Visual C++ 2015-2022 Redistributable (x64) - 14.44.35211", "14.44.35211.0", "Microsoft Corporation", "VC_redist.x64.exe");
+            : app == SoftwareApp.VatEfs
+                ? new(Machine.I386, "Microsoft Visual C++ 2015-2022 Redistributable (x86) - 14.44.35211", "14.44.35211.0", "Microsoft Corporation", "VC_redist.x86.exe")
+                : new(Machine.I386, "Microsoft Visual C++ 2015-2022 Redistributable (x64) - 14.44.35211", "14.44.35211.0", "Microsoft Corporation", "VC_redist.x64.exe");
         _http = new(new Handler(request => Response(request, ++Requests)));
     }
     internal SoftwarePrerequisiteEnvironment Environment() => new()

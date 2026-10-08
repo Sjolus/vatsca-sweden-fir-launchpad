@@ -9,7 +9,10 @@ namespace VatscaUpdateChecker.Services;
 internal sealed record AtcMsiRegistration(string ProductCode, string Name, string Publisher,
     string Version, string InstallLocation, string DisplayIcon, bool WindowsInstaller, string Scope);
 internal sealed record AtcRemovalCommand(string Executable, IReadOnlyList<string> Arguments,
-    bool Elevate, string? NsisInstallDirectory = null);
+    bool Elevate, string? NsisInstallDirectory = null)
+{
+    public bool IsMsi { get; init; }
+}
 
 /// <summary>Tests replace all registry, trust, process and execution delegates.</summary>
 internal sealed class AtcRemovalEnvironment

@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Net.Http;
+using System.Windows.Threading;
 using System.Windows;
 using Microsoft.Win32;
 using VatscaUpdateChecker.Models;
@@ -16,6 +17,8 @@ public partial class FreshSoftwareInstallWindow : Window
     private FreshSoftwareInstallPlan? _plan;
     private CancellationTokenSource? _cancellation;
     private bool _busy, _previewing, _finished;
+    private readonly DispatcherTimer _processTimer = new() { Interval = TimeSpan.FromSeconds(3) };
+    private string? _processBlockingReason;
     public FreshSoftwareInstallResult? Result { get; private set; }
     public bool RestartRequired { get; private set; }
     public bool AdoptionRequested { get; private set; }
@@ -29,12 +32,20 @@ public partial class FreshSoftwareInstallWindow : Window
         Height = Math.Min(Height, SystemParameters.WorkArea.Height);
         Width = Math.Min(Width, SystemParameters.WorkArea.Width);
         _app = app; _settings = settings; _service = new(_http);
-        string name = app switch { SoftwareApp.Vacs => "VACS", SoftwareApp.Vatis => "vATIS", _ => "TrackAudio" };
+        string name = app switch { SoftwareApp.Vacs => "VACS", SoftwareApp.Vatis => "vATIS", SoftwareApp.VatEfs => "VatEFS", _ => "TrackAudio" };
         Title = Heading.Text = "Set up " + name;
         ApplyButton.Content = "Install " + name;
         AllowVatisBeta.Visibility = app == SoftwareApp.Vatis ? Visibility.Visible : Visibility.Collapsed;
-        var path = app switch { SoftwareApp.Vacs => settings.VacsExePath, SoftwareApp.Vatis => settings.VatisExePath, _ => settings.TrackAudioExePath };
-        ConfiguredPath.Text = string.IsNullOrWhiteSpace(path) ? "No executable configured in Launchpad." : "Currently configured: " + path;
+        var path = app switch { SoftwareApp.Vacs => settings.VacsExePath, SoftwareApp.Vatis => settings.VatisExePath, SoftwareApp.VatEfs => settings.VatEfsPath, _ => settings.TrackAudioExePath };
+        ConfiguredPath.Text = string.IsNullOrWhiteSpace(path) ? "No application location configured in Launchpad." : "Currently configured: " + path;
+        PrereleaseNotice.Visibility = app == SoftwareApp.VatEfs ? Visibility.Visible : Visibility.Collapsed;
+        if (app == SoftwareApp.VatEfs) PrerequisiteButton.Content = "Check required x86 runtime…";
+        if (app == SoftwareApp.VatEfs)
+        {
+            _processTimer.Tick += (_, _) => RefreshProcessGuard();
+            _processTimer.Start();
+            RefreshProcessGuard();
+        }
     }
 
     private void InvalidateReview()
@@ -61,6 +72,7 @@ public partial class FreshSoftwareInstallWindow : Window
             _plan = await Task.Run(() => _service.PreviewAsync(_app, _settings, backup, allowBeta, _cancellation.Token));
             ReviewText.Text = _plan.Review;
             if (_app == SoftwareApp.Vatis) ApplyButton.Content = _plan.Release.Version.Contains('-') ? "Install vATIS beta" : "Install vATIS";
+            if (_app == SoftwareApp.VatEfs) ApplyButton.Content = _plan.Release.IsPrerelease ? "Install VatEFS prerelease" : "Install VatEFS";
             StatusText.Text = "Review the full plan. No application package has been downloaded or installed.";
         }
         catch (OperationCanceledException) { StatusText.Text = "Review cancelled. Nothing was installed."; }
@@ -73,6 +85,8 @@ public partial class FreshSoftwareInstallWindow : Window
     private async void Apply_Click(object sender, RoutedEventArgs e)
     {
         if (_busy || _finished || _plan == null || ConfirmInstall.IsChecked != true) return;
+        RefreshProcessGuard();
+        if (_processBlockingReason != null) return;
         var plan = _plan; _cancellation = new();
         SetBusy(true, "Preparing the reviewed installation…");
         try
@@ -87,7 +101,9 @@ public partial class FreshSoftwareInstallWindow : Window
             Result = await Task.Run(() => _service.ApplyAsync(plan, progress, _cancellation.Token));
             RestartRequired |= Result.RestartRequired;
             _finished = true;
-            StatusText.Text = "Installation verified. The application remains closed." +
+            StatusText.Text = (_app == SoftwareApp.VatEfs
+                ? "Installation verified. VatEFS remains closed. Enable its plugin through Controller profile before starting EuroScope."
+                : "Installation verified. The application remains closed.") +
                 (Result.RestartRequired ? " Restart Windows before further changes." : "") + BackupNotice();
         }
         catch (OperationCanceledException) { StatusText.Text = "Preparation cancelled. Review again before retrying." + BackupNotice(); }
@@ -125,13 +141,22 @@ public partial class FreshSoftwareInstallWindow : Window
     private void SetBusy(bool busy, string? message = null)
     {
         _busy = busy; OptionsPanel.IsEnabled = ReviewButton.IsEnabled = !busy && !_finished;
-        ConfirmInstall.IsEnabled = !busy && !_finished && _plan != null;
-        ApplyButton.IsEnabled = !busy && !_finished && _plan != null && ConfirmInstall.IsChecked == true;
+        ConfirmInstall.IsEnabled = !busy && !_finished && _plan != null && _processBlockingReason == null;
+        ApplyButton.IsEnabled = !busy && !_finished && _plan != null && ConfirmInstall.IsChecked == true && _processBlockingReason == null;
         CloseButton.IsEnabled = !busy; Activity.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
         Activity.IsIndeterminate = true; CancelOperationButton.Visibility = Visibility.Collapsed;
         if (message != null) StatusText.Text = message;
     }
-    private void ConfirmationChanged(object sender, RoutedEventArgs e) => ApplyButton.IsEnabled = !_busy && !_finished && _plan != null && ConfirmInstall.IsChecked == true;
+    private void RefreshProcessGuard()
+    {
+        _processBlockingReason = _app == SoftwareApp.VatEfs ? VatEfsInstaller.GetBlockingReason() : null;
+        ProcessNotice.Text = _processBlockingReason ?? "";
+        ProcessNotice.Visibility = _processBlockingReason == null ? Visibility.Collapsed : Visibility.Visible;
+        if (_processBlockingReason != null) ConfirmInstall.IsChecked = false;
+        ConfirmInstall.IsEnabled = !_busy && !_finished && _plan != null && _processBlockingReason == null;
+        ConfirmationChanged(this, new RoutedEventArgs());
+    }
+    private void ConfirmationChanged(object sender, RoutedEventArgs e) => ApplyButton.IsEnabled = !_busy && !_finished && _plan != null && ConfirmInstall.IsChecked == true && _processBlockingReason == null;
     private void BetaChanged(object sender, RoutedEventArgs e)
     {
         InvalidateReview();
@@ -146,5 +171,5 @@ public partial class FreshSoftwareInstallWindow : Window
         if (_busy) { e.Cancel = true; StatusText.Text = "Wait for completion, or cancel preparation while that action is available."; }
         base.OnClosing(e);
     }
-    protected override void OnClosed(EventArgs e) { _http.Dispose(); base.OnClosed(e); }
+    protected override void OnClosed(EventArgs e) { _processTimer.Stop(); _http.Dispose(); base.OnClosed(e); }
 }

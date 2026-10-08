@@ -26,6 +26,12 @@ jobs:
         with:
           dotnet-version: '9.0.x'
 
+      - name: Setup Node for GNG page selection tests
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          package-manager-cache: false
+
       - name: Restore
         run: dotnet restore vatsca-update-checker.sln
 
@@ -79,6 +85,24 @@ jobs:
 
       - name: Test application status
         run: dotnet run --project Tests/CheckResult.Tests/CheckResult.Tests.csproj -c Release
+
+      - name: Test VatEFS installation detection
+        run: dotnet run --project Tests/VatEfs.Tests/VatEfs.Tests.csproj -c Release
+
+      - name: Test VatEFS installation and updates
+        run: dotnet run --project Tests/VatEfsInstaller.Tests/VatEfsInstaller.Tests.csproj -c Release
+
+      - name: Test GNG cleanup and restore
+        run: dotnet run --project Tests/GngCleanup.Tests/GngCleanup.Tests.csproj -c Release -- --archive
+
+      - name: Test GNG installation and recovery
+        run: dotnet run --project Tests/GngUpdate.Tests/GngUpdate.Tests.csproj -c Release
+
+      - name: Test GNG browser policy
+        run: dotnet run --project Tests/GngBrowser.Tests/GngBrowser.Tests.csproj -c Release
+
+      - name: Test GNG runtime integration
+        run: dotnet run --project Tests/WebViewRuntime.Tests/WebViewRuntime.Tests.csproj -c Release
 
       - name: Build WPF layout tests
         run: dotnet build Tests/UiReview/UiReview.csproj -c Release

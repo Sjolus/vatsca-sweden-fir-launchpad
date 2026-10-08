@@ -133,9 +133,12 @@ var tests = new (string Name, Func<Task> Run)[]
         Check(result.InstallationCompleted && !result.RestartRequired && result.BackupFolder == null && f.Commands.Count == 1);
         var command = f.Commands.Single();
         Check(command.Arguments[0] == "/i" && command.Arguments.Contains("/qn") && command.Arguments.Contains("/norestart"));
-        Check(command.Arguments.Contains("ALLUSERS=1") && command.Arguments.Contains("TARGETDIR=" + plan.InstallRoot) && command.Elevate);
+        Check(command.Arguments.Contains("ALLUSERS=1") && command.Arguments.Contains("TARGETDIR=" + plan.InstallRoot) && command.Elevate && command.IsMsi);
         Check(command.Arguments.Contains(EuroScopeMsiFootprint.DataDirectoryProperty + "=" + f.PathOf("Roaming/EuroScope")));
         Check(!command.Arguments.Any(arg => arg.StartsWith("REINSTALL")) && !f.Running);
+        var start = AtcRemovalVendor.BuildStartInfo(command with { Arguments = ["/i", @"C:\package cache\EuroScope.msi", "/qn", @"TARGETDIR=C:\Program Files (x86)\EuroScope", "ALLUSERS=", @"EUROSCOPE=C:\Users\Controller Name\AppData\Roaming\EuroScope\"] });
+        Check(start.Arguments == "/i \"C:\\package cache\\EuroScope.msi\" /qn TARGETDIR=\"C:\\Program Files (x86)\\EuroScope\" ALLUSERS=\"\" EUROSCOPE=\"C:\\Users\\Controller Name\\AppData\\Roaming\\EuroScope\\\"");
+        Check(start.WindowStyle == System.Diagnostics.ProcessWindowStyle.Normal && !start.CreateNoWindow);
     }),
     ("exact build repair preserves scope and recaches only the pinned package", async () =>
     {

@@ -13,6 +13,9 @@
     <Page Include="../../SettingsWindow.xaml" Link="SettingsWindow.xaml" />
     <Page Include="../../AppConfigWindow.xaml" Link="AppConfigWindow.xaml" />
     <Page Include="../../MaintenanceWindow.xaml" Link="MaintenanceWindow.xaml" />
+    <Page Include="../../GngCleanupWindow.xaml" Link="GngCleanupWindow.xaml" />
+    <Page Include="../../GngUpdateWindow.xaml" Link="GngUpdateWindow.xaml" />
+    <Page Include="../../GngFileDiffWindow.xaml" Link="GngFileDiffWindow.xaml" />
     <Page Include="../../InstallationDiscoveryWindow.xaml" Link="InstallationDiscoveryWindow.xaml" />
     <Page Include="../../EuroScopeInstallWindow.xaml" Link="EuroScopeInstallWindow.xaml" />
     <Page Include="../../FreshSoftwareInstallWindow.xaml" Link="FreshSoftwareInstallWindow.xaml" />
@@ -23,6 +26,13 @@
     <Resource Include="../../Assets/logo-banner.png" Link="Assets/logo-banner.png" />
     <Compile Include="../../Models/CheckResult.cs" Link="CheckResult.cs" />
     <Compile Include="../../MainWindow.ApplicationDetails.cs" Link="MainWindow.ApplicationDetails.cs" />
+    <Compile Include="../../GngUpdateWindow.Review.cs" Link="GngUpdateWindow.Review.cs" />
+    <Compile Include="../../GngUpdateWindow.EuroScope.cs" Link="GngUpdateWindow.EuroScope.cs" />
+    <Compile Include="../../GngUpdateWindow.BrowserPresentation.cs" Link="GngUpdateWindow.BrowserPresentation.cs" />
+    <Compile Include="../../Models/GngUpdatePlan.cs" Link="GngUpdatePlan.cs" />
+    <Compile Include="../../GngFileDiffWindow.xaml.cs" Link="GngFileDiffWindow.xaml.cs" />
+    <Compile Include="../../Models/GngFilePreview.cs" Link="GngFilePreview.cs" />
+    <Compile Include="../../Services/GngTextDiff.cs" Link="GngTextDiff.cs" />
     <Compile Include="../../Models/SoftwareUpdate.cs" Link="SoftwareUpdate.cs" />
     <Compile Include="../../Models/ProfileOption.cs" Link="ProfileOption.cs" />
     <Compile Include="../../Models/ApplicationDescriptions.cs" Link="ApplicationDescriptions.cs" />

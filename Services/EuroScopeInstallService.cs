@@ -261,7 +261,7 @@ public sealed class EuroScopeInstallService
             plan.Scope == "AllUsers" ? "ALLUSERS=1" : "ALLUSERS=",
             EuroScopeMsiFootprint.DataDirectoryProperty + "=" + plan.DataRoot };
         if (plan.Action == EuroScopeInstallAction.Repair) args.AddRange(["REINSTALL=ALL", "REINSTALLMODE=vamus"]);
-        return new(plan.MsiexecPath, args, plan.Scope == "AllUsers");
+        return new(plan.MsiexecPath, args, plan.Scope == "AllUsers") { IsMsi = true };
     }
 
     private void ValidateOriginal(EuroScopeInstallPlan plan)

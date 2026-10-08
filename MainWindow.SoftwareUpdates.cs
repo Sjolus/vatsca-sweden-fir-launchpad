@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Net.Http;
+using System.IO;
 using System.Windows;
 using VatscaUpdateChecker.Models;
 using VatscaUpdateChecker.Services;
@@ -22,15 +23,18 @@ public partial class MainWindow
         foreach (var row in _results.Where(r => r.HasSoftwareUpdate))
         {
             _windowLifetime.Token.ThrowIfCancellationRequested();
-            await _softwareUpdates.CheckAsync(row.SoftwareApp!.Value, row.LaunchPath, _windowLifetime.Token);
+            await _softwareUpdates.CheckAsync(row.SoftwareApp!.Value, SoftwareExecutablePath(row), _windowLifetime.Token);
         }
     }
+
+    private static string SoftwareExecutablePath(CheckResult row) => row.IsLocalUrl ? row.SoftwareExecutablePath : row.LaunchPath;
 
     private void ResetSoftwareChecks()
     {
         foreach (var row in _results.Where(r => r.HasSoftwareUpdate))
         {
             row.SoftwareUpdate = null;
+            row.LatestIsPrerelease = false;
             row.Status = CheckStatus.Unknown;
             row.StatusMessage = "Check for updates after changing application paths.";
             row.InstalledVersion = row.LatestVersion = "—";
@@ -49,9 +53,11 @@ public partial class MainWindow
     {
         _setupRestartRequired |= _softwareUpdates.RestartRequired;
         var row = _results.Single(r => r.SoftwareApp == state.App);
+        if (state.App == SoftwareApp.VatEfs) row.SoftwareBlockingReason = VatEfsInstaller.GetBlockingReason();
         row.SoftwareUpdate = state;
         row.InstalledVersion = FormatLaunchpadVersion(state.InstalledVersion);
         row.LatestVersion = FormatLaunchpadVersion(state.LatestVersion);
+        row.LatestIsPrerelease = state.Release?.IsPrerelease == true;
         row.StatusMessage = state.Message;
         row.Status = state.Phase switch
         {
@@ -94,6 +100,12 @@ public partial class MainWindow
             return;
         }
 
+        if (app == SoftwareApp.VatEfs && row.SoftwareUpdate?.CanUpdate == true &&
+            VatEfsInstaller.GetBlockingReason() is { } blockingReason)
+        {
+            row.SoftwareBlockingReason = blockingReason;
+            return;
+        }
         if (!TryAcquireMaintenanceGuard(out var lease)) return;
         using var guard = lease;
 
@@ -110,18 +122,20 @@ public partial class MainWindow
             if (row.SoftwareUpdate?.CanUpdate == true)
                 await _softwareUpdates.UpdateAsync(app, _windowLifetime.Token);
             else
-                await _softwareUpdates.CheckAsync(app, row.LaunchPath, _windowLifetime.Token);
+                await _softwareUpdates.CheckAsync(app, SoftwareExecutablePath(row), _windowLifetime.Token);
 
             var state = _softwareUpdates.GetState(app);
             ApplySoftwareState(state);
             if (state.Phase == SoftwareUpdatePhase.Completed && state.Installation is { } installed)
             {
-                row.LaunchPath = installed.ExePath;
+                if (!row.IsLocalUrl) row.LaunchPath = installed.ExePath;
+                else row.SoftwareExecutablePath = installed.ExePath;
                 switch (app)
                 {
                     case SoftwareApp.Vacs: _settings.VacsExePath = installed.ExePath; break;
                     case SoftwareApp.Vatis: _settings.VatisExePath = installed.ExePath; break;
                     case SoftwareApp.TrackAudio: _settings.TrackAudioExePath = installed.ExePath; break;
+                    case SoftwareApp.VatEfs: _settings.VatEfsPath = Path.GetDirectoryName(installed.ExePath)!; break;
                 }
                 try { SettingsService.Save(_settings); }
                 catch { row.StatusMessage = "The update succeeded, but the application path could not be saved. Set the path in Settings before reopening Launchpad."; }
@@ -162,6 +176,7 @@ public partial class MainWindow
         {
             SoftwareApp.Vacs => "https://github.com/vacs-project/vacs/releases",
             SoftwareApp.Vatis => "https://vatis.app/",
+            SoftwareApp.VatEfs => "https://github.com/minsulander/vatefs/releases",
             _ => "https://github.com/pierr3/TrackAudio/releases"
         };
         try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); }

@@ -117,6 +117,8 @@ var tests = new List<(string Name, Action Test)>
         var state = new SetupWizardState(Existing());
         Throws<ArgumentException>(() => state.RecordInstallation(SetupWizardApplication.Vacs, " "));
         Throws<ArgumentOutOfRangeException>(() => state.RecordInstallation((SetupWizardApplication)999, "path"));
+        Throws<ArgumentException>(() => state.RecordInstallation(SetupWizardApplication.VatEfs, "efs.exe"));
+        Throws<ArgumentException>(() => state.RecordInstallation(SetupWizardApplication.VatEfs, @"C:\Synthetic\VatEFS\Wrong.exe"));
         Equal(JsonSerializer.Serialize(Existing()), JsonSerializer.Serialize(state.Dismiss()));
         True(!state.HasSavedActions && state.Actions.Count == 0);
     }),
@@ -134,7 +136,7 @@ var tests = new List<(string Name, Action Test)>
         var summary = string.Join("\n", state.Summary());
         True(summary.Contains("Your chosen program files and data folders") && summary.Contains("not chosen — optional"));
         True(summary.Contains("VACS: chosen location — "));
-        True(summary.Contains("must be installed separately") && summary.Contains("No installation"));
+        True(summary.Contains("Downloading and installing a package need separate actions") && summary.Contains("No installation"));
     }),
     ("no chosen applications produces no next-step guides", () =>
     {
@@ -201,14 +203,15 @@ foreach (var app in Enum.GetValues<SetupWizardApplication>())
     {
         var current = Existing(); var state = new SetupWizardState(current);
         state.Draft.IsDarkMode = false; state.Draft.CheckOnStartup = false;
-        string path = @"C:\Synthetic\verified\" + app + ".exe";
+        string path = @"C:\Synthetic\verified\" + (app == SetupWizardApplication.VatEfs ? "efs" : app.ToString()) + ".exe";
         state.RecordInstallation(app, path, restartRequired: true, backupFolder: @"D:\Synthetic\recovery");
         var saved = state.Dismiss();
-        Equal(path, app switch
+        Equal(app == SetupWizardApplication.VatEfs ? Path.GetDirectoryName(path)! : path, app switch
         {
             SetupWizardApplication.EuroScope => saved.EuroscopeExePath,
             SetupWizardApplication.Vacs => saved.VacsExePath,
             SetupWizardApplication.Vatis => saved.VatisExePath,
+            SetupWizardApplication.VatEfs => saved.VatEfsPath,
             _ => saved.TrackAudioExePath
         });
         True(saved.IsDarkMode && saved.CheckOnStartup && state.RestartRequired && state.HasSavedActions);

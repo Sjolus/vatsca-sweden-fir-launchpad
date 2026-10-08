@@ -61,6 +61,9 @@ public sealed class UiReviewHost : Window
         Add(screens, "Manage EuroScope", () => Open(new EuroScopeInstallWindow()));
         Add(screens, "Set up vATIS", () => Open(new FreshSoftwareInstallWindow()));
         Add(screens, "Setup wizard", () => Open(new SetupWizardWindow()));
+        Add(screens, "GNG cleanup", () => Open(new GngCleanupWindow()));
+        Add(screens, "GNG setup / update", () => Open(new GngUpdateWindow()));
+        Add(screens, "GNG file changes", () => Open(GngFileDiffFixture.Create(GngFileDiffFixtureState.Changes, UiFixture.Minimum)));
         var options = new WrapPanel(); panel.Children.Add(options);
         Add(options, "Light / dark", UiFixture.ToggleTheme);
         Add(options, "Mixed / blank paths", () => { UiFixture.Blank = !UiFixture.Blank; UiFixture.Refresh(); });
@@ -117,6 +120,8 @@ internal static partial class UiFixture
     }
     private static void Populate(Window window)
     {
+        if (window is GngCleanupWindow cleanup) cleanup.RefreshSyntheticScenario();
+        if (window is GngUpdateWindow update) update.RefreshSyntheticScenario();
         if (window is SetupWizardWindow wizard) wizard.RefreshSyntheticScenario();
         if (window is MainWindow main)
         {
@@ -170,6 +175,15 @@ internal static partial class UiFixture
             Text(window,"ConfiguredPath", Blank ? "No executable configured (synthetic)." : "Configured path: " + FakePath("Current installation/application.exe"));
             Text(window,"StatusText","Synthetic preparation only. Review, confirmation and progress do not run installers.");
             if (Find<CheckBox>(window,"AllowVatisBeta") is {} beta) beta.Visibility = Visibility.Visible;
+            if (window is FreshSoftwareInstallWindow { IsVatEfsFixture: true })
+            {
+                Text(window,"Heading","Set up VatEFS");
+                Find<CheckBox>(window,"AllowVatisBeta")!.Visibility = Visibility.Collapsed;
+                Find<FrameworkElement>(window,"PrereleaseNotice")!.Visibility = Visibility.Visible;
+                Find<Button>(window,"PrerequisiteButton")!.Content = "Check required x86 runtime…";
+                Text(window,"ProcessNotice","EuroScope is running. Close all EuroScope instances before changing GNG or VatEFS files.");
+                Find<FrameworkElement>(window,"ProcessNotice")!.Visibility = Visibility.Visible;
+            }
         }
     }
     private static ObservableCollection<CheckResult> Rows()
@@ -181,7 +195,10 @@ internal static partial class UiFixture
             Software("TrackAudio",SoftwareApp.TrackAudio,SoftwareUpdatePhase.Available,"1.3.0","1.4.0"),
             Software("VACS",SoftwareApp.Vacs,SoftwareUpdatePhase.Downloading,"2.7.0","2.8.0"),
             Software("vATIS",SoftwareApp.Vatis,SoftwareUpdatePhase.Error,"4.1.0-beta.18","4.1.0-beta.19"),
-            new() { AppName="VatEFS", IsWebApp=true, IsLocalUrl=true, IsLocalUrlReachable=!Blank, LaunchPath="http://localhost:17770", Status=Blank?CheckStatus.NotConfigured:CheckStatus.Installed },
+            new() { AppName="VatEFS", SoftwareApp=SoftwareApp.VatEfs, SoftwareExecutablePath=Blank?"":FakeFile("efs.exe"),
+                SoftwareUpdate=new(SoftwareApp.VatEfs,Blank?SoftwareUpdatePhase.Unavailable:SoftwareUpdatePhase.Available,"Synthetic VatEFS package update."), IsWebApp=true, IsLocalUrl=true, IsLocalUrlReachable=!Blank, LaunchPath="http://localhost:17770",
+                InstalledVersion=Blank?"Not installed":"v0.0.14", LatestVersion="v0.0.15", LatestIsPrerelease=true,
+                DownloadUrl="https://github.com/minsulander/vatefs/releases/tag/v0.0.15", Status=Blank?CheckStatus.NotConfigured:CheckStatus.UpdateAvailable },
             new() { AppName="VATIRIS", IsWebApp=true, LaunchPath="https://vatiris.se", Status=CheckStatus.WebApp, InstalledVersion="N/A", LatestVersion="N/A" },
             new() { AppName="Sweden FIR Launchpad", HasSelfUpdate=true, InstalledVersion="2.0.0-dev.1", LatestVersion="2.0.0", ShowSelfUpdateAction=true, SelfUpdateActionText="Download update", SelfUpdateSummary="Update available", StatusMessage="Synthetic self-update; no network requests." }
         };
@@ -209,6 +226,8 @@ internal static partial class UiFixture
             case "SetupWizard_Click": Show(new SetupWizardWindow(),window); return;
             case "AppConfig_Click": Show(new AppConfigWindow(),window); return;
             case "Maintenance_Click": Show(new MaintenanceWindow(),window); return;
+            case "GngCleanup_Click": Show(new GngCleanupWindow(),window); return;
+            case "GngUpdate_Click": Show(new GngUpdateWindow(),window); return;
             case "DiscoverInstallations_Click": case "FindInstallations_Click": Show(new InstallationDiscoveryWindow(),window); return;
             case "EuroScopeManage_Click": Show(new EuroScopeInstallWindow(),window); return;
             case "SoftwareInstall_Click": Show(new FreshSoftwareInstallWindow(),window); return;

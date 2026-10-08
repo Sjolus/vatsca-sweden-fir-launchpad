@@ -35,6 +35,23 @@ var tests = new (string Name, Func<Task> Body)[]
         using var f = new Fixture(); f.Installer.Current = f.Installer.Current with { Version = "unknown" };
         Equal(SoftwareUpdatePhase.Error, (await f.Check()).Phase); Equal(0, f.Source.Calls);
     }),
+    ("VatEFS keeps the installed version when release checking fails", async () =>
+    {
+        using var f = new Fixture(SoftwareApp.VatEfs);
+        f.Installer.Current = f.Installer.Current with { Version = "0.0.12" };
+        f.Source.OnGet = _ => throw new HttpRequestException("Synthetic catalog failure");
+        var state = await f.Check();
+        Equal(SoftwareUpdatePhase.Error, state.Phase); Equal("0.0.12", state.Installation!.Version);
+        Equal(0, f.Handler.Calls); Equal(0, f.Installer.Installs);
+    }),
+    ("missing VatEFS keeps the fresh-install release without downloading", async () =>
+    {
+        using var f = new Fixture(SoftwareApp.VatEfs);
+        f.Installer.Current = f.Installer.Current with { CanUpdate = false, Version = "", Reason = "Not installed" };
+        var state = await f.Check();
+        Equal(SoftwareUpdatePhase.Unavailable, state.Phase); Equal(f.Source.Release, state.Release);
+        Equal(1, f.Source.Calls); Equal(0, f.Handler.Calls); Equal(0, f.Installer.Installs);
+    }),
     ("missing compatible release is unavailable", async () =>
     {
         using var f = new Fixture(); f.Source.Release = null;
@@ -307,8 +324,8 @@ sealed class Fixture : IDisposable
     {
         App = app; Directory.CreateDirectory(Root);
         var version = "1.4.0";
-        var fileName = app switch { SoftwareApp.Vacs => $"vacs_{version}_x64-setup.exe", SoftwareApp.Vatis => $"org.vatsim.vatis-{version}-full.nupkg", _ => $"trackaudio-{version}-x64-setup.exe" };
-        var url = app switch { SoftwareApp.Vacs => $"https://github.com/vacs-project/vacs/releases/download/vacs-client-v{version}/{fileName}", SoftwareApp.Vatis => $"https://vatis.app/updates/windows/{fileName}", _ => $"https://github.com/pierr3/TrackAudio/releases/download/{version}/{fileName}" };
+        var fileName = app switch { SoftwareApp.Vacs => $"vacs_{version}_x64-setup.exe", SoftwareApp.Vatis => $"org.vatsim.vatis-{version}-full.nupkg", SoftwareApp.VatEfs => $"vatefs-{version}.msi", _ => $"trackaudio-{version}-x64-setup.exe" };
+        var url = app switch { SoftwareApp.Vacs => $"https://github.com/vacs-project/vacs/releases/download/vacs-client-v{version}/{fileName}", SoftwareApp.Vatis => $"https://vatis.app/updates/windows/{fileName}", SoftwareApp.VatEfs => $"https://github.com/minsulander/vatefs/releases/download/v{version}/{fileName}", _ => $"https://github.com/pierr3/TrackAudio/releases/download/{version}/{fileName}" };
         Source = new FakeSource(new(app, version, new Uri(url), fileName, Convert.ToHexString(SHA256.HashData(Payload)), Payload.Length));
         Installer = new FakeInstaller(new(app, Path.Combine(Root, "fake-tool.exe"), "1.3.0", Root, "user", null, true, null), Path.Combine(Root, "backup"));
         Handler = new FakeHandler { Respond = (_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(Payload) }) };

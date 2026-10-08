@@ -1,6 +1,6 @@
 # Setting up your ATC applications
 
-You can use Launchpad with an existing setup or install supported applications from scratch. Choose only the tools you need. GNG installation remains manual in 2.0.
+You can use Launchpad with an existing setup or install supported applications from scratch, including [Swedish GNG](gng-updates.md). Choose only the tools you need.
 
 ## Keep your existing setup
 
@@ -22,7 +22,7 @@ Launchpad checks the selected files and folders. Correct or clear invalid new se
 
 ## Install missing applications
 
-Open an application's **Details…**, then **Set up…**. Check the destination and installation options before confirming.
+Open an application's **Details…**, then **Install…** (**Set up…** for EuroScope). Check the destination and installation options before confirming.
 
 | Application | Installation | Existing settings |
 | --- | --- | --- |
@@ -30,6 +30,8 @@ Open an application's **Details…**, then **Set up…**. Check the destination 
 | VACS | An all-users installation under Program Files. Windows asks for administrator permission. | Known settings for the current user can be reused; Launchpad exports them first. |
 | TrackAudio | An installation for the current Windows user. | Existing TrackAudio settings can be reused; Launchpad exports them first. |
 | vATIS | The supported beta.19 package, with an explicit choice to use the beta. | An existing vATIS folder must be handled through update or removal first. Setup cannot overwrite it. |
+| VatEFS | The official MSI, including prereleases, under `%ProgramFiles%\VatEFS` for all users. Close EuroScope and the VatEFS backend first. | Fresh installation refuses an existing registration or folder. Supported installed copies use the update action with a recovery backup. External profiles and browser settings stay in place. |
+| Swedish GNG | Choose Download Swedish GNG and sign in if asked. Launchpad chooses Update Only for a recognized existing setup, or Full Package for setup/repair; review installation afterward. Original ZIP import is also available. | Supported personal files and profile fields are preserved. Shared defaults are replaced with backups; read the preview before confirming. |
 
 If Launchpad finds an existing copy or leftover installation files, use the existing-applications route or **Remove / reset…** before trying a fresh install. Unsupported layouts can be installed manually through the vendor.
 
@@ -42,6 +44,8 @@ Setup shows a separate action when a Microsoft runtime is needed:
 - **VACS:** machine-wide WebView2.
 - **TrackAudio:** Visual C++ x64.
 - **EuroScope:** Visual C++ x86.
+- **VatEFS:** the same Visual C++ x86 runtime used by its EuroScope plugin.
+- **GNG browser:** WebView2. ZIP import remains available without it.
 
 Confirm the runtime installation when prompted. If Windows requires a restart, restart before continuing. Shared runtimes stay installed when you remove Launchpad or an ATC application.
 
@@ -51,10 +55,12 @@ Confirm the runtime installation when prompted. If Windows requires a restart, r
 
 **Finish** saves the guide's preferences. **Skip for now** or closing it discards unfinished preferences but keeps installations and choices you already saved in another dialog. If saving fails, Launchpad warns that those choices are retained only until the app closes.
 
+The last page offers **Open GNG setup after I choose Finish**. It starts unchecked and only opens the download/review window after the guide closes. It does not authorize installation; that window has its own confirmation. A pending Windows restart disables this option.
+
 ## Start again with a clean setup
 
 Use **Remove / reset…** to choose applications and settings separately. Keep the recovery export unless you intend permanent deletion. Then install the missing applications again. See [removal and recovery](uninstallation.md) for what each option removes.
 
 GNG and vATIS store personal settings alongside their program/package files. Keeping those settings during removal means exporting them for manual restoration. Launchpad does not find every custom ATC file on your computer.
 
-Install GNG using the [Swedish installation guide](https://wiki.vatsim-scandinavia.org/books/general/page/euroscope-and-gng-package-installation), then select its folder in Launchpad. VatEFS setup and EuroScope plugin references may still need manual configuration. VATIRIS opens as a web application.
+Use [GNG setup](gng-updates.md) to install the Swedish package, then follow the [Swedish installation guide](https://wiki.vatsim-scandinavia.org/books/general/page/euroscope-and-gng-package-installation) for EuroScope configuration. After installing VatEFS, use **Controller profile → Preview** to review enabling its plugin. Fonts and custom EuroScope plugin references may still need manual configuration. VATIRIS opens as a web application.
