@@ -4,6 +4,19 @@ namespace VatscaUpdateChecker;
 public partial class App : Application { }
 public partial class MainWindow : Window
 {
+    private void Pin_Click(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "Pin_Click");
+    private void Activity_Click(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "Activity_Click");
+    private void DetailsResize_DragDelta(object sender, System.Windows.Controls.Primitives.DragDeltaEventArgs e) => ApplicationDetails.Height = Math.Clamp(ApplicationDetails.Height - e.VerticalChange, 100, 240);
+    private void DetailsSize_Click(object sender, RoutedEventArgs e)
+    {
+        ApplicationDetails.Height = ApplicationDetails.Height > 150 ? 100 : Math.Min(240, Height * .48);
+        DetailsSizeButton.Content = ApplicationDetails.Height > 150 ? "Less space" : "More space";
+    }
+    private void RunningActions_Click(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "RunningActions_Click");
+    private void Usage_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: Models.CheckResult row }) row.IsNotUsed = !row.IsNotUsed;
+    }
     public MainWindow() { InitializeComponent(); UiFixture.Initialize(this); InitializeApplicationDetails(); }
     internal void SelectSyntheticDetails(Models.CheckResult row) => SelectApplicationDetails(row);
     internal void RefreshSyntheticDetailsLayout() => UpdateApplicationDetailsLayout();

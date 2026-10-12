@@ -198,6 +198,12 @@ public static class ProfileService
 
         void HoppieFile(string path, string note = "")
         {
+            if (string.IsNullOrWhiteSpace(hoppieCode))
+            {
+                SectionHeader(path, "unchanged");
+                sb.AppendLine("  No Hoppie code entered — this file will not be changed.");
+                return;
+            }
             var cur     = File.Exists(path) ? File.ReadAllText(path).Trim() : string.Empty;
             var tag     = string.Equals(cur, hoppieCode, StringComparison.Ordinal)
                           ? "(unchanged)" : "← changed";

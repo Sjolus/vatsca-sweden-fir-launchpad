@@ -2,15 +2,19 @@
 
 You can use Launchpad with an existing setup or install supported applications from scratch, including [Swedish GNG](gng-updates.md). Choose only the tools you need.
 
+This guide describes Launchpad 2.2.0 and later.
+
 ## Keep your existing setup
 
 Open **Setup guide…** and choose the existing-applications route. The guide opens automatically for new users; you can skip it and return later.
 
-1. Choose **Find installed programs…**. Launchpad checks installed-app records and common folders for EuroScope, TrackAudio, VACS, vATIS, Swedish GNG and VatEFS.
-2. Select the copies you use. Existing saved locations are kept unless you choose to replace them.
-3. Review the locations in Settings and save. For a custom location, use **Choose files and folders…**.
+1. Choose **Find installed applications**. Launchpad checks installed-app records and common folders, showing the copies it finds beside each application.
+2. Select a copy, then choose **Use this copy**. Its location is checked and saved; existing saved paths change only when you choose a replacement.
+3. For a custom location, use **Choose copy…** (or **Choose folder…** for VatEFS). GNG has a separate data-folder choice on the next step.
 
 Linking an application saves its location. It does not move files, change permissions or import its settings. You can continue using your current configuration without using Launchpad's controller-profile features.
+
+Mark an optional application **Not used** to remove its warnings from the attention count. Its location and data remain available; clear that choice to include it again. Choosing or installing a copy through the guide includes it again automatically.
 
 When choosing locations:
 
@@ -51,11 +55,17 @@ Confirm the runtime installation when prompted. If Windows requires a restart, r
 
 ## Finish configuration
 
-**Controller profile** lets you enter controller details and preview changes to supported EuroScope files. It is optional. The last setup page also links to the relevant VATSCA guides for EuroScope/GNG, TrackAudio audio/PTT and Sweden's vATIS profile.
+The normal route has six steps: Welcome, Applications, Swedish GNG, Controller profile, Fonts and Finish. Every step can be skipped. The preferences-only route skips application, GNG and font setup.
 
-**Finish** saves the guide's preferences. **Skip for now** or closing it discards unfinished preferences but keeps installations and choices you already saved in another dialog. If saving fails, Launchpad warns that those choices are retained only until the app closes.
+At the GNG step, keep your existing data folder or choose **Install or update GNG…**. The package window has its own review and confirmation. After a completed installation, the guide resumes at Controller profile; cancelling returns to the GNG step.
 
-The last page offers **Open GNG setup after I choose Finish**. It starts unchecked and only opens the download/review window after the guide closes. It does not authorize installation; that window has its own confirmation. A pending Windows restart disables this option.
+**Controller profile** lets you enter details and preview changes to supported EuroScope files. Choose **Preview** before **Save & apply**; with a configured target, this updates its Swedish profiles. Without an available target folder, **Save profile** stores the details in Launchpad only. Keeping your existing configuration is also fine.
+
+At Fonts, choose **Check fonts**. Missing or older fonts can be opened in Windows font preview; choose Install there, then check again. The guide does not install fonts automatically or start EuroScope. The last page also links to the relevant VATSCA guides for EuroScope/GNG, TrackAudio audio/PTT and Sweden's vATIS profile.
+
+**Finish** saves appearance and startup preferences. **Continue later** or closing the guide keeps your place, selected paths and completed installations/profile actions. Unfinished appearance preferences are discarded. Reopen **Setup guide…** to continue. If saving fails, Launchpad warns that the choices are retained only for the current session.
+
+A pending Windows restart blocks further installation and controller-profile changes. Restart Windows before continuing; reopening Launchpad alone does not fulfil that requirement.
 
 ## Start again with a clean setup
 

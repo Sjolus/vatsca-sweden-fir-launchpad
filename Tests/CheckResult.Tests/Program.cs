@@ -227,16 +227,52 @@ try
             True(!row.RowExplanation.Contains("Details"));
         }
     });
-    Run("force-stop label warns about unsaved work", () =>
+    Run("running applications offer Show rather than immediate termination", () =>
     {
         var row = Software(SoftwareApp.TrackAudio, SoftwareUpdatePhase.Current);
         Equal("Launch", row.LaunchActionText);
         row.IsRunning = true;
-        Equal("Stop", row.LaunchActionText);
-        True(row.LaunchTooltip.Contains("Force-stop") && row.LaunchTooltip.Contains("Unsaved work"));
+        Equal("Show", row.LaunchActionText);
+        True(row.LaunchTooltip.Contains("Show") && row.LaunchTooltip.Contains("separate action"));
         var web = new CheckResult { AppName = "VATIRIS", IsWebApp = true };
         Equal("Open", web.LaunchActionText);
     });
+    Run("not-used applications retain paths and are neutral without hiding active operations", () =>
+    {
+        var row = Software(SoftwareApp.TrackAudio, SoftwareUpdatePhase.Unavailable);
+        var path = row.LaunchPath;
+        row.IsNotUsed = true;
+        Equal("Not used", row.RowStatusText);
+        Equal("Neutral", row.RowStatusKind);
+        Equal(path, row.LaunchPath);
+        Equal("Use this application", row.UsageActionText);
+        row.SoftwareUpdate = row.SoftwareUpdate! with { Phase = SoftwareUpdatePhase.Installing };
+        Equal("Installing…", row.RowStatusText);
+        row.IsNotUsed = false;
+        Equal(path, row.LaunchPath);
+    });
+    Run("running VatEFS browser stays visible when its local service stops", () =>
+    {
+        var row = Software(SoftwareApp.VatEfs, SoftwareUpdatePhase.Current);
+        row.LaunchPath = "http://localhost:17770";
+        row.IsLocalUrlReachable = false;
+        row.IsRunning = true;
+        True(row.ShowSimpleLaunch);
+        Equal("Show", row.LaunchActionText);
+    });
+    Run("selected launch profile does not claim to change a running EuroScope session", () =>
+    {
+        var row = new CheckResult { AppName = "EuroScope" };
+        row.Profiles.Add(new("Sweden", "C:\\Synthetic\\Sweden.prf"));
+        row.SelectedProfile = row.Profiles[0];
+        Equal("Launch profile: Sweden", row.SelectedProfileCaption);
+        row.IsRunning = true;
+        Equal("Next launch: Sweden", row.SelectedProfileCaption);
+        row.SelectedProfile = new("Observer", null);
+        Equal("Next launch: Observer", row.SelectedProfileCaption);
+        Equal("Show", row.LaunchActionText);
+    });
+
     Run("status, progress and error changes refresh the selected detail bindings", () =>
     {
         var row = Software(SoftwareApp.TrackAudio, SoftwareUpdatePhase.Current);

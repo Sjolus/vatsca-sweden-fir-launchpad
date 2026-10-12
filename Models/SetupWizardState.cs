@@ -5,6 +5,7 @@ namespace VatscaUpdateChecker.Models;
 public enum SetupWizardRoute { Existing, Fresh, Manual }
 public enum SetupWizardApplication { EuroScope, Vacs, Vatis, TrackAudio, VatEfs }
 public enum SetupWizardGuide { EuroScopeGng, TrackAudio, Vatis }
+public enum SetupWizardStep { Welcome, Applications, Gng, Profile, Fonts, Finish }
 
 /// <summary>
 /// Pure wizard state. Only explicit child-dialog saves and verified installation results
@@ -17,6 +18,7 @@ public sealed class SetupWizardState
     private readonly List<string> _actions = [];
     public AppSettings Draft { get; }
     public SetupWizardRoute Route { get; set; } = SetupWizardRoute.Existing;
+    public SetupWizardStep Step { get; private set; }
     public bool HasSavedActions { get; private set; }
     public bool RestartRequired { get; private set; }
     public IReadOnlyList<string> Actions => _actions.AsReadOnly();
@@ -30,7 +32,57 @@ public sealed class SetupWizardState
         ArgumentNullException.ThrowIfNull(current);
         _saved = current.Copy();
         Draft = current.Copy();
+        if (!current.SetupWizardCompleted && Enum.IsDefined(typeof(SetupWizardStep), current.SetupWizardStep))
+            Step = (SetupWizardStep)current.SetupWizardStep;
+        if (Enum.TryParse<SetupWizardRoute>(current.SetupWizardRoute, out var route) && Enum.IsDefined(route)) Route = route;
     }
+
+    public void MoveTo(SetupWizardStep step)
+    {
+        if (!Enum.IsDefined(step)) throw new ArgumentOutOfRangeException(nameof(step));
+        Step = step;
+        foreach (var target in new[] { Draft, _saved })
+        {
+            target.SetupWizardStep = (int)step;
+            target.SetupWizardRoute = Route.ToString();
+            target.SetupWizardCompleted = false;
+        }
+    }
+
+    public void AcceptLocation(SetupWizardApplication app, string path)
+    {
+        if (!Enum.IsDefined(app)) throw new ArgumentOutOfRangeException(nameof(app));
+        if (string.IsNullOrWhiteSpace(path)) throw new ArgumentException("A reviewed location is required.", nameof(path));
+        foreach (var target in new[] { Draft, _saved })
+            switch (app)
+            {
+                case SetupWizardApplication.EuroScope: target.EuroscopeExePath = path; break;
+                case SetupWizardApplication.Vacs: target.VacsExePath = path; break;
+                case SetupWizardApplication.Vatis: target.VatisExePath = path; break;
+                case SetupWizardApplication.TrackAudio: target.TrackAudioExePath = path; break;
+                case SetupWizardApplication.VatEfs: target.VatEfsPath = path; break;
+            }
+        SetNotUsed(Name(app), false);
+        HasSavedActions = true;
+        _actions.Add(Name(app) + " location selected. Existing configuration was left in place.");
+    }
+
+    public void AcceptGngFolder(string path, bool installed)
+    {
+        if (string.IsNullOrWhiteSpace(path)) throw new ArgumentException("A reviewed GNG folder is required.", nameof(path));
+        Draft.EuroscopeDataPath = _saved.EuroscopeDataPath = path;
+        SetNotUsed("EuroScope (GNG Pack)", false);
+        HasSavedActions = true;
+        _actions.Add(installed ? "GNG installation completed. Review Controller profile and fonts next." : "Existing GNG data folder selected. Its configuration was left in place.");
+    }
+
+    public void SetNotUsed(string appName, bool notUsed)
+    {
+        foreach (var target in new[] { Draft, _saved })
+            ApplicationPreferences.SetNotUsed(target, appName, notUsed);
+    }
+
+    public bool IsNotUsed(string appName) => ApplicationPreferences.IsNotUsed(Draft, appName);
 
     public void AcceptSettings(AppSettings settings)
     {
@@ -45,6 +97,9 @@ public sealed class SetupWizardState
             target.VatisExePath = settings.VatisExePath;
             target.VatEfsPath = settings.VatEfsPath;
             target.CheckOnStartup = settings.CheckOnStartup;
+            target.NotUsedApplications = settings.NotUsedApplications;
+            target.TextScale = settings.TextScale;
+            target.AlwaysOnTop = settings.AlwaysOnTop;
         }
         HasSavedActions = true;
         _actions.Add("Program and folder locations, plus the startup check preference, were saved in Settings. Existing program settings were left in place.");
@@ -88,6 +143,7 @@ public sealed class SetupWizardState
             }
         }
         HasSavedActions = true;
+        SetNotUsed(Name(app), false);
         _actions.Add(Name(app) + " installation completed and was verified. Its program location will be kept.");
         if (!string.IsNullOrWhiteSpace(backupFolder)) _actions.Add("Recovery export: " + backupFolder);
         if (restartRequired) RequireRestart();
@@ -104,7 +160,14 @@ public sealed class SetupWizardState
         RestartRequired = true;
     }
 
-    public AppSettings Finish() => Draft.Copy();
+    public AppSettings Finish()
+    {
+        var result = Draft.Copy();
+        result.SetupWizardStep = 0;
+        result.SetupWizardCompleted = true;
+        result.SetupWizardDismissed = false;
+        return result;
+    }
     public AppSettings Dismiss() => _saved.Copy();
 
     public IReadOnlyList<SetupWizardGuide> NextSteps()
@@ -137,7 +200,7 @@ public sealed class SetupWizardState
             PathLine("TrackAudio", Draft.TrackAudioExePath),
             PathLine("EuroScope / GNG data folder", Draft.EuroscopeDataPath),
             PathLine("VatEFS folder", Draft.VatEfsPath),
-            "GNG setup is available after this guide. Downloading and installing a package need separate actions.",
+            "Downloading and installing a package need separate actions. Skipped steps can be reviewed again from Setup guide.",
             "Theme: " + (Draft.IsDarkMode ? "dark" : "light") + "; application list: " + (Draft.CompactLayout ? "compact" : "expanded") + ".",
             "Startup update checks: " + (Draft.CheckOnStartup ? "on (checks only)." : "off."),
         };

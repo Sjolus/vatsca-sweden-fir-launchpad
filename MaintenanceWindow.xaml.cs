@@ -114,6 +114,8 @@ public partial class MaintenanceWindow : Window
         ConfirmRemoval.IsEnabled = false;
         ApplyButton.IsEnabled = false;
         ReviewText.Text = "Selection changed. Review again before removing anything.";
+        ReviewSummaryText.Text = ReviewText.Text;
+        ReviewDetails.IsExpanded = false;
     }
 
     private void ChooseBackup_Click(object sender, RoutedEventArgs e)
@@ -166,6 +168,7 @@ public partial class MaintenanceWindow : Window
                       "Launchpad will be uninstalled last, after all selected work below succeeds.\n\n" + _plan.Review;
             }
             else ReviewText.Text = _plan.Review + "\nLaunchpad will remain installed.";
+            ReviewSummaryText.Text = ReviewSummaries.Removal(_plan, RemoveLaunchpad.IsChecked == true);
             ConfirmRemoval.IsEnabled = true;
             StatusText.Text = "Review the paths, then confirm. No files have been changed.";
         }
@@ -178,7 +181,7 @@ public partial class MaintenanceWindow : Window
         if (_plan != null) ShowReviewedPlan();
     }
 
-    private void ShowReviewedPlan() => ReviewScrollHelper.Show(ContentScroll, ReviewPanel, ReviewText,
+    private void ShowReviewedPlan() => ReviewScrollHelper.Show(ContentScroll, ReviewPanel, ReviewSummaryText,
         () => !_busy && _plan != null && IsVisible);
 
     private void RememberRecoveryExport()
@@ -207,6 +210,10 @@ public partial class MaintenanceWindow : Window
             MadeChanges = true;
             var backup = await Task.Run(() => _service.ApplyAsync(plan, progress, CancellationToken.None));
             RememberRecoveryExport();
+            // A preferences/logs reset also removes activity. Do not immediately recreate it.
+            if (!_service.ActivityHistoryReset)
+                ActivityHistoryService.Record(ActivityApplication.Maintenance, ActivityOperation.Remove,
+                    ActivityOutcome.Completed, recoveryFolder: backup, restartRequired: _service.RestartRequired);
             StatusText.Text = "Selected removal completed." + (backup == null ? " No recovery export was requested." : " Recovery export: " + backup);
             if (RemoveLaunchpad.IsChecked == true)
             {
@@ -221,6 +228,9 @@ public partial class MaintenanceWindow : Window
         {
             RememberRecoveryExport();
             RestartRequired |= _service.RestartRequired;
+            if (!_service.ActivityHistoryReset)
+                ActivityHistoryService.Record(ActivityApplication.Maintenance, ActivityOperation.Remove,
+                    ActivityOutcome.Stopped, recoveryFolder: _service.LastBackupFolder, restartRequired: RestartRequired);
             failureOutcome = "Stopped: " + ex.Message + " Completed removals are not undone. All removal selections have been cleared." +
                 (RestartRequired ? " Restart Windows before further changes. Remaining removal and data cleanup were not performed; Launchpad was not uninstalled."
                     : " Review the refreshed application state before retrying.") +
@@ -229,6 +239,7 @@ public partial class MaintenanceWindow : Window
         }
         finally
         {
+            if (_service.ActivityHistoryReset) ActivityHistoryService.ResetCompleted();
             RestartRequired |= _service.RestartRequired;
             _finished |= RestartRequired;
             _applying = false;

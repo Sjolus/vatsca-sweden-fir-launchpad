@@ -18,6 +18,7 @@ public sealed record AtcMaintenancePlan(
 /// <summary>Reviews destructive actions and completes any recovery export selected or required by the plan before applying them. Discovery never starts a process.</summary>
 public sealed class AtcMaintenanceService
 {
+    public bool ActivityHistoryReset { get; private set; }
     private readonly AtcRemovalCatalog _catalog;
     private readonly AtcRemovalVendor _vendors;
     private readonly AtcRemovalEnvironment _environment;
@@ -88,7 +89,7 @@ public sealed class AtcMaintenanceService
         backupRoots.AddRange(localRoots);
         deleteRoots.AddRange(localRoots);
         ValidateTargetOverlap(selected, localRoots);
-        if (local.Settings) review.AppendLine("Launchpad: delete preferences, identity fields, log and process-tracking files.");
+        if (local.Settings) review.AppendLine("Launchpad: delete preferences, identity fields, activity history, log and process-tracking files.");
         if (local.BrowserSessions) review.AppendLine("Launchpad: delete its dedicated VATIRIS/VatEFS and AeroNav sign-in browser sessions.");
         if (local.Downloads) review.AppendLine("Launchpad: delete temporary client/GNG downloads and verification staging. Managed GNG package copies stay with their recovery backups.");
         if (local.Backups) review.AppendLine("Launchpad: delete existing software-update, GNG installation and cleanup recovery backups, including saved GNG package history. Review every listed path below.");
@@ -116,6 +117,7 @@ public sealed class AtcMaintenanceService
 
     public async Task<string?> ApplyAsync(AtcMaintenancePlan plan, IProgress<string>? progress, CancellationToken cancellationToken)
     {
+        ActivityHistoryReset = false;
         RequireNoRestart();
         LastBackupFolder = null;
         ValidateConfiguredPaths(plan.Selections, plan.DirectRemovalFiles.Roots);
@@ -164,7 +166,15 @@ public sealed class AtcMaintenanceService
         if (backup != null) RemovalFileService.VerifyBackup(plan.BackupFiles, backup);
         foreach (var selection in plan.Selections.Where(s => s.Target.VendorSpec == null || !s.RemoveApplication))
             if (_catalog.IsRunning(selection.Target)) throw new InvalidOperationException("Close " + selection.Target.Name + " before removing its data.");
-        var deleted = await RemovalFileService.DeleteRemainingAsync(plan.DirectRemovalFiles, progress).ConfigureAwait(false);
+        RemovalDeleteResult deleted;
+        try { deleted = await RemovalFileService.DeleteRemainingAsync(plan.DirectRemovalFiles, progress).ConfigureAwait(false); }
+        finally
+        {
+            // Partial direct removal can already have removed history. Never recreate it
+            // merely to report the reset, but preserve failures that happened before reset.
+            ActivityHistoryReset = plan.LaunchpadData.Settings &&
+                !File.Exists(Path.Combine(_environment.LocalAppData, "VatscaUpdateChecker", "Activity", "history.json"));
+        }
         if (!deleted.Succeeded)
             throw new IOException("Removal stopped. " + string.Join("; ", deleted.Errors.Select(e => e.Path + ": " + e.Message)));
         if (plan.LaunchpadData.Credentials)
@@ -265,8 +275,9 @@ public sealed class AtcMaintenanceService
         var roots = new List<string>();
         if (selected.Settings)
         {
-            roots.AddRange(new[] { "settings.json", "launchpad.log", "VATIRIS.pid", "VatEFS.pid" }.Select(name => Path.Combine(roaming, name)));
+            roots.AddRange(new[] { "settings.json", "launchpad.log", "VATIRIS.pid", "VatEFS.pid", "VATIRIS.process.json", "VatEFS.process.json" }.Select(name => Path.Combine(roaming, name)));
             roots.Add(Path.Combine(software, "VatEfsLogs"));
+            roots.Add(Path.Combine(_environment.LocalAppData, "VatscaUpdateChecker", "Activity"));
         }
         if (selected.BrowserSessions)
         {

@@ -14,7 +14,7 @@ internal static partial class LayoutMatrix
     private static readonly Func<Window>[] Factories =
     [
         () => new MainWindow(), () => new SettingsWindow(), () => new AppConfigWindow(),
-        () => new MaintenanceWindow(), () => new InstallationDiscoveryWindow(),
+        () => new MaintenanceWindow(), () => new InstallationDiscoveryWindow(), () => new ActivityWindow(),
         () => new EuroScopeInstallWindow(), () => new FreshSoftwareInstallWindow(), () => new FreshSoftwareInstallWindow(vatEfs: true), () => new GngCleanupWindow()
     ];
 
@@ -36,6 +36,7 @@ internal static partial class LayoutMatrix
                 CheckThemeReadability();
                 layouts += CheckGngUpdateLayouts();
                 layouts += CheckGngFileDiffLayouts();
+                layouts += CheckProfilePreviewLayouts();
                 CheckCompactDensity();
                 layouts++;
                 CheckRestartNotice();
@@ -58,6 +59,7 @@ internal static partial class LayoutMatrix
                             if (window is MainWindow main) { CheckRowReadability(main); CheckFirstRunActions(main); CheckSoftwareStates(main); CheckLongStatusWidth(main); }
                             if (window is SettingsWindow settings) CheckSettingsExpansion(settings);
                             if (window is AppConfigWindow profile) CheckProfileScroll(profile, minimum);
+                            if (window is ActivityWindow activity) CheckActivityLayout(activity);
                             if (window is GngCleanupWindow cleanup) CheckCleanupLayout(cleanup);
                             if (window is MaintenanceWindow or EuroScopeInstallWindow or FreshSoftwareInstallWindow)
                                 CheckReviewLocation(window);
@@ -88,10 +90,11 @@ internal static partial class LayoutMatrix
                     finally { profile.Close(); }
                 }
                 layouts += CheckWizardSteps();
+                layouts += CheckTextSizeLayouts();
             }
             Require(UiFixture.ErrorCount == errorsBefore, "An unhandled fixture exception was logged.");
             Require(trace.Errors.Count == 0, "WPF binding errors: " + string.Join(" | ", trace.Errors));
-            return $"PASS: {layouts} hidden layout cases; both themes, blank/mixed paths, default/minimum sizes, uniform compact/comfortable rows, compact eight-row fit, selected application details, persistent restart notice, profile and wizard scrolling/footer reachability, optional GNG setup, inert GNG start/sign-in/download/cancel/review/completion/runtime fallback, production changes-only review filter/counts/reset/empty state, warning/input contrast, read-only progress bindings, missing/stale paths and update/cancellation states. No windows shown.";
+            return $"PASS: {layouts} hidden layout cases; both themes, blank/mixed paths, default/minimum sizes, independent 100/125/150% text size and compact/expanded density, compact eight-row fit, selected application details and profile, pin/detail controls, activity/recovery layouts, persistent restart notice, profile and six-step wizard scrolling/footer reachability, explicit GNG setup, inert GNG start/sign-in/download/cancel/review/completion/runtime fallback, production changes-only review filter/counts/reset/empty state, warning/input contrast, read-only progress bindings, missing/stale paths and update/cancellation states. No windows shown.";
         }
         finally
         {
@@ -99,13 +102,14 @@ internal static partial class LayoutMatrix
             source.Switch.Level = priorLevel;
             UiFixture.Blank = UiFixture.Minimum = false;
             UiFixture.Scale = 1;
+            UiFixture.SetTextScale(1);
         }
     }
 
     private static void CheckThemeReadability()
     {
         Require(Contrast(Colors.White, Color.FromRgb(0x8a, 0x4b, 0)) >= 4.5, "Standard warning badge text contrast is below 4.5:1.");
-        foreach (var (foreground, background) in new[] { ("PrimaryText", "AppBg"), ("SecondaryText", "AppBg"), ("InputFg", "InputBg"), ("WarningFg", "WarningBg"), ("SuccessFg", "SuccessBg"), ("SelectionFg", "SelectionBg") })
+        foreach (var (foreground, background) in new[] { ("PrimaryText", "AppBg"), ("SecondaryText", "AppBg"), ("InputFg", "InputBg"), ("WarningFg", "WarningBg"), ("SuccessFg", "SuccessBg"), ("SelectionFg", "SelectionBg"), ("DiffAddedFg", "DiffAddedBg"), ("DiffRemovedFg", "DiffRemovedBg") })
         {
             var fg = (SolidColorBrush)Application.Current.FindResource(foreground);
             var bg = (SolidColorBrush)Application.Current.FindResource(background);
@@ -133,9 +137,10 @@ internal static partial class LayoutMatrix
         var content = (FrameworkElement)window.Content;
         var names = window switch
         {
-            MainWindow => new[] { "CheckButton", "SetupButton", "MaintenanceButton" },
+            MainWindow => new[] { "CheckButton", "SetupButton", "MaintenanceButton", "ActivityButton" },
             SettingsWindow => new[] { "SaveButton" },
             AppConfigWindow => new[] { "PreviewButton", "SaveProfileButton" },
+            ProfilePreviewWindow => new[] { "ToggleCredentialsButton", "BackButton" },
             MaintenanceWindow => new[] { "ReviewButton", "ApplyButton", "CloseButton", "RefreshButton" },
             EuroScopeInstallWindow or FreshSoftwareInstallWindow => new[] { "ReviewButton", "ApplyButton", "CloseButton" },
             SetupWizardWindow => new[] { "SkipButton", "BackButton", "NextButton" },
@@ -168,7 +173,7 @@ internal static partial class LayoutMatrix
             var notice = Required<TextBox>(window, "RestartNotice");
             var footer = (Grid)notice.Parent;
             LayoutValidation.CheckWindowContent(window);
-            Require(notice.Visibility == Visibility.Collapsed && footer.RowDefinitions[1].ActualHeight < .5,
+            Require(notice.Visibility == Visibility.Collapsed && footer.RowDefinitions[2].ActualHeight < .5,
                 "The ordinary footer must not reserve a blank restart-notice row.");
             var ordinaryFooterHeight = footer.ActualHeight;
 
@@ -203,17 +208,17 @@ internal static partial class LayoutMatrix
 
             window.SetSyntheticRestart(false);
             LayoutValidation.CheckWindowContent(window);
-            Require(footer.RowDefinitions[1].ActualHeight < .5 && Math.Abs(footer.ActualHeight - ordinaryFooterHeight) < .5,
+            Require(footer.RowDefinitions[2].ActualHeight < .5 && Math.Abs(footer.ActualHeight - ordinaryFooterHeight) < .5,
                 "Collapsing the restart notice must recover all of its footer space.");
         }
         finally { window.Close(); }
     }
 
-    private static int CheckWizardSteps()
+    private static int CheckWizardSteps(bool textSizeOnly = false)
     {
         int cases = 0;
         foreach (bool blank in new[] { false, true })
-        foreach (var (minimum, scale) in new[] { (false, 1d), (true, 1d), (true, 1.5d) })
+        foreach (var (minimum, scale) in textSizeOnly ? new[] { (true, 1d) } : new[] { (false, 1d), (true, 1d), (true, 1.5d) })
         {
             UiFixture.Blank = blank;
             UiFixture.Minimum = minimum;
@@ -223,9 +228,9 @@ internal static partial class LayoutMatrix
             {
                 var content = (FrameworkElement)window.Content;
                 var scroll = Required<ScrollViewer>(window, "ContentScroll");
-                var pages = new[] { "WelcomePage", "ApplicationsPage", "PreferencesPage", "SummaryPage" };
-                var lastControls = new[] { "ManualChoice", "VatisButton", "StartupChoice", "SummaryText" };
-                for (int step = 0; step < 4; step++)
+                var pages = new[] { "WelcomePage", "ApplicationsPage", "GngPage", "PreferencesPage", "FontsPage", "SummaryPage" };
+                var lastControls = new[] { "ManualChoice", "VatEfsButton", "GngButton", "StartupChoice", "FontsStatus", "SummaryText" };
+                for (int step = 0; step < 6; step++)
                 {
                     Require(window.SyntheticPage == step, "Wizard navigation did not reach the intended step.");
                     LayoutValidation.CheckWindowContent(window);
@@ -235,7 +240,7 @@ internal static partial class LayoutMatrix
                     foreach (var (name, index) in pages.Select((name, index) => (name, index)))
                         Require(IsPresented(Required<FrameworkElement>(window, name)) == (index == step), "Wizard has the wrong visible page.");
                     Require(Required<Button>(window, "BackButton").IsEnabled == (step > 0), "Wizard Back availability is wrong.");
-                    Require(Equals(Required<Button>(window, "NextButton").Content, step == 3 ? "Finish" : "Next"), "Wizard final action is mislabeled.");
+                    Require(Equals(Required<Button>(window, "NextButton").Content, step == 5 ? "Finish" : "Next"), "Wizard final action is mislabeled.");
                     var page = Required<FrameworkElement>(window, pages[step]);
                     foreach (var button in LayoutValidation.Descendants(page).OfType<Button>().Where(IsPresented))
                     {
@@ -252,7 +257,7 @@ internal static partial class LayoutMatrix
                     {
                         var descriptions = LayoutValidation.Descendants(page).OfType<TextBlock>().Select(label => label.Text).ToArray();
                         foreach (var description in new[] { ApplicationDescriptions.EuroScope, ApplicationDescriptions.Vacs,
-                            ApplicationDescriptions.TrackAudio, ApplicationDescriptions.Vatis, ApplicationDescriptions.VatEfs, ApplicationDescriptions.SwedishGng })
+                            ApplicationDescriptions.TrackAudio, ApplicationDescriptions.Vatis, ApplicationDescriptions.VatEfs })
                             Require(descriptions.Contains(description), "Wizard application purpose description is missing: " + description);
                         foreach (var label in LayoutValidation.Descendants(page).OfType<TextBlock>().Where(label =>
                             label.Text is "EuroScope" or "VACS" or "TrackAudio" or "vATIS" or "VatEFS"))
@@ -286,14 +291,14 @@ internal static partial class LayoutMatrix
                         window.SetSyntheticRestart(true);
                         LayoutValidation.CheckWindowContent(window); CheckFooter(window);
                         Require(scroll.ViewportHeight > 25, "Wizard restart status leaves no usable scrolling body.");
-                        foreach (var name in new[] { "EuroScopeButton", "VacsButton", "TrackAudioButton", "VatisButton", "VatEfsButton", "ProfileButton" })
+                        foreach (var name in new[] { "EuroScopeButton", "VacsButton", "TrackAudioButton", "VatisButton", "VatEfsButton", "ProfileButton", "GngButton" })
                             Require(!Required<Button>(window, name).IsEnabled, "Further setup remained available after a synthetic restart requirement.");
                         window.SetSyntheticRestart(false);
                         window.SetSyntheticExecutablePresence(null);
                     }
-                    if (step == 3)
+                    if (step == 2) CheckWizardGngChoice(window);
+                    if (step == 5)
                     {
-                        CheckWizardGngChoice(window);
                         CheckWizardGuides(window, blank ? [] : [SetupWizardGuide.EuroScopeGng, SetupWizardGuide.TrackAudio, SetupWizardGuide.Vatis]);
                         if (!blank)
                         {
@@ -313,12 +318,12 @@ internal static partial class LayoutMatrix
                         }
                     }
                     cases++;
-                    if (step < 3) window.SyntheticNext();
+                    if (step < 5) window.SyntheticNext();
                 }
-                for (int step = 2; step >= 0; step--) { window.SyntheticBack(); Require(window.SyntheticPage == step, "Wizard Back skipped a normal step."); }
+                for (int step = 4; step >= 0; step--) { window.SyntheticBack(); Require(window.SyntheticPage == step, "Wizard Back skipped a normal step."); }
                 Required<RadioButton>(window, "ManualChoice").IsChecked = true;
                 window.SyntheticNext();
-                Require(window.SyntheticPage == 2, "Manual route must skip application setup.");
+                Require(window.SyntheticPage == 3, "Manual route must skip application and GNG setup.");
                 window.SyntheticBack();
                 Require(window.SyntheticPage == 0, "Manual route Back must return to Welcome.");
             }
@@ -418,7 +423,8 @@ internal static partial class LayoutMatrix
         var content = (FrameworkElement)window.Content;
         var scroll = Required<ScrollViewer>(window, "ContentScroll");
         var panel = Required<FrameworkElement>(window, "ReviewPanel");
-        var review = Required<TextBox>(window, "ReviewText");
+        var review = Required<TextBox>(window, "ReviewSummaryText");
+        var details = Required<Expander>(window, "ReviewDetails");
         var confirm = Required<CheckBox>(window, window is MaintenanceWindow ? "ConfirmRemoval" : window is EuroScopeInstallWindow ? "ConfirmChange" : "ConfirmInstall");
         Require(IsWithin(review, panel) && IsWithin(confirm, panel) && IsWithin(panel, scroll),
             "Review and confirmation must share the scrollable review area.");
@@ -426,6 +432,7 @@ internal static partial class LayoutMatrix
         Require(Bounds(confirm, panel).Top >= Bounds(review, panel).Bottom, "Confirmation must follow the reviewed text.");
         Require(review.IsReadOnly && review.VerticalScrollBarVisibility == ScrollBarVisibility.Auto,
             "Long review text needs a read-only scrollable viewport.");
+        Require(!details.IsExpanded, "Full technical details should be optional when opening a review.");
         UiFixture.Handle(window, window, new RoutedEventArgs(), "Review_Click");
         LayoutValidation.CheckWindowContent(window);
         Require(confirm.IsEnabled && confirm.IsChecked != true, "Synthetic review must never preconfirm the operation.");
@@ -435,6 +442,11 @@ internal static partial class LayoutMatrix
         Require(reviewBounds.Top>=-.5 && reviewBounds.Top<scroll.ActualHeight && reviewBounds.Bottom>0,
             "The shared production review helper did not bring the beginning of the review into view.");
         Require(review.CaretIndex==0 && review.VerticalOffset<.5, "The shared review helper did not start at the beginning of the review text.");
+        details.IsExpanded=true;
+        LayoutValidation.CheckWindowContent(window);
+        var fullPlan=Required<TextBox>(window,"ReviewText");
+        Require(fullPlan.IsReadOnly && IsPresented(fullPlan) && fullPlan.Text.Contains("SYNTHETIC REVIEW",StringComparison.Ordinal), "Expanding details must retain the complete exact plan.");
+        details.IsExpanded=false;
         // Separately verify that the subsequent confirmation remains reachable.
         // Do not move the viewport before checking automatic review positioning.
         confirm.BringIntoView();

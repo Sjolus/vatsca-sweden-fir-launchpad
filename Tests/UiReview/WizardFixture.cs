@@ -52,36 +52,33 @@ public partial class SetupWizardWindow : Window
 
     internal void SyntheticNext()
     {
-        if (SyntheticPage == 3)
+        if (SyntheticPage == 5)
         {
-            SyntheticGngSetupRequested = !_restartRequired && GngAfterFinishChoice.IsChecked == true;
-            StatusText.Text = SyntheticGngSetupRequested
-                ? "Synthetic finish: GNG setup was explicitly requested. No window, browser, download or installer was started."
-                : "Synthetic finish only. No preferences were saved and no clients were started.";
+            StatusText.Text = "Synthetic finish only. No preferences were saved and no clients were started.";
             return;
         }
-        SyntheticPage = SyntheticPage == 0 && ManualChoice.IsChecked == true ? 2 : SyntheticPage + 1;
+        SyntheticPage = ManualChoice.IsChecked == true ? (SyntheticPage == 0 ? 3 : 5) : SyntheticPage + 1;
         RenderSyntheticPage();
     }
 
     internal void SyntheticBack()
     {
         if (SyntheticPage == 0) return;
-        SyntheticPage = SyntheticPage == 2 && ManualChoice.IsChecked == true ? 0 : SyntheticPage - 1;
+        SyntheticPage = ManualChoice.IsChecked == true ? (SyntheticPage == 5 ? 3 : 0) : SyntheticPage - 1;
         RenderSyntheticPage();
     }
 
     private void RenderSyntheticPage()
     {
         if (!_ready) return;
-        var pages = new[] { WelcomePage, ApplicationsPage, PreferencesPage, SummaryPage };
+        var pages = new[] { WelcomePage, ApplicationsPage, GngPage, PreferencesPage, FontsPage, SummaryPage };
         for (var index = 0; index < pages.Length; index++)
             pages[index].Visibility = index == SyntheticPage ? Visibility.Visible : Visibility.Collapsed;
         bool manual = ManualChoice.IsChecked == true;
-        int step = manual && SyntheticPage > 0 ? SyntheticPage : SyntheticPage + 1;
-        StepText.Text = $"Step {step} of {(manual ? 3 : 4)} — " + new[] { "Welcome", "Applications", "Profile and preferences", "Finish" }[SyntheticPage];
+        int step = manual ? (SyntheticPage == 0 ? 1 : SyntheticPage == 3 ? 2 : 3) : SyntheticPage + 1;
+        StepText.Text = $"Step {step} of {(manual ? 3 : 6)} — " + new[] { "Welcome", "Applications", "Swedish GNG", "Controller profile", "Fonts", "Finish" }[SyntheticPage];
         BackButton.IsEnabled = SyntheticPage > 0;
-        NextButton.Content = SyntheticPage == 3 ? "Finish" : "Next";
+        NextButton.Content = SyntheticPage == 5 ? "Finish" : "Next";
         ApplicationsHint.Text = ExistingChoice.IsChecked == true
             ? "First choose the copies you already use. You can also review installing a missing program below."
             : "Choose a program to install below. If it is already on your PC, find or choose that copy instead. Each installation needs your confirmation.";
@@ -98,8 +95,9 @@ public partial class SetupWizardWindow : Window
                 : "The chosen program file was not found. You can review an installation; setup will first check for remaining program folders and settings.";
         }
         ProfileButton.IsEnabled = !_restartRequired;
-        GngAfterFinishChoice.IsEnabled = !_restartRequired;
-        if (_restartRequired) GngAfterFinishChoice.IsChecked = false;
+        GngButton.IsEnabled = !_restartRequired;
+        GngPath.Text = UiFixture.Blank ? "No data folder chosen. Find your existing GNG, or install it below." : @"Recognised GNG folder: C:\Synthetic\EuroScope data";
+        FontsInstallButton.IsEnabled = false;
         var guideSettings = _syntheticGuideSettings ?? (UiFixture.Blank ? new AppSettings() : new AppSettings
         {
             EuroscopeExePath = @"C:\Synthetic ATC applications\EuroScope.exe",
@@ -131,5 +129,16 @@ public partial class SetupWizardWindow : Window
     private void Software_Click(object sender, RoutedEventArgs e) => SyntheticAction((sender as Button)?.Tag + " setup review");
     private void Profile_Click(object sender, RoutedEventArgs e) => SyntheticAction("Controller profile review");
     private void Guide_Click(object sender, RoutedEventArgs e) => SyntheticAction("Guide " + (sender as FrameworkElement)?.Tag);
+    private void BrowseLocation_Click(object sender, RoutedEventArgs e) => SyntheticAction("Browse application location");
+    private void UseCopy_Click(object sender, RoutedEventArgs e) => SyntheticAction("Use discovered location");
+    private void NotUsed_Changed(object sender, RoutedEventArgs e) { if (_ready) SyntheticAction("Not used preference"); }
+    private void Gng_Click(object sender, RoutedEventArgs e)
+    {
+        if (_restartRequired) return;
+        SyntheticGngSetupRequested = true;
+        SyntheticAction("GNG setup handoff");
+    }
+    private void FontsCheck_Click(object sender, RoutedEventArgs e) => SyntheticAction("Font check");
+    private void FontsInstall_Click(object sender, RoutedEventArgs e) => SyntheticAction("Font previews");
     private void SyntheticAction(string action) => StatusText.Text = action + " is inert in this synthetic fixture. No files, credentials, network or applications were accessed.";
 }

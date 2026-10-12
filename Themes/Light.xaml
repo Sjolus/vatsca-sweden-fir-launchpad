@@ -32,6 +32,10 @@
     <SolidColorBrush x:Key="WarningFg" Color="#5b3a00"/>
     <SolidColorBrush x:Key="SuccessBg" Color="#deeee7"/>
     <SolidColorBrush x:Key="SuccessFg" Color="#174d3b"/>
+    <SolidColorBrush x:Key="DiffAddedBg" Color="#deeee7"/>
+    <SolidColorBrush x:Key="DiffAddedFg" Color="#174d3b"/>
+    <SolidColorBrush x:Key="DiffRemovedBg" Color="#ffe6e6"/>
+    <SolidColorBrush x:Key="DiffRemovedFg" Color="#782020"/>
     <SolidColorBrush x:Key="SelectionBg" Color="#1a475f"/>
     <SolidColorBrush x:Key="SelectionFg" Color="White"/>
     <SolidColorBrush x:Key="ButtonFocusBorder" Color="#1a475f"/>

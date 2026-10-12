@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.2.0] — 2026-10-12
+
+- Connect application selection, GNG installation, controller-profile review and font checks in a resumable setup guide. Find and choose existing copies directly beside each application.
+- Mark optional applications as Not used without clearing their paths or configuration, and show relevant update and attention counts.
+- Bring running applications forward with Show. Move normal close and confirmed force-stop actions into Details, with executable, process ID and start-time checks.
+- Add independent text sizes, an adjustable details panel, an always-on-top pin and remembered window size, position and monitor. Show the selected EuroScope profile before launch.
+- Keep recent software outcomes and recovery locations in a local Activity view. Open GNG recovery with the chosen backup suggested, retaining its normal checks and confirmation.
+- Lead installation and removal reviews with what changes, what stays and recovery guidance. Highlight GNG additions/removals and jump between change groups.
+- Make a blank Hoppie code's preview match Apply: existing Hoppie files stay unchanged.
+
 ## [2.1.0] — 2026-10-08
 
 - Install and update VatEFS from its official GitHub releases, including prereleases. Add it to the setup guide, back up managed installations before updating, and require EuroScope and the VatEFS backend to be closed. Compare the registered package version while keeping the separate browser launch.

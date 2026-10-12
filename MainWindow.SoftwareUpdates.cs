@@ -87,6 +87,7 @@ public partial class MainWindow
         CheckButton.IsEnabled = !_isChecking && !busy;
         MaintenanceButton.IsEnabled = CanRunSoftwareAction() && CanRunSelfUpdateAction();
         SetupButton.IsEnabled = CanRunSoftwareAction() && CanRunSelfUpdateAction();
+        ActivityButton.IsEnabled = !_windowClosed && !busy && !_selfUpdateActionBusy && _openDialogCount == 0 && IsEnabled;
     }
 
     private async void SoftwareUpdate_Click(object sender, RoutedEventArgs e)
@@ -115,6 +116,8 @@ public partial class MainWindow
             return;
         }
 
+        var requestedUpdate = row.SoftwareUpdate?.CanUpdate == true;
+        var previousVersion = row.SoftwareUpdate?.InstalledVersion;
         _softwareActionBusy = true;
         UpdateSelfUpdateActionEnabled();
         try
@@ -149,6 +152,14 @@ public partial class MainWindow
         finally
         {
             _setupRestartRequired |= _softwareUpdates.RestartRequired;
+            if (requestedUpdate)
+            {
+                var result = _softwareUpdates.GetState(app);
+                ActivityHistoryService.Record(ActivityHistoryService.ForSoftware(app), ActivityOperation.Update,
+                    result.Phase == SoftwareUpdatePhase.Completed ? ActivityOutcome.Completed :
+                    result.Phase == SoftwareUpdatePhase.Cancelled ? ActivityOutcome.Cancelled : ActivityOutcome.Stopped,
+                    result.LatestVersion, result.BackupFolder, restartRequired: _softwareUpdates.RestartRequired, previousVersion: previousVersion);
+            }
             _softwareActionBusy = false;
             if (!_windowClosed)
             {

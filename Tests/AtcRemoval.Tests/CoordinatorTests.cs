@@ -56,6 +56,40 @@ internal static class CoordinatorTests
                     Assert(File.Exists(download) == !selection.Downloads && File.Exists(recovery) == !selection.Backups);
                 }
             }),
+            ("activity history is reset only with preferences and logs", async () =>
+            {
+                foreach (var clearSettings in new[] { false, true })
+                {
+                    using var f = new Case();
+                    var history = f.File("local/VatscaUpdateChecker/Activity/history.json", "SYNTHETIC-ACTIVITY");
+                    var backupFile = f.File("local/VatscaUpdateChecker/CleanupBackups/session/file", "SYNTHETIC-BACKUP");
+                    var plan = f.Service.Preview([], new(clearSettings, false, false, false, !clearSettings), null);
+                    Assert(plan.DirectRemovalFiles.Files.Any(file => file.FullPath == history) == clearSettings);
+                    await f.Service.ApplyAsync(plan, null, default);
+                    Assert(File.Exists(history) != clearSettings && File.Exists(backupFile) == clearSettings);
+                    Assert(f.Service.ActivityHistoryReset == clearSettings);
+                }
+            }),
+            ("failed pre-reset validation preserves activity and does not report a reset", async () =>
+            {
+                using var f = new Case();
+                var history = f.File("local/VatscaUpdateChecker/Activity/history.json", "ORIGINAL-ACTIVITY");
+                var plan = f.Service.Preview([], new(true, false, false, false, false), null);
+                File.WriteAllText(history, "NEW-ACTIVITY");
+                await Reject(() => f.Service.ApplyAsync(plan, null, default));
+                Assert(!f.Service.ActivityHistoryReset && File.ReadAllText(history) == "NEW-ACTIVITY");
+            }),
+            ("preferences and logs reset removes current browser ownership receipts", async () =>
+            {
+                using var f = new Case();
+                var receipts = new[] { "VATIRIS.process.json", "VatEFS.process.json", "VATIRIS.pid", "VatEFS.pid" }
+                    .Select(name => f.File("roaming/VatscaUpdateChecker/" + name, "SYNTHETIC-RECEIPT")).ToArray();
+                var session = f.File("roaming/VatscaUpdateChecker/VatEFSProfile/keep", "KEEP-SESSION");
+                var plan = f.Service.Preview([], new(true, false, false, false, false), null);
+                Assert(receipts.All(path => plan.DirectRemovalFiles.Files.Any(file => file.FullPath == path)));
+                await f.Service.ApplyAsync(plan, null, default);
+                Assert(receipts.All(path => !File.Exists(path)) && File.Exists(session));
+            }),
             ("only the two explicit Credential Manager targets are deleted", async () =>
             {
                 using var f = new Case();

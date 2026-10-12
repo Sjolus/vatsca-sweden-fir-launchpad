@@ -1,6 +1,7 @@
 <Application x:Class="VatscaUpdateChecker.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:sys="clr-namespace:System;assembly=mscorlib"
              xmlns:converters="clr-namespace:VatscaUpdateChecker.Converters">
     <Application.Resources>
         <ResourceDictionary>
@@ -9,6 +10,23 @@
             </ResourceDictionary.MergedDictionaries>
             <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
             <converters:RowBackgroundConverter x:Key="RowBgConverter"/>
+            <sys:Double x:Key="TextSize11">11</sys:Double>
+            <sys:Double x:Key="TextSize12">12</sys:Double>
+            <sys:Double x:Key="TextSize13">13</sys:Double>
+            <sys:Double x:Key="TextSize14">14</sys:Double>
+            <sys:Double x:Key="TextSize15">15</sys:Double>
+            <sys:Double x:Key="TextSize16">16</sys:Double>
+            <sys:Double x:Key="TextSize17">17</sys:Double>
+            <sys:Double x:Key="TextSize18">18</sys:Double>
+            <sys:Double x:Key="TextSize19">19</sys:Double>
+            <sys:Double x:Key="TextSize20">20</sys:Double>
+            <sys:Double x:Key="TextSize21">21</sys:Double>
+            <sys:Double x:Key="TextSize22">22</sys:Double>
+            <sys:Double x:Key="TextSize23">23</sys:Double>
+            <sys:Double x:Key="TextSize24">24</sys:Double>
+            <sys:Double x:Key="CompactRowHeight">38</sys:Double>
+            <sys:Double x:Key="ExpandedRowHeight">56</sys:Double>
+            <GridLength x:Key="LaunchColumnWidth">82</GridLength>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

@@ -23,6 +23,7 @@ public partial class App : Application
             }
             var settings = SettingsService.Load();
             SetTheme(settings.IsDarkMode);
+            SetTextScale(settings.TextScale);
             MainWindow = new MaintenanceWindow(settings, uninstallLaunchpad: true);
             MainWindow.Show();
             return;
@@ -38,4 +39,6 @@ public partial class App : Application
         var uri  = new Uri(isDark ? "Themes/Dark.xaml" : "Themes/Light.xaml", UriKind.Relative);
         Current.Resources.MergedDictionaries[0] = new ResourceDictionary { Source = uri };
     }
+
+    public static void SetTextScale(double requestedScale) => PresentationResources.ApplyTextScale(Current.Resources, requestedScale);
 }

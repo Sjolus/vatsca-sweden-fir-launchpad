@@ -25,8 +25,10 @@ public partial class MainWindow
             {
                 // Reload after reset so a subsequent preference write cannot resurrect removed settings.
                 _settings = SettingsService.Load();
+                RefreshActivityNotice();
                 _isDarkMode = _settings.IsDarkMode;
                 ApplyDensity();
+                ApplyPresentationPreferences();
                 App.SetTheme(_isDarkMode);
                 ThemeToggleButton.Content = _isDarkMode ? "☀" : "☽";
                 ApplyLaunchPaths();

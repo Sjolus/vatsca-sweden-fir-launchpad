@@ -125,6 +125,125 @@ internal static class LayoutSnapshots
             }
             finally { window.Close(); }
         }
+
+        CaptureWorkflowScreens(outputDirectory);
+        UiFixture.SetTextScale(1);
+        UiFixture.Blank = UiFixture.Minimum = UiFixture.RestartRequired = false;
+        UiFixture.Scale = 1;
+    }
+
+    private static void CaptureWorkflowScreens(string outputDirectory)
+    {
+        foreach (var dark in new[] { false, true })
+        foreach (var (textScale, minimum) in new[] { (1d, false), (1d, true), (1.25d, false), (1.5d, false), (1.5d, true) })
+        {
+            if (UiFixture.Dark != dark) UiFixture.ToggleTheme();
+            UiFixture.Blank = UiFixture.RestartRequired = false;
+            UiFixture.Minimum = minimum;
+            UiFixture.Scale = 1;
+            UiFixture.SetTextScale(textScale);
+            var prefix = $"{(dark ? "dark" : "light")}-text{(int)(textScale * 100)}-{(minimum ? "minimum" : "default")}";
+            void Snapshot(Window window, string name) => Save(window, Path.Combine(outputDirectory, $"{prefix}-{name}.png"));
+
+            var main = new MainWindow { Tag = "Compact" };
+            try
+            {
+                main.RefreshSyntheticDetailsLayout();
+                Snapshot(main, "main-compact");
+                ((Button)main.FindName("DetailsSizeButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Snapshot(main, "main-details-expanded");
+            }
+            finally { main.Close(); }
+
+            var wizard = new SetupWizardWindow();
+            try
+            {
+                var pageNames = new[] { "welcome", "applications", "gng", "profile", "fonts", "finish" };
+                for (var page = 0; page < pageNames.Length; page++)
+                {
+                    Snapshot(wizard, "wizard-" + pageNames[page]);
+                    if (page is 1 or 5)
+                    {
+                        ((ScrollViewer)wizard.FindName("ContentScroll")).ScrollToEnd();
+                        Snapshot(wizard, "wizard-" + pageNames[page] + "-bottom");
+                    }
+                    if (page < pageNames.Length - 1) wizard.SyntheticNext();
+                }
+            }
+            finally { wizard.Close(); }
+
+            var settings = new SettingsWindow();
+            try
+            {
+                var choices = (StackPanel)settings.FindName("NotUsedChoices");
+                foreach (var name in ApplicationPreferences.OptionalApplications)
+                {
+                    // Match the production-generated controls, using only synthetic selections.
+                    var choice = new CheckBox
+                    {
+                        Content = name == "EuroScope (GNG Pack)" ? "Swedish GNG package" : name,
+                        Tag = name, IsChecked = name is "VACS" or "VATIRIS", Margin = new Thickness(0, 0, 0, 5),
+                    };
+                    choice.SetResourceReference(Control.ForegroundProperty, "PrimaryText");
+                    choices.Children.Add(choice);
+                }
+                Snapshot(settings, "settings");
+                for (DependencyObject? parent = choices; parent is not null; parent = LogicalTreeHelper.GetParent(parent))
+                    if (parent is Expander expander) { expander.IsExpanded = true; break; }
+                Snapshot(settings, "settings-notused");
+                choices.BringIntoView();
+                Snapshot(settings, "settings-notused-bottom");
+            }
+            finally { settings.Close(); }
+
+            var activity = new ActivityWindow();
+            try
+            {
+                var grid = (DataGrid)activity.FindName("HistoryGrid");
+                for (var index = 0; index < grid.Items.Count; index++)
+                {
+                    grid.SelectedIndex = index;
+                    Snapshot(activity, "activity-" + new[] { "gng", "vendor", "cancelled" }[index]);
+                    if (index == 0)
+                    {
+                        ((FrameworkElement)activity.FindName("GngRecoveryButton")).BringIntoView();
+                        Snapshot(activity, "activity-gng-recovery");
+                    }
+                }
+            }
+            finally { activity.Close(); }
+
+            foreach (var (name, factory) in new (string, Func<Window>)[]
+            {
+                ("maintenance", () => new MaintenanceWindow()),
+                ("euroscope", () => new EuroScopeInstallWindow()),
+                ("fresh-install", () => new FreshSoftwareInstallWindow()),
+            })
+            {
+                var review = factory();
+                try
+                {
+                    LayoutValidation.CheckWindowContent(review);
+                    UiFixture.Handle(review, review, new RoutedEventArgs(), "Review_Click");
+                    Snapshot(review, name + "-review");
+                }
+                finally { review.Close(); }
+            }
+
+            var profile = new AppConfigWindow();
+            try { Snapshot(profile, "controller-profile"); }
+            finally { profile.Close(); }
+
+            var profilePreview = UiFixture.CreateProfilePreview();
+            try
+            {
+                Snapshot(profilePreview, "controller-profile-preview");
+                ((Expander)profilePreview.FindName("ProfileDetails")).IsExpanded = true;
+                ((FrameworkElement)profilePreview.FindName("PreviewDetailsText")).BringIntoView();
+                Snapshot(profilePreview, "controller-profile-preview-details");
+            }
+            finally { profilePreview.Close(); }
+        }
     }
 
     private static void Save(Window window, string path)

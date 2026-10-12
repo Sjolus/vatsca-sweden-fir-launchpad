@@ -43,6 +43,8 @@ public partial class EuroScopeInstallWindow : Window
         ConfirmChange.IsChecked = false;
         ConfirmChange.IsEnabled = false;
         ApplyButton.IsEnabled = false;
+        ReviewSummaryText.Text = "Review the change again to see the current version, destination and recovery plan.";
+        ReviewDetails.IsExpanded = false;
     }
 
     private void ChooseBackup_Click(object sender, RoutedEventArgs e)
@@ -64,22 +66,29 @@ public partial class EuroScopeInstallWindow : Window
             var destination = string.IsNullOrWhiteSpace(BackupPath.Text) ? null : BackupPath.Text;
             _plan = await Task.Run(() => _service.Preview(_settings, destination));
             ReviewText.Text = _plan.Review;
+            ReviewSummaryText.Text = ReviewSummaries.EuroScope(_plan);
             ApplyButton.Content = _plan.Action + " supported version";
             ConfirmChange.IsEnabled = true;
-            StatusText.Text = "Review the complete plan. No download or installation has started.";
+            StatusText.Text = "Review the change and recovery folder. Expand the full plan for package checks and individual files. Nothing has been installed.";
         }
         catch (Exception ex) { StatusText.Text = ex.Message; }
         finally { SetBusy(false); }
         if (_plan != null) ShowReviewedPlan();
     }
 
-    private void ShowReviewedPlan() => ReviewScrollHelper.Show(ContentScroll, ReviewPanel, ReviewText,
+    private void ShowReviewedPlan() => ReviewScrollHelper.Show(ContentScroll, ReviewPanel, ReviewSummaryText,
         () => !_busy && _plan != null && IsVisible);
 
     private async void Apply_Click(object sender, RoutedEventArgs e)
     {
         if (_busy || _finished || _plan == null || ConfirmChange.IsChecked != true) return;
         var plan = _plan;
+        var activityOperation = plan.Action switch
+        {
+            EuroScopeInstallAction.Repair => ActivityOperation.Repair,
+            EuroScopeInstallAction.Replace => ActivityOperation.Replace,
+            _ => ActivityOperation.Install
+        };
         _cancellation = new();
         SetBusy(true, "Preparing the supported EuroScope installer…");
         try
@@ -94,6 +103,9 @@ public partial class EuroScopeInstallWindow : Window
             });
             Result = await Task.Run(() => _service.ApplyAsync(plan, progress, _cancellation.Token));
             RestartRequired |= Result.RestartRequired;
+            ActivityHistoryService.Record(ActivityApplication.EuroScope, activityOperation,
+                Result.InstallationCompleted ? ActivityOutcome.Completed : ActivityOutcome.NeedsAttention,
+                EuroScopePolicy.SupportedVersion, Result.BackupFolder, restartRequired: RestartRequired, previousVersion: plan.InstalledVersion);
             _finished = true;
             StatusText.Text = (Result.InstallationCompleted
                 ? "EuroScope " + EuroScopePolicy.SupportedVersion + " verified. The client remains closed."
@@ -101,8 +113,18 @@ public partial class EuroScopeInstallWindow : Window
                 (Result.RestartRequired ? " Windows restart required before further changes." : "") +
                 (Result.BackupFolder == null ? "" : " Recovery export: " + Result.BackupFolder);
         }
-        catch (OperationCanceledException) { StatusText.Text = "Preparation cancelled. Review again before retrying." + BackupNotice(); }
-        catch (Exception ex) { StatusText.Text = "Stopped: " + ex.Message + BackupNotice(); }
+        catch (OperationCanceledException)
+        {
+            ActivityHistoryService.Record(ActivityApplication.EuroScope, activityOperation, ActivityOutcome.Cancelled,
+                EuroScopePolicy.SupportedVersion, _service.LastBackupFolder, restartRequired: _service.RestartRequired, previousVersion: plan.InstalledVersion);
+            StatusText.Text = "Preparation cancelled. Review again before retrying." + BackupNotice();
+        }
+        catch (Exception ex)
+        {
+            ActivityHistoryService.Record(ActivityApplication.EuroScope, activityOperation, ActivityOutcome.Stopped,
+                EuroScopePolicy.SupportedVersion, _service.LastBackupFolder, restartRequired: _service.RestartRequired, previousVersion: plan.InstalledVersion);
+            StatusText.Text = "Stopped: " + ex.Message + BackupNotice();
+        }
         finally
         {
             _cancellation.Dispose();
@@ -146,6 +168,7 @@ public partial class EuroScopeInstallWindow : Window
     private async void Prerequisite_Click(object sender, RoutedEventArgs e)
     {
         if (_busy || _finished) return;
+        bool requested = false;
         InvalidateReview();
         SetBusy(true, "Checking the Visual C++ x86 prerequisite…");
         try
@@ -155,15 +178,23 @@ public partial class EuroScopeInstallWindow : Window
             if (MessageBox.Show(this, problem + "\n\nDownload and install Microsoft's signed Visual C++ x86 runtime now? Windows may request administrator approval. This is a shared Windows component and will be kept when Launchpad is removed.",
                 "EuroScope prerequisite", MessageBoxButton.YesNo, MessageBoxImage.Information) != MessageBoxResult.Yes)
             { StatusText.Text = "Runtime installation was not requested."; return; }
+            requested = true;
             var progress = new Progress<string>(message => { if (_busy) StatusText.Text = message; });
             var result = await Task.Run(() => EuroScopePrerequisiteService.InstallAsync(progress, onRestartRequired: () => RestartRequired = true));
             RestartRequired |= result.RestartRequired;
+            ActivityHistoryService.Record(ActivityApplication.EuroScope, ActivityOperation.Prerequisite,
+                ActivityOutcome.Completed, restartRequired: RestartRequired);
             StatusText.Text = result.RestartRequired
                 ? "Visual C++ installed. Restart Windows before installing EuroScope."
                 : "Visual C++ x86 is ready. Review the EuroScope change when you are ready.";
             if (result.RestartRequired) _finished = true;
         }
-        catch (Exception ex) { StatusText.Text = "Visual C++ preparation stopped: " + ex.Message; }
+        catch (Exception ex)
+        {
+            if (requested) ActivityHistoryService.Record(ActivityApplication.EuroScope, ActivityOperation.Prerequisite,
+                ActivityOutcome.Stopped, restartRequired: RestartRequired);
+            StatusText.Text = "Visual C++ preparation stopped: " + ex.Message;
+        }
         finally { KeepRestartRequirement(); SetBusy(false); }
     }
     private void Removal_Click(object sender, RoutedEventArgs e) { RemovalRequested = true; Close(); }

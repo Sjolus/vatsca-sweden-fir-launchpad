@@ -5,7 +5,7 @@
         Height="720" Width="560" MinHeight="400" MinWidth="440"
         ResizeMode="CanResize"
         WindowStartupLocation="CenterOwner"
-        Background="{DynamicResource AppBg}">
+        Background="{DynamicResource AppBg}" FontSize="{DynamicResource TextSize12}">
 
     <DockPanel Margin="20">
 
@@ -39,16 +39,16 @@
         <!-- Sync status banner -->
         <Border x:Name="SyncBanner"
                 Padding="10,8" Margin="0,0,0,16">
-            <TextBlock x:Name="SyncText" Foreground="{DynamicResource WarningFg}" FontSize="12" TextWrapping="Wrap"/>
+            <TextBlock x:Name="SyncText" Foreground="{DynamicResource WarningFg}" FontSize="{DynamicResource TextSize12}" TextWrapping="Wrap"/>
         </Border>
 
         <TextBlock Text="EuroScope profile folder" FontWeight="SemiBold" Margin="0,0,0,4"
                    Foreground="{DynamicResource PrimaryText}"/>
         <TextBox x:Name="TargetPathText" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="80"
-                 VerticalScrollBarVisibility="Auto" Padding="6,5" FontSize="12"
+                 VerticalScrollBarVisibility="Auto" Padding="6,5" FontSize="{DynamicResource TextSize12}"
                  AutomationProperties.Name="EuroScope profile folder"/>
         <TextBlock x:Name="ApplyHintText" TextWrapping="Wrap" Margin="0,6,0,16"
-                   Foreground="{DynamicResource SecondaryText}" FontSize="12"/>
+                   Foreground="{DynamicResource SecondaryText}" FontSize="{DynamicResource TextSize12}"/>
 
         <!-- Fields -->
         <StackPanel>
@@ -56,17 +56,17 @@
             <!-- Name -->
             <TextBlock Text="Full Name" FontWeight="SemiBold" Margin="0,0,0,4"
                        Foreground="{DynamicResource PrimaryText}"/>
-            <TextBox x:Name="NameBox" Margin="0,0,0,14" Padding="6,5" FontFamily="Consolas" FontSize="12" AutomationProperties.Name="Full name"/>
+            <TextBox x:Name="NameBox" Margin="0,0,0,14" Padding="6,5" FontFamily="Consolas" FontSize="{DynamicResource TextSize12}" AutomationProperties.Name="Full name"/>
 
             <!-- Rating -->
             <TextBlock Text="VATSIM Rating" FontWeight="SemiBold" Margin="0,0,0,4"
                        Foreground="{DynamicResource PrimaryText}"/>
-            <ComboBox x:Name="RatingBox" Margin="0,0,0,14" Padding="6,5" FontSize="12" AutomationProperties.Name="VATSIM rating"/>
+            <ComboBox x:Name="RatingBox" Margin="0,0,0,14" Padding="6,5" FontSize="{DynamicResource TextSize12}" AutomationProperties.Name="VATSIM rating"/>
 
             <!-- CID -->
             <TextBlock Text="VATSIM CID" FontWeight="SemiBold" Margin="0,0,0,4"
                        Foreground="{DynamicResource PrimaryText}"/>
-            <TextBox x:Name="CidBox" Margin="0,0,0,14" Padding="6,5" FontFamily="Consolas" FontSize="12" AutomationProperties.Name="VATSIM CID"/>
+            <TextBox x:Name="CidBox" Margin="0,0,0,14" Padding="6,5" FontFamily="Consolas" FontSize="{DynamicResource TextSize12}" AutomationProperties.Name="VATSIM CID"/>
 
             <!-- Password -->
             <TextBlock Text="VATSIM Password" FontWeight="SemiBold" Margin="0,0,0,4"
@@ -76,15 +76,15 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <PasswordBox x:Name="PasswordBox"    Padding="6,5" FontFamily="Consolas" FontSize="12" AutomationProperties.Name="VATSIM password"/>
-                <TextBox    x:Name="PasswordBoxText" Padding="6,5" FontFamily="Consolas" FontSize="12"
+                <PasswordBox x:Name="PasswordBox"    Padding="6,5" FontFamily="Consolas" FontSize="{DynamicResource TextSize12}" AutomationProperties.Name="VATSIM password"/>
+                <TextBox    x:Name="PasswordBoxText" Padding="6,5" FontFamily="Consolas" FontSize="{DynamicResource TextSize12}"
                              Visibility="Collapsed" AutomationProperties.Name="VATSIM password, visible"/>
                 <Button Grid.Column="1" x:Name="TogglePassword" Content="Show"
                         Padding="8,5" Margin="4,0,0,0" Cursor="Hand"
                         Click="TogglePassword_Click" AutomationProperties.Name="Show VATSIM password"/>
             </Grid>
             <TextBlock Text="Stored in Windows Credential Manager. Applying also writes the password into EuroScope profile files."
-                       FontSize="11" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,14" TextWrapping="Wrap"/>
+                       FontSize="{DynamicResource TextSize11}" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,14" TextWrapping="Wrap"/>
 
             <!-- Hoppie Code -->
             <TextBlock Text="Hoppie ACARS Code (optional)" FontWeight="SemiBold" Margin="0,0,0,4"
@@ -94,15 +94,15 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <PasswordBox x:Name="HoppieBox"     Padding="6,5" FontFamily="Consolas" FontSize="12" AutomationProperties.Name="Hoppie ACARS code, optional"/>
-                <TextBox    x:Name="HoppieBoxText"  Padding="6,5" FontFamily="Consolas" FontSize="12"
+                <PasswordBox x:Name="HoppieBox"     Padding="6,5" FontFamily="Consolas" FontSize="{DynamicResource TextSize12}" AutomationProperties.Name="Hoppie ACARS code, optional"/>
+                <TextBox    x:Name="HoppieBoxText"  Padding="6,5" FontFamily="Consolas" FontSize="{DynamicResource TextSize12}"
                              Visibility="Collapsed" AutomationProperties.Name="Hoppie ACARS code, optional, visible"/>
                 <Button Grid.Column="1" x:Name="ToggleHoppie" Content="Show"
                         Padding="8,5" Margin="4,0,0,0" Cursor="Hand"
                         Click="ToggleHoppie_Click" AutomationProperties.Name="Show Hoppie ACARS code"/>
             </Grid>
             <TextBlock Text="For Hoppie data-link messaging. Stored in Windows Credential Manager; applying a code also writes it into plugin files. Leave blank if unused. This does not remove codes already in those files."
-                       FontSize="11" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,14" TextWrapping="Wrap"/>
+                       FontSize="{DynamicResource TextSize11}" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,14" TextWrapping="Wrap"/>
 
             <!-- OBS Callsign -->
             <TextBlock Text="OBS Callsign Prefix (optional)" FontWeight="SemiBold" Margin="0,0,0,4"
@@ -112,13 +112,13 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <TextBox x:Name="ObsBox" Padding="6,5" FontFamily="Consolas" FontSize="12" AutomationProperties.Name="OBS callsign prefix, optional"/>
+                <TextBox x:Name="ObsBox" Padding="6,5" FontFamily="Consolas" FontSize="{DynamicResource TextSize12}" AutomationProperties.Name="OBS callsign prefix, optional"/>
                 <TextBlock Grid.Column="1" Text="_OBS" VerticalAlignment="Center"
                            Margin="6,0,0,0" Foreground="{DynamicResource SecondaryText}"
-                           FontFamily="Consolas" FontSize="12"/>
+                           FontFamily="Consolas" FontSize="{DynamicResource TextSize12}"/>
             </Grid>
             <TextBlock Text="Creates an observer login callsign: enter ES for ES_OBS in LoginProfiles.txt. Leave blank to keep existing observer logins unchanged."
-                       FontSize="11" Foreground="{DynamicResource SecondaryText}" TextWrapping="Wrap"/>
+                       FontSize="{DynamicResource TextSize11}" Foreground="{DynamicResource SecondaryText}" TextWrapping="Wrap"/>
 
             <!-- VatEFS plugin toggle -->
             <CheckBox x:Name="PatchVatEfsBox" Margin="0,18,0,0"
@@ -126,7 +126,7 @@
                 <TextBlock Text="Enable VatEFS plugin in EuroScope .prf files" TextWrapping="Wrap"/>
             </CheckBox>
             <TextBlock Text="Adds VatEFS.dll + draw permissions when checked, removes them when unchecked. Requires VatEFS folder set in Settings."
-                       FontSize="11" Foreground="{DynamicResource SecondaryText}" Margin="22,2,0,0"
+                       FontSize="{DynamicResource TextSize11}" Foreground="{DynamicResource SecondaryText}" Margin="22,2,0,0"
                        TextWrapping="Wrap"/>
 
         </StackPanel>

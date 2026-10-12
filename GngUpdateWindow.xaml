@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Install or update Swedish GNG" Width="1040" Height="760" MinWidth="760" MinHeight="650"
         WindowStartupLocation="CenterOwner" Background="{DynamicResource AppBg}" Foreground="{DynamicResource PrimaryText}"
-        Closing="Window_Closing" Closed="Window_Closed">
+        Closing="Window_Closing" Closed="Window_Closed" FontSize="{DynamicResource TextSize12}">
     <Window.Resources>
         <Style TargetType="DataGridColumnHeader">
             <Setter Property="Background" Value="{DynamicResource ColumnHeaderBg}"/>
@@ -25,7 +25,7 @@
     <Grid Margin="18">
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
         <StackPanel Margin="0,0,0,8">
-            <TextBlock Text="Install or update Swedish GNG" FontSize="22" FontWeight="SemiBold" TextWrapping="Wrap"/>
+            <TextBlock Text="Install or update Swedish GNG" FontSize="{DynamicResource TextSize22}" FontWeight="SemiBold" TextWrapping="Wrap"/>
             <TextBlock x:Name="StepText" Text="1  Get a package   →   2  Review and install   →   3  Optional cleanup"
                        Foreground="{DynamicResource SecondaryText}" TextWrapping="Wrap" Margin="0,6,0,0"/>
         </StackPanel>
@@ -45,7 +45,7 @@
             <Grid>
                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <StackPanel>
-                    <TextBlock x:Name="DownloadStageText" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,0,3"
+                    <TextBlock x:Name="DownloadStageText" FontSize="{DynamicResource TextSize15}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,0,3"
                                Visibility="Collapsed" AutomationProperties.Name="Current GNG operation"/>
                     <TextBox x:Name="StatusText" Text="Choose Download Swedish GNG or Import ZIP to begin. Opening this window does not start a download."
                              IsReadOnly="True" IsReadOnlyCaretVisible="True" TextWrapping="Wrap" MaxHeight="75" VerticalScrollBarVisibility="Auto" Background="Transparent" BorderThickness="0"
@@ -81,7 +81,7 @@
                     <Border x:Name="StartPanel" Grid.Row="1" Background="{DynamicResource RowBg}" Padding="20">
                         <ScrollViewer VerticalScrollBarVisibility="Auto">
                             <StackPanel VerticalAlignment="Center" MaxWidth="650">
-                                <TextBlock x:Name="StartHeading" Text="Get your GNG package" FontSize="21" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                <TextBlock x:Name="StartHeading" Text="Get your GNG package" FontSize="{DynamicResource TextSize21}" FontWeight="SemiBold" TextWrapping="Wrap"/>
                                 <TextBlock x:Name="StartExplanation" Text="Launchpad checks AeroNav's current version and matching saved packages first, then downloads what is missing. Sign in if asked. You review the changes before installing; your website sign-in stays in this browser."
                                            TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,10,0,12"/>
                                 <TextBlock x:Name="PackageKindText" TextWrapping="Wrap" Margin="0,0,0,12" FontWeight="SemiBold"/>
@@ -89,7 +89,7 @@
                                     <Button x:Name="StartBrowserButton" Content="Download Swedish GNG" Click="StartBrowser_Click" Margin="0,0,8,8"
                                             ToolTip="Check AeroNav's current version and reuse matching saved packages first. Download missing packages, then review before installing."/>
                                     <Button x:Name="FreshDownloadButton" Content="Download fresh copies" Click="FreshDownload_Click" Margin="0,0,8,8"
-                                            FontSize="11" Padding="10,5" Foreground="{DynamicResource SecondaryText}"
+                                            FontSize="{DynamicResource TextSize11}" Padding="10,5" Foreground="{DynamicResource SecondaryText}"
                                             ToolTip="Ignore saved packages and download fresh copies from AeroNav. Installation still requires your review."/>
                                     <Button x:Name="RuntimeInstallButton" Content="Install WebView2…" Click="InstallRuntime_Click" Visibility="Collapsed" Margin="0,0,8,8"/>
                                     <Button x:Name="RuntimeInfoButton" Content="Runtime information ↗" Click="RuntimeInfo_Click" Visibility="Collapsed" Margin="0,0,0,8"/>
@@ -106,7 +106,7 @@
                         <Border HorizontalAlignment="Center" VerticalAlignment="Center" Margin="24" Padding="20,16"
                                 MaxWidth="460" Background="{DynamicResource RowBg}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1" CornerRadius="4">
                             <StackPanel>
-                                <TextBlock x:Name="BrowserOverlayTitle" FontSize="17" FontWeight="SemiBold" TextWrapping="Wrap" TextAlignment="Center">
+                                <TextBlock x:Name="BrowserOverlayTitle" FontSize="{DynamicResource TextSize17}" FontWeight="SemiBold" TextWrapping="Wrap" TextAlignment="Center">
                                     <TextBlock.Style>
                                         <Style TargetType="TextBlock">
                                             <Setter Property="Text" Value="{Binding Text, ElementName=DownloadStageText}"/>
@@ -138,17 +138,29 @@
                     </Grid>
                 </Grid>
                 <Grid x:Name="ReviewPanel" Visibility="Collapsed" Margin="10">
-                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                    <DockPanel Margin="0,0,0,8">
-                        <Button x:Name="ChooseAnotherButton" DockPanel.Dock="Right" Content="Choose another package" Click="ChooseAnother_Click" Margin="12,0,0,0" VerticalAlignment="Top"/>
+                    <Grid.RowDefinitions><RowDefinition Height="*" MaxHeight="230"/><RowDefinition Height="Auto"/><RowDefinition Height="2*" MinHeight="90"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <ScrollViewer x:Name="ReviewInformationScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Margin="0,0,0,8"
+                                  AutomationProperties.Name="Package summary and recovery details">
                         <StackPanel>
-                            <TextBlock x:Name="PackageText" TextWrapping="Wrap" FontSize="17" FontWeight="SemiBold"/>
-                            <TextBlock x:Name="PackageSummaryText" Foreground="{DynamicResource SecondaryText}" TextWrapping="Wrap" Margin="0,3,0,0"/>
+                            <DockPanel Margin="0,0,0,8">
+                                <Button x:Name="ChooseAnotherButton" DockPanel.Dock="Right" Content="Choose another package" Click="ChooseAnother_Click" Margin="12,0,0,0" VerticalAlignment="Top"/>
+                                <StackPanel>
+                                    <TextBlock x:Name="PackageText" TextWrapping="Wrap" FontSize="{DynamicResource TextSize17}" FontWeight="SemiBold"/>
+                                    <TextBlock x:Name="PackageSummaryText" Foreground="{DynamicResource SecondaryText}" TextWrapping="Wrap" Margin="0,3,0,0"/>
+                                </StackPanel>
+                            </DockPanel>
+                            <TextBox x:Name="ReviewSummaryText" IsReadOnly="True" IsReadOnlyCaretVisible="True" TextWrapping="Wrap"
+                                     VerticalScrollBarVisibility="Disabled" Padding="8"
+                                     Background="{DynamicResource RowAltBg}" Foreground="{DynamicResource PrimaryText}"
+                                     AutomationProperties.Name="GNG changes, preserved settings and recovery"/>
+                            <Expander x:Name="ReviewDetails" Header="Package rules and full recovery details" Foreground="{DynamicResource PrimaryText}" Margin="0,6,0,0"
+                                      Expanded="ReviewDetails_Expanded">
+                                <TextBox x:Name="WarningsText" IsReadOnly="True" IsReadOnlyCaretVisible="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" MaxHeight="90"
+                                         Background="{DynamicResource RowAltBg}" Foreground="{DynamicResource PrimaryText}" Padding="8" AutomationProperties.Name="Installation review and backup location"/>
+                            </Expander>
                         </StackPanel>
-                    </DockPanel>
-                    <TextBox x:Name="WarningsText" Grid.Row="1" IsReadOnly="True" IsReadOnlyCaretVisible="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" MaxHeight="60"
-                             Background="{DynamicResource RowAltBg}" Foreground="{DynamicResource PrimaryText}" Padding="8" Margin="0,0,0,8" AutomationProperties.Name="Installation review and backup location"/>
-                    <DockPanel Grid.Row="2" Margin="0,0,0,6">
+                    </ScrollViewer>
+                    <DockPanel Grid.Row="1" Margin="0,0,0,6">
                         <CheckBox x:Name="ShowUnchangedFiles" DockPanel.Dock="Right" Content="Show unchanged files"
                                   Checked="ReviewFilterChanged" Unchecked="ReviewFilterChanged" Margin="12,0,0,0"
                                   Foreground="{DynamicResource PrimaryText}" VerticalAlignment="Center"
@@ -156,11 +168,11 @@
                         <TextBlock x:Name="FileSummaryText" TextWrapping="Wrap" VerticalAlignment="Center"
                                    AutomationProperties.Name="GNG file change counts"/>
                     </DockPanel>
-                    <Grid Grid.Row="3">
+                    <Grid Grid.Row="2">
                         <DataGrid x:Name="FilesGrid" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" CanUserDeleteRows="False" CanUserResizeRows="False"
                                   CanUserReorderColumns="False" HeadersVisibility="Column" GridLinesVisibility="Horizontal" Background="{DynamicResource RowBg}" Foreground="{DynamicResource PrimaryText}"
                                   RowBackground="{DynamicResource RowBg}" AlternatingRowBackground="{DynamicResource RowAltBg}" HorizontalGridLinesBrush="{DynamicResource DividerBrush}" BorderThickness="0"
-                                  MouseDoubleClick="FilesGrid_MouseDoubleClick" SelectionMode="Single"
+                                  MouseDoubleClick="FilesGrid_MouseDoubleClick" SelectionMode="Single" VirtualizingPanel.ScrollUnit="Pixel"
                                   AutomationProperties.Name="Proposed GNG file changes">
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="Action" Binding="{Binding Action}" Width="115" ElementStyle="{StaticResource FileText}"/>
@@ -180,13 +192,13 @@
                         <TextBlock x:Name="NoFileChangesText" Visibility="Collapsed" TextWrapping="Wrap" Margin="8" VerticalAlignment="Center"
                                    Text="No files will be changed. Show unchanged files to see what already matches or will be kept."/>
                     </Grid>
-                    <CheckBox x:Name="ConfirmInstall" Grid.Row="4" Checked="ConfirmationChanged" Unchecked="ConfirmationChanged" Margin="0,10,0,0" Foreground="{DynamicResource PrimaryText}">
+                    <CheckBox x:Name="ConfirmInstall" Grid.Row="3" Checked="ConfirmationChanged" Unchecked="ConfirmationChanged" Margin="0,10,0,0" Foreground="{DynamicResource PrimaryText}">
                         <TextBlock Text="I have reviewed the changes and destination folder. EuroScope is closed." TextWrapping="Wrap"/>
                     </CheckBox>
                 </Grid>
                 <ScrollViewer x:Name="CompletePanel" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" Margin="20">
                     <StackPanel>
-                        <TextBlock x:Name="CompleteTitle" FontSize="22" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                        <TextBlock x:Name="CompleteTitle" FontSize="{DynamicResource TextSize22}" FontWeight="SemiBold" TextWrapping="Wrap"/>
                         <TextBox x:Name="CompleteText" IsReadOnly="True" IsReadOnlyCaretVisible="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" MaxHeight="135"
                                  Background="Transparent" BorderThickness="0" Foreground="{DynamicResource PrimaryText}" Margin="0,10,0,14" AutomationProperties.Name="Installation or restore result"/>
                         <TextBlock Text="Keep your recovery backup" FontWeight="SemiBold" Margin="0,0,0,6"/>

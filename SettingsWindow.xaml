@@ -6,7 +6,7 @@
         Height="670" Width="660" MinHeight="500" MinWidth="580"
         ResizeMode="CanResize"
         WindowStartupLocation="CenterOwner"
-        Background="{DynamicResource AppBg}">
+        Background="{DynamicResource AppBg}" FontSize="{DynamicResource TextSize12}">
 
     <DockPanel Margin="20">
 
@@ -50,11 +50,29 @@
         <StackPanel>
 
             <!-- Startup behaviour -->
-            <TextBlock Text="Preferences" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryText}" Margin="0,0,0,10"/>
+            <TextBlock Text="Preferences" FontSize="{DynamicResource TextSize16}" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryText}" Margin="0,0,0,10"/>
             <CheckBox x:Name="CheckOnStartup" Content="Check for updates automatically on startup"
                       Margin="0,0,0,6" Foreground="{DynamicResource PrimaryText}"/>
             <TextBlock Text="Checks only. Downloads and installations always need your action." TextWrapping="Wrap"
                        Foreground="{DynamicResource SecondaryText}" Margin="22,0,0,20"/>
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                <TextBlock Text="Text size" VerticalAlignment="Center" Margin="0,0,12,0" Foreground="{DynamicResource PrimaryText}"/>
+                <ComboBox x:Name="TextSizeChoice" MinWidth="150" SelectedIndex="0" AutomationProperties.Name="Text size">
+                    <ComboBoxItem Content="Standard (100%)" Tag="1"/>
+                    <ComboBoxItem Content="Larger (125%)" Tag="1.25"/>
+                    <ComboBoxItem Content="Largest (150%)" Tag="1.5"/>
+                </ComboBox>
+            </StackPanel>
+            <TextBlock Text="Text size is independent of Compact or Expanded rows. Changes apply when you save." TextWrapping="Wrap"
+                       Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,10"/>
+            <CheckBox x:Name="AlwaysOnTopChoice" Content="Keep Launchpad on top of other windows" Foreground="{DynamicResource PrimaryText}" Margin="0,0,0,14"/>
+            <Expander Header="Applications I don't use" Foreground="{DynamicResource PrimaryText}" Margin="0,0,0,14">
+                <StackPanel Margin="0,8,0,0">
+                    <TextBlock Text="Checked applications are marked Not used and excluded from the attention count. Their saved locations and data are kept. Uncheck to include them again."
+                               TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,8"/>
+                    <StackPanel x:Name="NotUsedChoices"/>
+                </StackPanel>
+            </Expander>
 
             <Expander x:Name="ApplicationPaths" Header="Program files and data folders" IsExpanded="False" Foreground="{DynamicResource PrimaryText}">
             <StackPanel Margin="0,12,0,0">
@@ -74,7 +92,7 @@
                     <ColumnDefinition Width="8"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <TextBox x:Name="EuroscopeExePath" TextChanged="Path_Changed" AutomationProperties.Name="EuroScope executable path" Grid.Column="0" Padding="6,5" FontFamily="Consolas" FontSize="12"/>
+                <TextBox x:Name="EuroscopeExePath" TextChanged="Path_Changed" AutomationProperties.Name="EuroScope executable path" Grid.Column="0" Padding="6,5" FontFamily="Consolas" FontSize="{DynamicResource TextSize12}"/>
                 <Button  Grid.Column="2" Content="Suggested" Padding="8,5" Cursor="Hand"
                          ToolTip="Fill in the usual location, then check the result. This does not install anything."
                          AutomationProperties.Name="{Binding Tag, RelativeSource={RelativeSource Self}, StringFormat='Use typical {0} path'}" Click="InsertDefault_Click" Tag="EuroScope"/>
@@ -83,7 +101,7 @@
                 <Button  Grid.Column="6" Content="Browse…" Padding="10,5" Cursor="Hand"
                          AutomationProperties.Name="{Binding Tag, RelativeSource={RelativeSource Self}, StringFormat='Browse for {0} executable'}" Click="BrowseExe_Click" Tag="EuroScope"/>
             </Grid>
-            <TextBlock x:Name="EuroscopeExeStatus" TextWrapping="Wrap" FontSize="12" Margin="0,0,0,10"
+            <TextBlock x:Name="EuroscopeExeStatus" TextWrapping="Wrap" FontSize="{DynamicResource TextSize12}" Margin="0,0,0,10"
                        Foreground="{DynamicResource SecondaryText}" AutomationProperties.Name="EuroScope program check"
                        AutomationProperties.LiveSetting="Polite"/>
 
@@ -100,7 +118,7 @@
                     <ColumnDefinition Width="8"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <TextBox x:Name="EuroscopePath" TextChanged="Path_Changed" AutomationProperties.Name="EuroScope data folder" Grid.Column="0" Padding="6,5" FontFamily="Consolas" FontSize="12"/>
+                <TextBox x:Name="EuroscopePath" TextChanged="Path_Changed" AutomationProperties.Name="EuroScope data folder" Grid.Column="0" Padding="6,5" FontFamily="Consolas" FontSize="{DynamicResource TextSize12}"/>
                 <Button  Grid.Column="2" Content="Suggested" Padding="8,5" Cursor="Hand"
                          ToolTip="Fill in the usual location, then check the result. This does not install anything."
                          AutomationProperties.Name="{Binding Tag, RelativeSource={RelativeSource Self}, StringFormat='Use typical {0} path'}" Click="InsertDefault_Click" Tag="EuroscopeData"/>
@@ -109,13 +127,13 @@
                 <Button  Grid.Column="6" Content="Browse…" Padding="10,5" Cursor="Hand"
                          AutomationProperties.Name="{Binding Tag, RelativeSource={RelativeSource Self}, StringFormat='Browse for {0} folder'}" Click="BrowseFolder_Click" Tag="EuroscopeData"/>
             </Grid>
-            <TextBlock x:Name="EuroscopeDataStatus" TextWrapping="Wrap" FontSize="12" Margin="0,0,0,10"
+            <TextBlock x:Name="EuroscopeDataStatus" TextWrapping="Wrap" FontSize="{DynamicResource TextSize12}" Margin="0,0,0,10"
                        Foreground="{DynamicResource SecondaryText}" AutomationProperties.Name="Swedish GNG folder check"
                        AutomationProperties.LiveSetting="Polite"/>
             <TextBlock Text="{x:Static models:ApplicationDescriptions.SwedishGng}"
-                       TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,4"/>
+                       TextWrapping="Wrap" FontSize="{DynamicResource TextSize12}" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,4"/>
             <TextBlock Text="Choose the folder containing the ESAA folder, Swedish profiles (.prf) and ESAA-Sweden sector files (.sct/.ese). Do not choose the ESAA folder itself." TextWrapping="Wrap"
-                       FontSize="12" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,12"/>
+                       FontSize="{DynamicResource TextSize12}" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,12"/>
 
             <!-- TrackAudio -->
             <TextBlock Text="TrackAudio program (trackaudio.exe)" FontWeight="SemiBold" Margin="0,0,0,4"
@@ -130,7 +148,7 @@
                     <ColumnDefinition Width="8"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <TextBox x:Name="TrackAudioPath" TextChanged="Path_Changed" AutomationProperties.Name="TrackAudio executable path" Grid.Column="0" Padding="6,5" FontFamily="Consolas" FontSize="12"/>
+                <TextBox x:Name="TrackAudioPath" TextChanged="Path_Changed" AutomationProperties.Name="TrackAudio executable path" Grid.Column="0" Padding="6,5" FontFamily="Consolas" FontSize="{DynamicResource TextSize12}"/>
                 <Button  Grid.Column="2" Content="Suggested" Padding="8,5" Cursor="Hand"
                          ToolTip="Fill in the usual location, then check the result. This does not install anything."
                          AutomationProperties.Name="{Binding Tag, RelativeSource={RelativeSource Self}, StringFormat='Use typical {0} path'}" Click="InsertDefault_Click" Tag="TrackAudio"/>
@@ -139,7 +157,7 @@
                 <Button  Grid.Column="6" Content="Browse…" Padding="10,5" Cursor="Hand"
                          AutomationProperties.Name="{Binding Tag, RelativeSource={RelativeSource Self}, StringFormat='Browse for {0} executable'}" Click="BrowseExe_Click" Tag="TrackAudio"/>
             </Grid>
-            <TextBlock x:Name="TrackAudioStatus" TextWrapping="Wrap" FontSize="12" Margin="0,0,0,10"
+            <TextBlock x:Name="TrackAudioStatus" TextWrapping="Wrap" FontSize="{DynamicResource TextSize12}" Margin="0,0,0,10"
                        Foreground="{DynamicResource SecondaryText}" AutomationProperties.Name="TrackAudio program check"
                        AutomationProperties.LiveSetting="Polite"/>
 
@@ -156,7 +174,7 @@
                     <ColumnDefinition Width="8"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <TextBox x:Name="VacsPath" TextChanged="Path_Changed" AutomationProperties.Name="VACS executable path" Grid.Column="0" Padding="6,5" FontFamily="Consolas" FontSize="12"/>
+                <TextBox x:Name="VacsPath" TextChanged="Path_Changed" AutomationProperties.Name="VACS executable path" Grid.Column="0" Padding="6,5" FontFamily="Consolas" FontSize="{DynamicResource TextSize12}"/>
                 <Button  Grid.Column="2" Content="Suggested" Padding="8,5" Cursor="Hand"
                          ToolTip="Fill in the usual location, then check the result. This does not install anything."
                          AutomationProperties.Name="{Binding Tag, RelativeSource={RelativeSource Self}, StringFormat='Use typical {0} path'}" Click="InsertDefault_Click" Tag="VACS"/>
@@ -165,7 +183,7 @@
                 <Button  Grid.Column="6" Content="Browse…" Padding="10,5" Cursor="Hand"
                          AutomationProperties.Name="{Binding Tag, RelativeSource={RelativeSource Self}, StringFormat='Browse for {0} executable'}" Click="BrowseExe_Click" Tag="VACS"/>
             </Grid>
-            <TextBlock x:Name="VacsStatus" TextWrapping="Wrap" FontSize="12" Margin="0,0,0,10"
+            <TextBlock x:Name="VacsStatus" TextWrapping="Wrap" FontSize="{DynamicResource TextSize12}" Margin="0,0,0,10"
                        Foreground="{DynamicResource SecondaryText}" AutomationProperties.Name="VACS program check"
                        AutomationProperties.LiveSetting="Polite"/>
 
@@ -182,7 +200,7 @@
                     <ColumnDefinition Width="8"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <TextBox x:Name="VatisPath" TextChanged="Path_Changed" AutomationProperties.Name="vATIS executable path" Grid.Column="0" Padding="6,5" FontFamily="Consolas" FontSize="12"/>
+                <TextBox x:Name="VatisPath" TextChanged="Path_Changed" AutomationProperties.Name="vATIS executable path" Grid.Column="0" Padding="6,5" FontFamily="Consolas" FontSize="{DynamicResource TextSize12}"/>
                 <Button  Grid.Column="2" Content="Suggested" Padding="8,5" Cursor="Hand"
                          ToolTip="Fill in the usual location, then check the result. This does not install anything."
                          AutomationProperties.Name="{Binding Tag, RelativeSource={RelativeSource Self}, StringFormat='Use typical {0} path'}" Click="InsertDefault_Click" Tag="vATIS"/>
@@ -191,7 +209,7 @@
                 <Button  Grid.Column="6" Content="Browse…" Padding="10,5" Cursor="Hand"
                          AutomationProperties.Name="{Binding Tag, RelativeSource={RelativeSource Self}, StringFormat='Browse for {0} executable'}" Click="BrowseExe_Click" Tag="vATIS"/>
             </Grid>
-            <TextBlock x:Name="VatisStatus" TextWrapping="Wrap" FontSize="12" Margin="0,0,0,10"
+            <TextBlock x:Name="VatisStatus" TextWrapping="Wrap" FontSize="{DynamicResource TextSize12}" Margin="0,0,0,10"
                        Foreground="{DynamicResource SecondaryText}" AutomationProperties.Name="vATIS program check"
                        AutomationProperties.LiveSetting="Polite"/>
 
@@ -208,7 +226,7 @@
                     <ColumnDefinition Width="8"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <TextBox x:Name="VatEfsPath" TextChanged="Path_Changed" AutomationProperties.Name="VatEFS folder" Grid.Column="0" Padding="6,5" FontFamily="Consolas" FontSize="12"/>
+                <TextBox x:Name="VatEfsPath" TextChanged="Path_Changed" AutomationProperties.Name="VatEFS folder" Grid.Column="0" Padding="6,5" FontFamily="Consolas" FontSize="{DynamicResource TextSize12}"/>
                 <Button  Grid.Column="2" Content="Suggested" Padding="8,5" Cursor="Hand"
                          ToolTip="Fill in the usual location, then check the result. This does not install anything."
                          AutomationProperties.Name="{Binding Tag, RelativeSource={RelativeSource Self}, StringFormat='Use typical {0} path'}" Click="InsertDefault_Click" Tag="VatEFS"/>
@@ -217,13 +235,13 @@
                 <Button  Grid.Column="6" Content="Browse…" Padding="10,5" Cursor="Hand"
                          AutomationProperties.Name="{Binding Tag, RelativeSource={RelativeSource Self}, StringFormat='Browse for {0} folder'}" Click="BrowseFolder_Click" Tag="VatEFS"/>
             </Grid>
-            <TextBlock x:Name="VatEfsStatus" TextWrapping="Wrap" FontSize="12" Margin="0,0,0,10"
+            <TextBlock x:Name="VatEfsStatus" TextWrapping="Wrap" FontSize="{DynamicResource TextSize12}" Margin="0,0,0,10"
                        Foreground="{DynamicResource SecondaryText}" AutomationProperties.Name="VatEFS folder check"
                        AutomationProperties.LiveSetting="Polite"/>
             <TextBlock Text="{x:Static models:ApplicationDescriptions.VatEfs}"
-                       TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource SecondaryText}" Margin="0,4,0,0"/>
+                       TextWrapping="Wrap" FontSize="{DynamicResource TextSize12}" Foreground="{DynamicResource SecondaryText}" Margin="0,4,0,0"/>
             <TextBlock Text="Choose the folder containing VatEFS.dll. Controller profile uses this file when you enable the flight-strip plugin." TextWrapping="Wrap"
-                       FontSize="12" Foreground="{DynamicResource SecondaryText}" Margin="0,2,0,0"/>
+                       FontSize="{DynamicResource TextSize12}" Foreground="{DynamicResource SecondaryText}" Margin="0,2,0,0"/>
 
             </StackPanel>
             </Expander>

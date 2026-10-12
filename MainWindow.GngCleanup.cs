@@ -15,7 +15,7 @@ public partial class MainWindow
             // The dialog owns the local modal gate. Archive and restore take MaintenanceLock
             // inside the service so their filesystem validation shares the same lease.
             var window = new GngCleanupWindow(_settings.EuroscopeDataPath, _settings.LastEuroscopeProfile,
-                CleanupProtectedPaths()) { Owner = this };
+                CleanupProtectedPaths(), recoveryFolder: _requestedActivityRecovery?.RecoveryFolder) { Owner = this };
             ShowOwnedDialog(window);
             if (window.AttemptedChanges)
             {

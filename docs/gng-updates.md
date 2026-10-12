@@ -2,7 +2,7 @@
 
 Available in Launchpad 2.1.0 and later.
 
-Open **Swedish GNG package → Details… → Set up / update…**. The setup guide also offers an unchecked **Open GNG setup after I choose Finish** option. Version checks never download or install a package automatically.
+Open **Swedish GNG package → Details… → Set up / update…**. The setup guide includes a GNG step before Controller profile and Fonts, returning there after installation. Version checks never download or install a package automatically.
 
 ## Get the package
 
@@ -31,6 +31,8 @@ The embedded browser needs Microsoft WebView2. If it is missing, the window offe
 ## Review and install
 
 The preview shows additions, replacements and merges by default, with counts of files to change, files already matching and personal files kept. Select **Show unchanged files** to include the files that will not be modified. This only changes the list you see, not what will be installed. Read the warnings and check the destination before selecting the confirmation and choosing **Install reviewed package**.
+
+The review leads with a short explanation of what changes, what stays and where recovery files go. Package details remain available underneath. Its file comparison highlights additions and removals, retains the `+`/`−` markers, and offers **Next change** to jump between groups; the Before / After views remain available.
 
 Close every EuroScope instance before installing or restoring GNG. Launchpad disables those actions while it detects a EuroScope process, including one started outside Launchpad or with no visible window. Downloads and review remain available. Once EuroScope closes, confirm the review again. Launchpad rechecks before changing files; if EuroScope starts during an installation, further changes stop and recovery may need to be completed after closing it.
 
@@ -82,6 +84,8 @@ A failed installation attempts to restore the files it changed. Read the result 
 To undo a managed update, choose **Restore backup…** in GNG setup and select the dated installation folder shown in its result. Recovery must target the same data folder and starts with the most recent managed installation, or the pending failed operation. Restore can replace unchanged installed files with their originals and remove unchanged files added by the update. Files edited since installation are kept and reported for attention. Preserve those edits elsewhere, resolve the listed conflicts and retry recovery. Keep each backup's manifest, package and file structure together.
 
 Cleanup has its own **Restore a backup…** action and separate `CleanupBackups` folder. If undoing both cleanup and an installation, restore archived dependencies before returning to profiles that need them.
+
+The **Activity** view links recorded GNG operations to their recovery folders. **Review GNG recovery…** opens the relevant GNG window and suggests the selected backup when you choose Restore. An outstanding failed installation takes priority. You still review and confirm the restore, and the original data-folder and EuroScope process checks apply.
 
 In **Remove / reset…**, deleting **cached downloads** leaves installation history and its original ZIPs intact. Deleting **recovery backups** removes GNG installation history, retained ZIPs and cleanup backups as well as existing client recovery backups. Resetting **browser sessions** clears the dedicated sign-in session separately.
 

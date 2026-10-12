@@ -7,6 +7,18 @@ public class AppSettings
     public bool CompactLayout { get; set; } = true;
     public bool SetupWizardCompleted { get; set; }
     public bool SetupWizardDismissed { get; set; }
+    public int SetupWizardStep { get; set; }
+    public string SetupWizardRoute { get; set; } = "Existing";
+    public string NotUsedApplications { get; set; } = string.Empty;
+    public double TextScale { get; set; } = 1;
+    public bool AlwaysOnTop { get; set; }
+    public double? WindowLeft { get; set; }
+    public double? WindowTop { get; set; }
+    public double? WindowWidth { get; set; }
+    public double? WindowHeight { get; set; }
+    public bool WindowMaximized { get; set; }
+    public string WindowMonitor { get; set; } = string.Empty;
+    public double DetailPanelHeight { get; set; } = 100;
     public string EuroscopeExePath { get; set; } = string.Empty;
     public string EuroscopeDataPath { get; set; } = string.Empty;
     public string TrackAudioExePath { get; set; } = string.Empty;
