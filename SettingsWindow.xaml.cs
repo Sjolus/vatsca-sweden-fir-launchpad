@@ -40,6 +40,15 @@ public partial class SettingsWindow : Window
         Settings = current.Copy();
 
         CheckOnStartup.IsChecked  = Settings.CheckOnStartup;
+        TextSizeChoice.SelectedIndex = Settings.TextScale >= 1.5 ? 2 : Settings.TextScale >= 1.25 ? 1 : 0;
+        AlwaysOnTopChoice.IsChecked = Settings.AlwaysOnTop;
+        foreach (var name in ApplicationPreferences.OptionalApplications)
+        {
+            var choice = new CheckBox { Content = name == "EuroScope (GNG Pack)" ? "Swedish GNG package" : name,
+                Tag = name, IsChecked = ApplicationPreferences.IsNotUsed(Settings, name), Margin = new Thickness(0, 0, 0, 5) };
+            choice.SetResourceReference(ForegroundProperty, "PrimaryText");
+            NotUsedChoices.Children.Add(choice);
+        }
         EuroscopeExePath.Text = Settings.EuroscopeExePath;
         EuroscopePath.Text    = Settings.EuroscopeDataPath;
         TrackAudioPath.Text   = Settings.TrackAudioExePath;
@@ -155,6 +164,10 @@ public partial class SettingsWindow : Window
     {
         var draft = Settings.Copy();
         draft.CheckOnStartup = CheckOnStartup.IsChecked == true;
+        draft.TextScale = TextSizeChoice.SelectedIndex switch { 1 => 1.25, 2 => 1.5, _ => 1 };
+        draft.AlwaysOnTop = AlwaysOnTopChoice.IsChecked == true;
+        foreach (var choice in NotUsedChoices.Children.OfType<CheckBox>())
+            ApplicationPreferences.SetNotUsed(draft, (string)choice.Tag, choice.IsChecked == true);
         draft.EuroscopeExePath = EuroscopeExePath.Text.Trim();
         draft.EuroscopeDataPath = EuroscopePath.Text.Trim();
         draft.TrackAudioExePath = TrackAudioPath.Text.Trim();
@@ -233,6 +246,7 @@ public partial class SettingsWindow : Window
     {
         FindInstallationsButton.IsEnabled = SaveButton.IsEnabled = !_saving && !_discovering;
         ApplicationPaths.IsEnabled = CheckOnStartup.IsEnabled = !_saving;
+        TextSizeChoice.IsEnabled = AlwaysOnTopChoice.IsEnabled = NotUsedChoices.IsEnabled = !_saving;
     }
 
     private void InsertDefault_Click(object sender, RoutedEventArgs e)

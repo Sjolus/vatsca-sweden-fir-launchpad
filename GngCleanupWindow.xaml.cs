@@ -17,14 +17,16 @@ public partial class GngCleanupWindow : Window
     private readonly ObservableCollection<CleanupRow> _rows = new();
     private GngCleanupPlan? _plan;
     private bool _isBusy;
+    private readonly string? _suggestedRecoveryFolder;
 
     public bool AttemptedChanges { get; private set; }
 
     public GngCleanupWindow(string root, string? selectedProfile, IEnumerable<string> protectedPaths,
-        string? oldZip = null, string? newZip = null)
+        string? oldZip = null, string? newZip = null, string? recoveryFolder = null)
     {
         InitializeComponent();
         _selectedProfile = selectedProfile;
+        _suggestedRecoveryFolder = recoveryFolder;
         _protectedPaths = protectedPaths.Where(path => !string.IsNullOrWhiteSpace(path)).ToArray();
         RootBox.Text = root;
         BackupRootBox.Text = BackupRoot;
@@ -36,6 +38,8 @@ public partial class GngCleanupWindow : Window
             StatusText.Text = "Choose your EuroScope data folder in App settings before cleaning up or restoring GNG files.";
         else if (_storageNotice is not null)
             StatusText.Text = _storageNotice;
+        else if (recoveryFolder is not null)
+            StatusText.Text = "Choose Restore a backup to review this recovery copy. Nothing has been restored.\n" + recoveryFolder;
         else if (!string.IsNullOrWhiteSpace(newZip))
             StatusText.Text = string.IsNullOrWhiteSpace(oldZip)
                 ? "The new complete package reference is ready. Choose the old complete ZIP to compare, or close this window and keep the old files."
@@ -144,10 +148,18 @@ public partial class GngCleanupWindow : Window
         {
             AttemptedChanges = true;
             var result = await Task.Run(() => GngCleanupService.ArchiveSelected(plan, selected));
+            ActivityHistoryService.Record(ActivityApplication.Gng, ActivityOperation.Cleanup,
+                result.Skipped.Count == 0 ? ActivityOutcome.Completed : ActivityOutcome.NeedsAttention,
+                recoveryFolder: result.BackupFolder, dataFolder: plan.Root);
             InvalidatePlan();
             ShowResult(result, restoring: false);
         }
-        catch (Exception ex) { InvalidatePlan(); StatusText.Text = ex.Message; }
+        catch (Exception ex)
+        {
+            ActivityHistoryService.Record(ActivityApplication.Gng, ActivityOperation.Cleanup, ActivityOutcome.Stopped,
+                dataFolder: plan.Root);
+            InvalidatePlan(); StatusText.Text = ex.Message;
+        }
         finally { SetBusy(false); }
     }
 
@@ -160,6 +172,7 @@ public partial class GngCleanupWindow : Window
         }
         var dialog = new OpenFolderDialog { Title = "Select a dated Launchpad cleanup backup" };
         if (Directory.Exists(BackupRoot)) dialog.InitialDirectory = BackupRoot;
+        if (_suggestedRecoveryFolder is not null && Directory.Exists(_suggestedRecoveryFolder)) dialog.FolderName = _suggestedRecoveryFolder;
         if (dialog.ShowDialog(this) != true) return;
         if (MessageBox.Show(this,
             $"Restore files from:\n{dialog.FolderName}\n\nDestination:\n{RootBox.Text}\n\nOnly backups made for this data folder can be restored. Existing files will not be overwritten. Close EuroScope first.\n\nRestore this backup?",
@@ -172,10 +185,18 @@ public partial class GngCleanupWindow : Window
         {
             AttemptedChanges = true;
             var result = await Task.Run(() => GngCleanupService.Restore(folder, root, _protectedPaths));
+            ActivityHistoryService.Record(ActivityApplication.Gng, ActivityOperation.RestoreCleanup,
+                result.Skipped.Count == 0 ? ActivityOutcome.Completed : ActivityOutcome.NeedsAttention,
+                recoveryFolder: result.BackupFolder, dataFolder: root);
             InvalidatePlan();
             ShowResult(result, restoring: true);
         }
-        catch (Exception ex) { InvalidatePlan(); StatusText.Text = ex.Message; }
+        catch (Exception ex)
+        {
+            ActivityHistoryService.Record(ActivityApplication.Gng, ActivityOperation.RestoreCleanup, ActivityOutcome.Stopped,
+                recoveryFolder: folder, dataFolder: root);
+            InvalidatePlan(); StatusText.Text = ex.Message;
+        }
         finally { SetBusy(false); }
     }
 

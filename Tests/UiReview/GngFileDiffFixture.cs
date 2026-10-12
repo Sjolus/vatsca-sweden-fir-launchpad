@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using VatscaUpdateChecker.Models;
 using VatscaUpdateChecker.Services;
 
@@ -127,10 +128,16 @@ internal static partial class LayoutMatrix
                 Require(IsPresented(tabs) == hasText, "Summary-only previews must not expose blank text views.");
                 if (hasText)
                 {
+                    var metadata = Required<Expander>(window, "MetadataDetails");
+                    Require(!metadata.IsExpanded, "Text changes must get priority over optional file metadata.");
+                    metadata.IsExpanded = true;
+                    LayoutValidation.CheckWindowContent(window);
                     var summary = Required<TextBox>(window, "SummaryText");
                     var summaryScroll = LayoutValidation.Descendants(summary).OfType<ScrollViewer>().Single();
                     Require(summary.ActualHeight <= 92.5 && summaryScroll.ScrollableHeight > 0,
                         "Realistic preview metadata must scroll without consuming the text comparison area.");
+                    metadata.IsExpanded = false;
+                    LayoutValidation.CheckWindowContent(window);
                     Require(Required<TextBox>(window, "CurrentText").Text == GngFileDiffFixture.CurrentText(state) &&
                         Required<TextBox>(window, "AfterText").Text == GngFileDiffFixture.PlannedText(state),
                         "The preview must display the exact sanitized current and proposed text.");
@@ -138,13 +145,21 @@ internal static partial class LayoutMatrix
                     {
                         Required<TabItem>(window, "ChangesTab").IsSelected = true;
                         LayoutValidation.CheckWindowContent(window);
-                        var diff = Required<TextBox>(window, "DiffText");
+                        var diff = Required<RichTextBox>(window, "DiffText");
                         CheckGngPreviewText(diff, window);
-                        Require(diff.Text.Contains("@@", StringComparison.Ordinal) && diff.Text.Contains(GngFileDiffFixture.IsListLayout(state) ? "m_Column" : "RDF.dll", StringComparison.Ordinal),
+                        var diffText = new TextRange(diff.Document.ContentStart, diff.Document.ContentEnd).Text;
+                        Require(diffText.Contains("@@", StringComparison.Ordinal) && diffText.Contains(GngFileDiffFixture.IsListLayout(state) ? "m_Column" : "RDF.dll", StringComparison.Ordinal),
                             "The change view must show the production unified diff and line markers.");
+                        var next = Required<Button>(window, "NextChangeButton");
+                        Require(next.IsEnabled, "A text comparison with changes must support navigation.");
+                        next.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                        Require(Required<TextBlock>(window, "ChangePositionText").Text.StartsWith("Change 1 of ", StringComparison.Ordinal), "Next change did not identify the first change group.");
+                        Require(diff.Document.Blocks.OfType<Paragraph>().Where(p => new TextRange(p.ContentStart, p.ContentEnd).Text.StartsWith('+')).All(p => p.Background != null) &&
+                            diff.Document.Blocks.OfType<Paragraph>().Where(p => new TextRange(p.ContentStart, p.ContentEnd).Text.StartsWith('-')).All(p => p.Background != null),
+                            "Additions and removals need a visible highlight as well as their text markers.");
                         if (GngFileDiffFixture.IsListLayout(state))
                         {
-                            var changes = diff.Text.Split('\n').Where(line => line.StartsWith('+') || line.StartsWith('-')).ToArray();
+                            var changes = diffText.Split('\n').Where(line => line.StartsWith('+') || line.StartsWith('-')).ToArray();
                             Require(changes.Length == 2 && changes.All(line => line.Contains("m_Column", StringComparison.Ordinal)) &&
                                 !changes.Any(line => line.Contains("m_X:", StringComparison.Ordinal) || line.Contains("m_Y:", StringComparison.Ordinal) || line.Contains("m_Visible:", StringComparison.Ordinal)),
                                 "Merged list previews must show refreshed columns without a position or whole-list visibility reversion.");
@@ -157,14 +172,14 @@ internal static partial class LayoutMatrix
                     Required<TabItem>(window, "BeforeAfterTab").IsSelected = true;
                     LayoutValidation.CheckWindowContent(window);
                     foreach (var name in new[] { "CurrentText", "AfterText" }) CheckGngPreviewText(Required<TextBox>(window, name), window);
-                    Require(!LayoutValidation.Descendants((FrameworkElement)window.Content).Contains(Required<TextBox>(window, "DiffText")),
+                    Require(!LayoutValidation.Descendants((FrameworkElement)window.Content).Contains(Required<RichTextBox>(window, "DiffText")),
                         "Switching views must remove the diff pane from the visual tree.");
                 }
                 else
                 {
                     Require(window.Height <= 360 && window.MinHeight == 300, "Summary-only previews should use a compact window.");
                     Require(Required<TextBox>(window, "CurrentText").Text.Length == 0 && Required<TextBox>(window, "AfterText").Text.Length == 0 &&
-                        Required<TextBox>(window, "DiffText").Text.Length == 0, "Summary-only previews must not populate hidden file contents.");
+                        string.IsNullOrWhiteSpace(new TextRange(Required<RichTextBox>(window, "DiffText").Document.ContentStart, Required<RichTextBox>(window, "DiffText").Document.ContentEnd).Text), "Summary-only previews must not populate hidden file contents.");
                     if (state == GngFileDiffFixtureState.Large)
                     {
                         var scroll = Required<ScrollViewer>(window, "HeaderScroll");
@@ -181,6 +196,17 @@ internal static partial class LayoutMatrix
             finally { window.Close(); }
         }
         return count;
+    }
+
+    private static void CheckGngPreviewText(RichTextBox text, Window window)
+    {
+        Require(IsPresented(text) && text.IsReadOnly && text.IsReadOnlyCaretVisible && text.Focusable && text.FontFamily.Source == "Consolas" &&
+            text.HorizontalScrollBarVisibility == ScrollBarVisibility.Auto && text.VerticalScrollBarVisibility == ScrollBarVisibility.Auto,
+            "Diff text must remain read-only, selectable, monospace and scrollable.");
+        Require(text.ActualWidth >= 250 && text.ActualHeight >= 100, "The diff has too little space.");
+        text.SelectAll();
+        Require(text.Selection.Text == new TextRange(text.Document.ContentStart, text.Document.ContentEnd).Text, "Highlighted diff text cannot be selected for inspection.");
+        text.Selection.Select(text.Document.ContentStart, text.Document.ContentStart);
     }
 
     private static void CheckGngPreviewText(TextBox text, Window window)

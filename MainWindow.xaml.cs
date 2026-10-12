@@ -76,6 +76,8 @@ public partial class MainWindow : Window
         AppList.ItemsSource = _results;
 
         InitializeApplicationDetails();
+        InitializePresentation();
+        InitializeActivityHistory();
 
         _processTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
         _processTimer.Tick += (_, _) => UpdateRunningStates();
@@ -140,9 +142,12 @@ public partial class MainWindow : Window
                 result.IsRunning = IsWebAppRunning(result.AppName);
                 continue;
             }
-            if (result.IsFolder || string.IsNullOrEmpty(result.LaunchPath)) continue;
-            var exeName = Path.GetFileNameWithoutExtension(result.LaunchPath);
-            result.IsRunning = Process.GetProcessesByName(exeName).Length > 0;
+            if (result.IsFolder || string.IsNullOrEmpty(result.LaunchPath))
+            {
+                result.IsRunning = false;
+                continue;
+            }
+            result.IsRunning = ApplicationProcessControl.Find(result.LaunchPath).Count > 0;
         }
     }
 
@@ -169,63 +174,13 @@ public partial class MainWindow : Window
             result.IsLocalUrlReachable = reachable;
     }
 
-    // Returns true if the pid file for this web app exists and the tracked process is still alive.
-    // If the tracked PID has exited (e.g. Edge relaunched itself during first-run profile setup),
-    // falls back to a timestamp/parent heuristic that can match unrelated Edge windows.
-    private bool IsWebAppRunning(string appName)
-    {
-        var pidFile = Path.Combine(AppDataDir, $"{appName}.pid");
-        if (!File.Exists(pidFile)) return false;
-
-        var lines = File.ReadAllLines(pidFile);
-        if (lines.Length == 0) return false;
-        if (!int.TryParse(lines[0].Trim(), out var pid)) return false;
-        var launchTime = lines.Length > 1 && DateTime.TryParse(lines[1].Trim(), out var lt) ? lt : DateTime.MinValue;
-
-        // Fast path: tracked PID is still alive.
-        try
-        {
-            var proc = Process.GetProcessById(pid);
-            if (!proc.HasExited && proc.ProcessName == "msedge") return true;
-        }
-        catch { }
-
-        // Tracked PID is gone — Edge may have relaunched itself (e.g. first-run profile setup).
-        // Find a candidate browser process: an msedge that started after our launch whose parent is
-        // not itself msedge (renderers/GPU processes are children of the browser, not vice versa).
-        var browserId = ProcessHelper.FindEdgeBrowserProcess(launchTime);
-        if (browserId > 0)
-        {
-            File.WriteAllLines(pidFile, new[] { browserId.ToString(), launchTime.ToString("O") });
-            return true;
-        }
-
-        try { File.Delete(pidFile); } catch { }
-        return false;
-    }
-
-    private void KillWebApp(CheckResult result)
-    {
-        var pidFile = Path.Combine(AppDataDir, $"{result.AppName}.pid");
-        var lines   = File.Exists(pidFile) ? File.ReadAllLines(pidFile) : Array.Empty<string>();
-        if (lines.Length > 0 && int.TryParse(lines[0].Trim(), out var pid))
-        {
-            try
-            {
-                var proc = Process.GetProcessById(pid);
-                Logger.Log("KILL", $"{result.AppName}: killing pid {pid}");
-                proc.Kill(entireProcessTree: true);
-            }
-            catch { /* already exited */ }
-            try { File.Delete(pidFile); } catch { }
-        }
-        result.IsRunning = false;
-    }
+    private bool IsWebAppRunning(string appName) => TrackedBrowser(appName) != null;
 
     private async void Window_Loaded(object sender, RoutedEventArgs e)
     {
+        RestorePresentationPlacement();
         if (_firstSetup && !_settings.SetupWizardCompleted && !_settings.SetupWizardDismissed)
-            OpenSetupWizard();
+            await OpenSetupWizard();
         if (_windowClosed) return;
         UpdateRunningStates();
         UpdateAppConfigButton();
@@ -527,6 +482,7 @@ public partial class MainWindow : Window
             _settings            = win.Settings;
             _settings.IsDarkMode = _isDarkMode;
             SaveSessionSettings("Settings saved.");
+            ApplyPresentationPreferences();
             ApplyLaunchPaths();
             RefreshEuroscopeProfiles();
             UpdateRunningStates();
@@ -560,7 +516,7 @@ public partial class MainWindow : Window
             {
                 if (result.IsRunning)
                 {
-                    KillWebApp(result);
+                    ShowRunningApplication(result);
                 }
                 else
                 {
@@ -574,24 +530,15 @@ public partial class MainWindow : Window
                     });
                     if (proc != null)
                     {
-                        File.WriteAllLines(Path.Combine(AppDataDir, $"{result.AppName}.pid"),
-                            new[] { proc.Id.ToString(), proc.StartTime.ToString("O") });
-                        result.IsRunning = true;
+                        RememberBrowser(result.AppName, proc);
+                        result.IsRunning = IsWebAppRunning(result.AppName);
                     }
                     Logger.Log("LAUNCH", $"{result.AppName}: launched as web app (pid={proc?.Id}, url={result.LaunchPath})");
                 }
             }
             else if (result.IsRunning)
             {
-                var exeName = Path.GetFileNameWithoutExtension(result.LaunchPath);
-                var procs = Process.GetProcessesByName(exeName);
-                Logger.Log("KILL", $"{result.AppName}: killing {procs.Length} process(es) (name={exeName})");
-                foreach (var proc in procs)
-                {
-                    try { proc.Kill(entireProcessTree: true); }
-                    catch { /* process may have already exited */ }
-                }
-                result.IsRunning = false;
+                ShowRunningApplication(result);
             }
             else if (result.HasEuroScopeManagement)
             {

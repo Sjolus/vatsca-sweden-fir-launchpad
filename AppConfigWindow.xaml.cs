@@ -130,75 +130,24 @@ public partial class AppConfigWindow : Window
         }
         var temp        = BuildSettingsFromForm();
         var maskedText  = ProfileService.GeneratePreview(temp, VatsimPasswordValue, HoppieCodeValue, _euroscopeDataPath, showCredentials: false);
-        var clearText   = ProfileService.GeneratePreview(temp, VatsimPasswordValue, HoppieCodeValue, _euroscopeDataPath, showCredentials: true);
-        bool showing    = false;
-
-        var appBg   = Application.Current.Resources["AppBg"]   as System.Windows.Media.Brush ?? System.Windows.Media.Brushes.White;
-        var inputBg = Application.Current.Resources["InputBg"] as System.Windows.Media.Brush ?? System.Windows.Media.Brushes.White;
-        var inputFg = Application.Current.Resources["InputFg"] as System.Windows.Media.Brush ?? System.Windows.Media.Brushes.Black;
-
-        var tb = new System.Windows.Controls.TextBox
+        var changes = "Apply your name, CID, rating and password to the Swedish EuroScope profiles in the folder below. The server selection becomes AUTOMATIC.";
+        if (!string.IsNullOrWhiteSpace(HoppieCodeValue)) changes += " Update the supported Hoppie code files.";
+        if (!string.IsNullOrWhiteSpace(temp.ObsCallsign)) changes += " Update the observer login callsign.";
+        if (!string.IsNullOrWhiteSpace(temp.VatEfsPath)) changes += temp.PatchVatEfs
+            ? " Enable the configured VatEFS plugin where its DLL is available."
+            : " Remove VatEFS plugin entries from these profiles.";
+        var kept = "Other profile settings stay in place." +
+            (string.IsNullOrWhiteSpace(HoppieCodeValue) ? " Existing Hoppie codes in plugin files stay unchanged because the code field is blank." : "") +
+            (string.IsNullOrWhiteSpace(temp.ObsCallsign) ? " Existing observer logins stay unchanged because the prefix is blank." : "");
+        var summary = ReviewSummaries.Format(changes + "\n\nProfile folder: " + _euroscopeDataPath, kept,
+            "This profile action does not create a recovery copy. Make a copy of any custom profiles you want to keep before applying.",
+            "Passwords are saved in Windows Credential Manager and also written into the profile files. The preview is read-only; return to the profile form to save and apply.");
+        var previewWindow = new ProfilePreviewWindow(summary, maskedText,
+            () => ProfileService.GeneratePreview(temp, VatsimPasswordValue, HoppieCodeValue, _euroscopeDataPath, showCredentials: true))
         {
-            Text       = maskedText,
-            IsReadOnly = true,
-            FontFamily = new System.Windows.Media.FontFamily("Consolas"),
-            FontSize   = 12,
-            Margin     = new Thickness(16, 16, 16, 8),
-            BorderThickness = new Thickness(0),
-            Background = inputBg,
-            Foreground = inputFg,
-            TextWrapping = TextWrapping.NoWrap,
-            VerticalScrollBarVisibility   = System.Windows.Controls.ScrollBarVisibility.Auto,
-            HorizontalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto,
+            Owner = this,
         };
-
-        var toggleBtn = new System.Windows.Controls.Button
-        {
-            Content         = "Show Credentials",
-            Margin          = new Thickness(0, 0, 8, 0),
-            Padding         = new Thickness(12, 6, 12, 6),
-            HorizontalAlignment = HorizontalAlignment.Left,
-            Background      = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#1a475f")),
-            Foreground      = System.Windows.Media.Brushes.White,
-            BorderThickness = new Thickness(0),
-            Cursor          = System.Windows.Input.Cursors.Hand,
-        };
-        toggleBtn.Click += (_, _) =>
-        {
-            showing    = !showing;
-            tb.Text    = showing ? clearText : maskedText;
-            toggleBtn.Content = showing ? "Hide Credentials" : "Show Credentials";
-        };
-
-        var backBtn = new System.Windows.Controls.Button
-        {
-            Content = "Back to profile",
-            IsCancel = true,
-            Padding = new Thickness(12, 6, 12, 6),
-            Cursor = System.Windows.Input.Cursors.Hand,
-        };
-        var actions = new System.Windows.Controls.WrapPanel
-        {
-            Margin = new Thickness(16, 0, 16, 12),
-            HorizontalAlignment = HorizontalAlignment.Right,
-        };
-        actions.Children.Add(toggleBtn);
-        actions.Children.Add(backBtn);
-
-        var dock = new System.Windows.Controls.DockPanel();
-        System.Windows.Controls.DockPanel.SetDock(actions, System.Windows.Controls.Dock.Bottom);
-        dock.Children.Add(actions);
-        dock.Children.Add(tb);
-
-        new Window
-        {
-            Title  = "Controller profile — preview file changes",
-            Width  = Math.Min(660, SystemParameters.WorkArea.Width), Height = Math.Min(480, SystemParameters.WorkArea.Height),
-            Owner  = this,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Background = appBg,
-            Content    = dock,
-        }.ShowDialog();
+        previewWindow.ShowDialog();
     }
 
     private AppSettings BuildSettingsFromForm()

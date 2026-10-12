@@ -11,7 +11,7 @@ internal static partial class LayoutMatrix
     private static void CheckRowReadability(MainWindow window)
     {
         var list = Required<ItemsControl>(window, "AppList");
-        var expectedHeight = Equals(window.Tag, "Comfortable") ? 56 : 38;
+        var expectedHeight = (double)Application.Current.FindResource(Equals(window.Tag, "Comfortable") ? "ExpandedRowHeight" : "CompactRowHeight");
         var heights = Enumerable.Range(0, list.Items.Count)
             .Select(index => ((FrameworkElement)list.ItemContainerGenerator.ContainerFromIndex(index)).ActualHeight).ToArray();
         Require(heights.All(height => Math.Abs(height - expectedHeight) < .5),
@@ -58,6 +58,9 @@ internal static partial class LayoutMatrix
     {
         foreach (var button in LayoutValidation.Descendants(panel).OfType<Button>().Where(IsPresented))
         {
+            button.BringIntoView();
+            DrainBindings();
+            panel.UpdateLayout();
             var bounds = Bounds(button, panel);
             Require(bounds.Width > 18 && bounds.Height >= 19.5 && bounds.Left >= -.5 && bounds.Top >= -.5 &&
                 bounds.Right <= panel.ActualWidth + .5 && bounds.Bottom <= panel.ActualHeight + .5,

@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net9.0-windows</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../Models/AppSettings.cs" Link="AppSettings.cs"/>
+    <Compile Include="../../Models/ApplicationPreferences.cs" Link="ApplicationPreferences.cs"/>
+    <Compile Include="../../Models/WindowPlacement.cs" Link="WindowPlacement.cs"/>
+    <Compile Include="../../Services/ApplicationProcessControl.cs" Link="ApplicationProcessControl.cs"/>
+  </ItemGroup>
+</Project>

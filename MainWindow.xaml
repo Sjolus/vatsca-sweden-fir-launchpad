@@ -6,14 +6,14 @@
         Icon="Assets/app.ico" Title="Sweden FIR Launchpad"
         Height="550" Width="880" Tag="Compact" MinHeight="480" MinWidth="760"
         ResizeMode="CanResize" WindowStyle="SingleBorderWindow" WindowStartupLocation="CenterScreen"
-        Loaded="Window_Loaded" Background="{DynamicResource AppBg}" UseLayoutRounding="True">
+        Loaded="Window_Loaded" Background="{DynamicResource AppBg}" FontSize="{DynamicResource TextSize12}" UseLayoutRounding="True">
     <shell:WindowChrome.WindowChrome>
         <shell:WindowChrome CaptionHeight="0" ResizeBorderThickness="6" GlassFrameThickness="0" CornerRadius="0"/>
     </shell:WindowChrome.WindowChrome>
     <Window.Resources>
         <Style x:Key="FlatButton" TargetType="Button" BasedOn="{StaticResource ThemedButton}">
             <Setter Property="BorderThickness" Value="0"/><Setter Property="Background" Value="#1a475f"/>
-            <Setter Property="Foreground" Value="White"/><Setter Property="FontSize" Value="12"/>
+            <Setter Property="Foreground" Value="White"/><Setter Property="FontSize" Value="{DynamicResource TextSize12}"/>
             <Setter Property="MinHeight" Value="28"/><Setter Property="Padding" Value="9,4"/>
         </Style>
         <Style x:Key="RowActionButton" TargetType="Button" BasedOn="{StaticResource FlatButton}"/>
@@ -21,16 +21,16 @@
             <Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="#b63f3f"/></Trigger></Style.Triggers>
         </Style>
         <Style x:Key="RowShell" TargetType="Border">
-            <Setter Property="Height" Value="38"/>
+            <Setter Property="Height" Value="{DynamicResource CompactRowHeight}"/>
             <Setter Property="Background" Value="{Binding IsFolder, Converter={StaticResource RowBgConverter}}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/><Setter Property="BorderThickness" Value="0,0,0,1"/>
             <Style.Triggers>
-                <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource AncestorType=Window}}" Value="Comfortable"><Setter Property="Height" Value="56"/></DataTrigger>
+                <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource AncestorType=Window}}" Value="Comfortable"><Setter Property="Height" Value="{DynamicResource ExpandedRowHeight}"/></DataTrigger>
                 <DataTrigger Binding="{Binding IsSelected}" Value="True"><Setter Property="Background" Value="{DynamicResource ApplicationSelectedBg}"/></DataTrigger>
             </Style.Triggers>
         </Style>
         <Style x:Key="RowStatusText" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/><Setter Property="FontSize" Value="13"/><Setter Property="FontWeight" Value="Medium"/>
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/><Setter Property="FontSize" Value="{DynamicResource TextSize13}"/><Setter Property="FontWeight" Value="Medium"/>
             <Style.Triggers>
                 <DataTrigger Binding="{Binding RowStatusKind}" Value="Warning"><Setter Property="Foreground" Value="{DynamicResource ApplicationWarningText}"/></DataTrigger>
                 <DataTrigger Binding="{Binding RowStatusKind}" Value="Update"><Setter Property="Foreground" Value="{DynamicResource ApplicationUpdateText}"/></DataTrigger>
@@ -39,28 +39,29 @@
         </Style>
         <Style x:Key="RowExplanationText" TargetType="TextBlock">
             <Setter Property="Visibility" Value="Collapsed"/><Setter Property="Foreground" Value="{DynamicResource ApplicationSecondaryText}"/>
-            <Setter Property="FontSize" Value="12"/><Setter Property="Margin" Value="0,3,0,0"/><Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            <Setter Property="FontSize" Value="{DynamicResource TextSize12}"/><Setter Property="Margin" Value="0,3,0,0"/><Setter Property="TextTrimming" Value="CharacterEllipsis"/>
             <Style.Triggers><DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource AncestorType=Window}}" Value="Comfortable"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers>
         </Style>
         <Style x:Key="LaunchButton" TargetType="Button" BasedOn="{StaticResource RowActionButton}">
             <Setter Property="Content" Value="{Binding LaunchActionText}"/><Setter Property="IsEnabled" Value="{Binding LaunchEnabled}"/>
             <Setter Property="Padding" Value="4,4"/><Setter Property="ToolTip" Value="{Binding LaunchTooltip}"/>
             <Setter Property="AutomationProperties.Name" Value="{Binding LaunchTooltip}"/>
-            <Style.Triggers><DataTrigger Binding="{Binding IsRunning}" Value="True"><Setter Property="Background" Value="#943b3b"/></DataTrigger></Style.Triggers>
         </Style>
-        <Style x:Key="DetailAction" TargetType="Button" BasedOn="{StaticResource RowActionButton}"><Setter Property="Margin" Value="0,0,5,5"/></Style>
+        <Style x:Key="DetailAction" TargetType="Button" BasedOn="{StaticResource RowActionButton}"><Setter Property="Margin" Value="0,0,5,2"/></Style>
     </Window.Resources>
     <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1">
     <DockPanel>
         <Border DockPanel.Dock="Top" Background="{DynamicResource HeaderBg}" Padding="12,2" MouseLeftButtonDown="Header_MouseLeftButtonDown">
             <Grid>
-                <Grid.RowDefinitions><RowDefinition Height="32"/><RowDefinition Height="32"/></Grid.RowDefinitions>
+                <Grid.RowDefinitions><RowDefinition Height="Auto" MinHeight="32"/><RowDefinition Height="Auto" MinHeight="32"/></Grid.RowDefinitions>
                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <DockPanel VerticalAlignment="Center">
                     <Image DockPanel.Dock="Left" Source="Assets/logo-banner.png" Height="26" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality"/>
-                    <TextBlock Text="Sweden FIR Launchpad" Foreground="White" FontSize="16" FontWeight="Light" VerticalAlignment="Center" Margin="12,0,8,0"/>
+                    <TextBlock Text="Sweden FIR Launchpad" TextTrimming="CharacterEllipsis" ToolTip="Sweden FIR Launchpad" Foreground="White" FontSize="{DynamicResource TextSize16}" FontWeight="Light" VerticalAlignment="Center" Margin="12,0,8,0"/>
                 </DockPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <Button x:Name="PinButton" Content="Pin" Click="Pin_Click" Style="{StaticResource FlatButton}" Margin="0,0,6,0"
+                            ToolTip="Keep Launchpad above other windows" AutomationProperties.Name="Keep Launchpad on top"/>
                     <Button x:Name="DensityToggleButton" Click="DensityToggle_Click" Margin="0,0,6,0"
                             ToolTip="Switch between compact rows with details below and rows with short explanations" AutomationProperties.Name="Toggle compact or explanatory layout">
                         <Button.Style><Style TargetType="Button" BasedOn="{StaticResource FlatButton}">
@@ -68,13 +69,13 @@
                             <Style.Triggers><DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource AncestorType=Window}}" Value="Comfortable"><Setter Property="Content" Value="Expanded"/></DataTrigger></Style.Triggers>
                         </Style></Button.Style>
                     </Button>
-                    <Button x:Name="ThemeToggleButton" Content="☽" Style="{StaticResource FlatButton}" FontSize="14" Margin="0,0,10,0"
+                    <Button x:Name="ThemeToggleButton" Content="☽" Style="{StaticResource FlatButton}" FontSize="{DynamicResource TextSize14}" Margin="0,0,10,0"
                             ToolTip="Toggle dark / light mode" AutomationProperties.Name="Toggle dark or light theme" Click="ThemeToggle_Click"/>
                     <Button Content="─" Style="{StaticResource FlatButton}" Margin="0,0,2,0" ToolTip="Minimise" AutomationProperties.Name="Minimise Launchpad" Click="Minimize_Click"/>
                     <Button Content="□" Style="{StaticResource FlatButton}" Margin="0,0,2,0" ToolTip="Maximise or restore" AutomationProperties.Name="Maximise or restore Launchpad" Click="Maximize_Click"/>
                     <Button Content="✕" Style="{StaticResource CloseButton}" ToolTip="Close" AutomationProperties.Name="Close Launchpad" Click="Close_Click"/>
                 </StackPanel>
-                <TextBlock Grid.Row="1" Text="Applications" Foreground="White" FontSize="14" FontWeight="Medium" VerticalAlignment="Center"/>
+                <TextBlock x:Name="ApplicationsSummary" Grid.Row="1" Text="Applications" Foreground="White" FontSize="{DynamicResource TextSize14}" FontWeight="Medium" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
                 <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                     <Button x:Name="AppConfigButton" Content="Controller profile" Style="{StaticResource FlatButton}" Margin="0,0,8,0"
                             ToolTip="Your identity and optional EuroScope profile configuration" Click="AppConfig_Click"/>
@@ -84,37 +85,62 @@
         </Border>
         <Border DockPanel.Dock="Bottom" Background="{DynamicResource FooterBg}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,0,0" Padding="12,7">
             <Grid>
-                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                 <Button x:Name="CheckButton" Content="↻  Check for updates" Style="{StaticResource FlatButton}" Click="Check_Click"/>
                 <Button x:Name="SetupButton" Grid.Column="1" Content="Setup guide…" Margin="8,0,0,0" Style="{StaticResource FlatButton}"
                         ToolTip="Find existing applications, install missing software and review your configuration" AutomationProperties.Name="Open setup guide" Click="SetupWizard_Click"/>
                 <Button x:Name="MaintenanceButton" Grid.Column="2" Content="Remove / reset…" Margin="8,0" Style="{StaticResource FlatButton}"
                         ToolTip="Review software removal, optional settings resets and recovery copies" Click="Maintenance_Click"/>
-                <TextBlock x:Name="LastCheckedText" Grid.Column="3" Text="Last checked: never" HorizontalAlignment="Right" VerticalAlignment="Center"
-                           Foreground="{DynamicResource ApplicationSecondaryText}" FontSize="12" TextTrimming="CharacterEllipsis" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
-                <TextBox x:Name="RestartNotice" Grid.Row="1" Grid.ColumnSpan="4" Visibility="Collapsed"
+                <Button x:Name="ActivityButton" Grid.Column="3" Content="Activity…" Click="Activity_Click" Style="{StaticResource FlatButton}" Margin="0,0,8,0" ToolTip="Recent changes and recovery copies"/>
+                <TextBlock x:Name="LastCheckedText" Grid.Column="4" Text="Last checked: never" HorizontalAlignment="Right" VerticalAlignment="Center"
+                           Foreground="{DynamicResource ApplicationSecondaryText}" FontSize="{DynamicResource TextSize12}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+                <TextBlock x:Name="ActivityNotice" Grid.Row="1" Grid.ColumnSpan="5" Visibility="Collapsed" TextWrapping="Wrap"
+                           Foreground="{DynamicResource PrimaryText}" Margin="0,5,0,0" AutomationProperties.LiveSetting="Polite"/>
+                <TextBox x:Name="RestartNotice" Grid.Row="2" Grid.ColumnSpan="5" Visibility="Collapsed"
                          Text="An installer requested a Windows restart. Restart Windows before further setup, updates, removal or profile changes."
                          AutomationProperties.Name="Windows restart required" IsReadOnly="True" IsReadOnlyCaretVisible="True" IsTabStop="True"
                          TextWrapping="Wrap" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Disabled"
                          Background="{DynamicResource WarningBg}" Foreground="{DynamicResource WarningFg}" CaretBrush="{DynamicResource WarningFg}" BorderBrush="{DynamicResource WarningFg}"
-                         FontSize="12" Margin="0,7,0,0" Padding="8,6"/>
+                         FontSize="{DynamicResource TextSize12}" Margin="0,7,0,0" Padding="8,6"/>
             </Grid>
         </Border>
-        <Border x:Name="ApplicationDetails" DockPanel.Dock="Bottom" Height="88" Background="{DynamicResource ColumnHeaderBg}"
+        <Border x:Name="ApplicationDetails" DockPanel.Dock="Bottom" Height="100" Background="{DynamicResource ColumnHeaderBg}"
                 BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,0,0" Padding="12,7" AutomationProperties.Name="Selected application details">
             <Grid>
                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="296"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <TextBlock x:Name="DetailHeading" Grid.ColumnSpan="2" Text="{Binding DetailHeading}" Foreground="{DynamicResource PrimaryText}" FontSize="13" FontWeight="Medium"
+                <Thumb x:Name="DetailsResizeThumb" Grid.ColumnSpan="3" Height="5" VerticalAlignment="Top" Margin="0,-7,0,0"
+                       Cursor="SizeNS" DragDelta="DetailsResize_DragDelta" ToolTip="Drag to resize the details panel" AutomationProperties.Name="Resize details panel">
+                    <Thumb.Template>
+                        <ControlTemplate TargetType="Thumb">
+                            <Grid Background="Transparent">
+                                <Border Height="1" Background="{DynamicResource DividerBrush}" VerticalAlignment="Top"/>
+                                <Border x:Name="Grip" Width="48" Height="3" CornerRadius="1" Background="{DynamicResource ApplicationSecondaryText}"/>
+                            </Grid>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Grip" Property="Background" Value="{DynamicResource ApplicationUpdateText}"/></Trigger>
+                                <Trigger Property="IsDragging" Value="True"><Setter TargetName="Grip" Property="Background" Value="{DynamicResource ApplicationUpdateText}"/></Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Thumb.Template>
+                </Thumb>
+                <TextBlock x:Name="DetailHeading" Grid.ColumnSpan="2" Text="{Binding DetailHeading}" Foreground="{DynamicResource PrimaryText}" FontSize="{DynamicResource TextSize13}" FontWeight="Medium"
                            TextTrimming="CharacterEllipsis" ToolTip="{Binding DetailHeading}" Margin="0,0,8,3" AutomationProperties.LiveSetting="Polite"/>
-                <Button x:Name="DetailsCloseButton" Grid.Column="2" Content="✕" Click="DetailsClose_Click" Style="{StaticResource FlatButton}"
-                        MinHeight="20" Padding="5,1" FontSize="11" ToolTip="Hide application details" AutomationProperties.Name="Hide application details" Visibility="Collapsed"/>
+                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                <Button x:Name="DetailsSizeButton" Content="More space" Click="DetailsSize_Click" Style="{StaticResource FlatButton}" MinHeight="20" Padding="5,1" Margin="0,0,5,0" ToolTip="Expand or shrink application details"/>
+                <Button x:Name="DetailsCloseButton" Content="✕" Click="DetailsClose_Click" Style="{StaticResource FlatButton}"
+                        MinHeight="20" Padding="5,1" FontSize="{DynamicResource TextSize11}" ToolTip="Hide application details" AutomationProperties.Name="Hide application details" Visibility="Collapsed"/>
+                </StackPanel>
                 <TextBox x:Name="DetailMessage" Grid.Row="1" Text="{Binding DetailText, Mode=OneWay}" IsReadOnly="True" IsReadOnlyCaretVisible="True"
                          AutomationProperties.Name="Application explanation" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                          Background="Transparent" Foreground="{DynamicResource ApplicationSecondaryText}" CaretBrush="{DynamicResource PrimaryText}" BorderThickness="0"
-                         Padding="0" Margin="0,0,14,0" FontSize="12"/>
-                <WrapPanel Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" MaxWidth="296" HorizontalAlignment="Left" VerticalAlignment="Center">
+                         Padding="0" Margin="0,0,14,0" FontSize="{DynamicResource TextSize12}"/>
+                <ScrollViewer Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <WrapPanel MaxWidth="296" HorizontalAlignment="Left" VerticalAlignment="Top">
+                    <Button Content="Running app…" Click="RunningActions_Click" Style="{StaticResource DetailAction}"
+                            Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibility}}" IsEnabled="{Binding LaunchEnabled}"
+                            ToolTip="Show, close normally, or explicitly force stop the verified running application"/>
                     <Button x:Name="DetailEuroScopeButton" Content="{Binding EuroScopeSetupText}" Click="EuroScopeManage_Click" Style="{StaticResource DetailAction}"
                             Visibility="{Binding HasEuroScopeManagement, Converter={StaticResource BoolToVisibility}}" IsEnabled="{Binding SoftwareActionsAllowed}"
                             ToolTip="Install, repair or review replacement with the supported EuroScope version"/>
@@ -142,7 +168,11 @@
                             Visibility="{Binding ShowSoftwareSetup, Converter={StaticResource BoolToVisibility}}" IsEnabled="{Binding SoftwareActionsAllowed}" ToolTip="Review an existing installation or set up a missing application"/>
                     <Button x:Name="DetailSelfUpdateButton" Content="{Binding SelfUpdateActionText}" Click="SelfUpdate_Click" Style="{StaticResource DetailAction}"
                             Visibility="{Binding ShowSelfUpdateAction, Converter={StaticResource BoolToVisibility}}" IsEnabled="{Binding SelfUpdateActionEnabled}"/>
+                    <Button Content="{Binding UsageActionText}" Click="Usage_Click" Style="{StaticResource DetailAction}"
+                            Visibility="{Binding CanChooseUsage, Converter={StaticResource BoolToVisibility}}" IsEnabled="{Binding SoftwareActionsAllowed}"
+                            ToolTip="Change whether this optional tool needs attention. Saved locations and data are kept."/>
                 </WrapPanel>
+                </ScrollViewer>
             </Grid>
         </Border>
         <Border x:Name="DiscoveryPrompt" DockPanel.Dock="Top" Background="{DynamicResource RowBg}" Padding="12,8" Visibility="Collapsed">
@@ -154,19 +184,19 @@
         </Border>
         <ScrollViewer x:Name="ApplicationsScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
         <StackPanel MinWidth="714" Width="{Binding ViewportWidth, ElementName=ApplicationsScroll}">
-            <Border Background="{DynamicResource ColumnHeaderBg}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Height="28">
+            <Border Background="{DynamicResource ColumnHeaderBg}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" MinHeight="28" Padding="0,3">
                 <Grid Width="{Binding ActualWidth, ElementName=AppList}" HorizontalAlignment="Left">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="82"/><ColumnDefinition Width="1.55*" MinWidth="146"/>
+                        <ColumnDefinition Width="{DynamicResource LaunchColumnWidth}"/><ColumnDefinition Width="1.55*" MinWidth="146"/>
                         <ColumnDefinition Width="1.1*" MinWidth="104"/><ColumnDefinition Width="1.2*" MinWidth="122"/>
-                        <ColumnDefinition Width="1.6*" MinWidth="150"/><ColumnDefinition Width="84"/>
+                        <ColumnDefinition Width="1.6*" MinWidth="150"/><ColumnDefinition Width="{DynamicResource OptionsColumnWidth}"/>
                     </Grid.ColumnDefinitions>
-                    <TextBlock Text="Open" Margin="10,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource ApplicationSecondaryText}" FontSize="12"/>
-                    <TextBlock Grid.Column="1" Text="Application" VerticalAlignment="Center" Foreground="{DynamicResource ApplicationSecondaryText}" FontSize="12"/>
-                    <TextBlock Grid.Column="2" Text="Your version" VerticalAlignment="Center" Foreground="{DynamicResource ApplicationSecondaryText}" FontSize="12"/>
-                    <TextBlock Grid.Column="3" Text="Latest / supported" VerticalAlignment="Center" Foreground="{DynamicResource ApplicationSecondaryText}" FontSize="12"/>
-                    <TextBlock Grid.Column="4" Text="Status" VerticalAlignment="Center" Foreground="{DynamicResource ApplicationSecondaryText}" FontSize="12"/>
-                    <TextBlock Grid.Column="5" Text="Options" VerticalAlignment="Center" Foreground="{DynamicResource ApplicationSecondaryText}" FontSize="12"/>
+                    <TextBlock Text="Open" Margin="10,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource ApplicationSecondaryText}" FontSize="{DynamicResource TextSize12}"/>
+                    <TextBlock Grid.Column="1" Text="Application" VerticalAlignment="Center" Foreground="{DynamicResource ApplicationSecondaryText}" FontSize="{DynamicResource TextSize12}"/>
+                    <TextBlock Grid.Column="2" Text="Your version" VerticalAlignment="Center" Foreground="{DynamicResource ApplicationSecondaryText}" FontSize="{DynamicResource TextSize12}"/>
+                    <TextBlock Grid.Column="3" Text="Latest / supported" TextWrapping="Wrap" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="{DynamicResource ApplicationSecondaryText}" FontSize="{DynamicResource TextSize12}"/>
+                    <TextBlock Grid.Column="4" Text="Status" VerticalAlignment="Center" Foreground="{DynamicResource ApplicationSecondaryText}" FontSize="{DynamicResource TextSize12}"/>
+                    <TextBlock Grid.Column="5" Text="Options" VerticalAlignment="Center" Foreground="{DynamicResource ApplicationSecondaryText}" FontSize="{DynamicResource TextSize12}"/>
                 </Grid>
             </Border>
             <ItemsControl x:Name="AppList" Background="{DynamicResource AppBg}">
@@ -175,27 +205,31 @@
                         <Border Style="{StaticResource RowShell}">
                             <Grid>
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="82"/><ColumnDefinition Width="1.55*" MinWidth="146"/>
+                                    <ColumnDefinition Width="{DynamicResource LaunchColumnWidth}"/><ColumnDefinition Width="1.55*" MinWidth="146"/>
                                     <ColumnDefinition Width="1.1*" MinWidth="104"/><ColumnDefinition Width="1.2*" MinWidth="122"/>
-                                    <ColumnDefinition Width="1.6*" MinWidth="150"/><ColumnDefinition Width="84"/>
+                                    <ColumnDefinition Width="1.6*" MinWidth="150"/><ColumnDefinition Width="{DynamicResource OptionsColumnWidth}"/>
                                 </Grid.ColumnDefinitions>
                                 <Border Width="3" Background="{DynamicResource ApplicationUpdateText}" HorizontalAlignment="Left" Visibility="{Binding IsSelected, Converter={StaticResource BoolToVisibility}}"/>
                                 <Button Click="Launch_Click" Style="{StaticResource LaunchButton}" Margin="8,0,8,0" VerticalAlignment="Center"
                                         Visibility="{Binding ShowSimpleLaunch, Converter={StaticResource BoolToVisibility}}"/>
                                 <Grid Margin="8,0,8,0" VerticalAlignment="Center" Visibility="{Binding ShowSplitLaunch, Converter={StaticResource BoolToVisibility}}">
-                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="18"/></Grid.ColumnDefinitions>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="22"/></Grid.ColumnDefinitions>
                                     <Button Click="Launch_Click" Style="{StaticResource LaunchButton}" Padding="2,4"/>
                                     <Button Grid.Column="1" Content="▾" Click="ProfileDropdown_Click" Padding="2,4" Style="{StaticResource RowActionButton}"
                                             IsEnabled="{Binding LaunchEnabled}" ToolTip="{Binding SelectedProfile.DisplayName}" AutomationProperties.Name="Choose EuroScope profile"/>
                                 </Grid>
-                                <TextBlock Grid.Column="1" Text="{Binding DisplayName}" Margin="0,0,8,0" VerticalAlignment="Center"
-                                           Foreground="{DynamicResource PrimaryText}" FontSize="13" FontWeight="Medium" TextTrimming="CharacterEllipsis"
+                                <StackPanel Grid.Column="1" Margin="0,0,8,0" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding DisplayName}"
+                                           Foreground="{DynamicResource PrimaryText}" FontSize="{DynamicResource TextSize13}" FontWeight="Medium" TextTrimming="CharacterEllipsis"
                                            ToolTip="{Binding Description}" AutomationProperties.HelpText="{Binding Description}"/>
+                                <TextBlock Text="{Binding SelectedProfileCaption}" FontSize="{DynamicResource TextSize11}" Foreground="{DynamicResource ApplicationSecondaryText}"
+                                           Visibility="{Binding HasProfiles, Converter={StaticResource BoolToVisibility}}" TextTrimming="CharacterEllipsis" ToolTip="{Binding SelectedProfileCaption}"/>
+                                </StackPanel>
                                 <TextBlock Grid.Column="2" Text="{Binding DisplayInstalledVersion}" Margin="0,0,8,0" VerticalAlignment="Center"
-                                           Foreground="{DynamicResource PrimaryText}" FontSize="12" TextTrimming="CharacterEllipsis" ToolTip="{Binding DisplayInstalledVersion}"/>
+                                           Foreground="{DynamicResource PrimaryText}" FontSize="{DynamicResource TextSize12}" TextTrimming="CharacterEllipsis" ToolTip="{Binding DisplayInstalledVersion}"/>
                                 <StackPanel Grid.Column="3" VerticalAlignment="Center" Margin="0,0,8,0">
-                                    <TextBlock Text="{Binding DisplayLatestVersion}" Foreground="{DynamicResource PrimaryText}" FontSize="12" TextTrimming="CharacterEllipsis" ToolTip="{Binding DisplayLatestVersion}"/>
-                                    <TextBlock Text="{Binding LatestVersionCaption}" Foreground="{DynamicResource ApplicationSecondaryText}" FontSize="11"/>
+                                    <TextBlock Text="{Binding DisplayLatestVersion}" Foreground="{DynamicResource PrimaryText}" FontSize="{DynamicResource TextSize12}" TextTrimming="CharacterEllipsis" ToolTip="{Binding DisplayLatestVersion}"/>
+                                    <TextBlock Text="{Binding LatestVersionCaption}" Foreground="{DynamicResource ApplicationSecondaryText}" FontSize="{DynamicResource TextSize11}" TextTrimming="CharacterEllipsis" ToolTip="{Binding LatestVersionCaption}"/>
                                 </StackPanel>
                                 <StackPanel Grid.Column="4" VerticalAlignment="Center" Margin="0,0,8,0">
                                     <DockPanel>
@@ -205,7 +239,7 @@
                                     <TextBlock Text="{Binding RowExplanation}" Style="{StaticResource RowExplanationText}" ToolTip="{Binding DetailText}"/>
                                 </StackPanel>
                                 <Button x:Name="RowDetailsButton" Grid.Column="5" Content="{Binding RowOptionsText}" Click="Details_Click" Margin="0,0,10,0"
-                                        Style="{StaticResource ThemedButton}" FontSize="12" MinHeight="28" Padding="4,3" VerticalAlignment="Center"
+                                        Style="{StaticResource ThemedButton}" FontSize="{DynamicResource TextSize12}" MinHeight="28" Padding="4,3" VerticalAlignment="Center"
                                         AutomationProperties.Name="{Binding DisplayName, StringFormat=Details and actions for {0}}"/>
                                 <ProgressBar Grid.Column="4" Height="3" VerticalAlignment="Bottom" Margin="0,0,8,1" Minimum="0" Maximum="100" Foreground="{DynamicResource ApplicationUpdateText}" Background="{DynamicResource DividerBrush}" BorderThickness="0"
                                              Visibility="{Binding SoftwareUpdateBusy, Converter={StaticResource BoolToVisibility}}" IsIndeterminate="{Binding SoftwareProgressIndeterminate}"

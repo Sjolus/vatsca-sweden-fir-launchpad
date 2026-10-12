@@ -20,6 +20,15 @@ public class CheckResult : INotifyPropertyChanged
     private string _launchPath = string.Empty;
     private bool _isRunning;
     private bool _isSelected;
+    private bool _isNotUsed;
+
+    public bool IsNotUsed
+    {
+        get => _isNotUsed;
+        set { if (_isNotUsed == value) return; _isNotUsed = value; OnPropertyChanged(nameof(IsNotUsed)); NotifyPresentation(); }
+    }
+    public bool CanChooseUsage => !HasSelfUpdate;
+    public string UsageActionText => IsNotUsed ? "Use this application" : "I don't use this";
 
     public string AppName { get; init; } = string.Empty;
     public string Description => ApplicationDescriptions.For(AppName);
@@ -57,6 +66,7 @@ public class CheckResult : INotifyPropertyChanged
     {
         get
         {
+            if (IsNotUsed && !SoftwareUpdateBusy && !IsRunning) return "Not used";
             if (HasSoftwareUpdate)
             {
                 if (SoftwareNeedsSetup && !SoftwareUpdateBusy)
@@ -108,6 +118,7 @@ public class CheckResult : INotifyPropertyChanged
     {
         get
         {
+            if (IsNotUsed && !SoftwareUpdateBusy) return "Neutral";
             if (HasSoftwareUpdate)
                 return SoftwareNeedsSetup && !SoftwareUpdateBusy ? "Warning" : SoftwareUpdate?.Phase switch
                 {
@@ -141,6 +152,7 @@ public class CheckResult : INotifyPropertyChanged
     {
         get
         {
+            if (IsNotUsed) return "Optional · your saved locations and settings are kept";
             if (HasSoftwareUpdate)
             {
                 if (SoftwareNeedsSetup && !SoftwareUpdateBusy)
@@ -202,6 +214,7 @@ public class CheckResult : INotifyPropertyChanged
         get
         {
             var paragraphs = new List<string>();
+            if (IsNotUsed) AddDetail(paragraphs, "You chose not to use this application. Your saved locations and data are unchanged. Choose Use this application whenever you need it.");
             AddDetail(paragraphs, StatusMessage);
             if (HasSoftwareUpdate) AddDetail(paragraphs, SoftwareUpdate?.Message);
             if (HasSoftwareUpdate) AddDetail(paragraphs, SoftwareBlockingReason);
@@ -229,7 +242,8 @@ public class CheckResult : INotifyPropertyChanged
         }
     }
 
-    public string LaunchActionText => IsFolder ? "Folder" : IsRunning ? "Stop" : IsWebApp ? "Open" : "Launch";
+    public string LaunchActionText => IsFolder ? "Folder" : IsRunning ? "Show" : IsWebApp ? "Open" : "Launch";
+    public string SelectedProfileCaption => HasProfiles ? (IsRunning ? "Next launch: " : "Launch profile: ") + (SelectedProfile?.DisplayName ?? "No profile") : "";
     public string RowOptionsText => "Details…";
 
     private static bool IsEmptyVersion(string? value) => string.IsNullOrWhiteSpace(value) ||
@@ -513,7 +527,7 @@ public class CheckResult : INotifyPropertyChanged
 
     public bool ShowLaunch =>
         !string.IsNullOrEmpty(LaunchPath) &&
-        (IsLocalUrl ? IsLocalUrlReachable :
+        (IsLocalUrl ? IsLocalUrlReachable || IsRunning :
          IsWebApp   ? true :
          IsFolder   ? Directory.Exists(LaunchPath) :
                       File.Exists(LaunchPath));
@@ -525,7 +539,7 @@ public class CheckResult : INotifyPropertyChanged
     public bool ShowSplitLaunch => ShowLaunch && HasProfiles;
 
     public string LaunchTooltip => IsFolder ? "Open the GNG package folder." : IsRunning
-        ? $"Force-stop {DisplayName}. Unsaved work may be lost."
+        ? $"Show the running {DisplayName} window. Closing is a separate action in Details."
         : IsWebApp ? $"Open {DisplayName} in its browser window." : $"Launch {DisplayName}.";
 
     public string InstalledVersion
@@ -609,7 +623,8 @@ public class CheckResult : INotifyPropertyChanged
         // Use direct notifications: derived labels must not recursively invalidate one another.
         foreach (var name in new[] { nameof(DisplayInstalledVersion), nameof(DisplayLatestVersion),
             nameof(LatestVersionCaption), nameof(RowStatusText), nameof(RowStatusKind), nameof(RowStatusSymbol),
-            nameof(RowExplanation), nameof(DetailHeading), nameof(DetailText), nameof(LaunchActionText) })
+            nameof(RowExplanation), nameof(DetailHeading), nameof(DetailText), nameof(LaunchActionText),
+            nameof(UsageActionText), nameof(SelectedProfileCaption), nameof(ShowLaunch), nameof(ShowSimpleLaunch), nameof(ShowSplitLaunch) })
             OnPropertyChanged(name);
     }
 

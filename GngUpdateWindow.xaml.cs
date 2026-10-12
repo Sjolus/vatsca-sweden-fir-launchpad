@@ -57,6 +57,7 @@ public partial class GngUpdateWindow : Window
     private bool _cleanupOpen;
     private bool _recoveryRequired;
     private string? _pendingBackup;
+    private readonly string? _suggestedRecoveryFolder;
     private readonly DispatcherTimer _euroScopeTimer = new() { Interval = TimeSpan.FromSeconds(3) };
 
     public string DataFolder { get; }
@@ -67,17 +68,20 @@ public partial class GngUpdateWindow : Window
     private bool CanGetPackage => Idle && !_recoveryRequired && !_selectionInFlight;
 
     public GngUpdateWindow(string dataFolder, string? selectedProfile, IEnumerable<string> protectedPaths,
-        IEnumerable<string>? cleanupProtectedPaths = null)
+        IEnumerable<string>? cleanupProtectedPaths = null, string? recoveryFolder = null)
     {
         InitializeComponent();
         DataFolder = dataFolder ?? string.Empty;
         _selectedProfile = selectedProfile;
+        _suggestedRecoveryFolder = recoveryFolder;
         _protectedPaths = protectedPaths.Where(path => !string.IsNullOrWhiteSpace(path)).ToArray();
         _cleanupProtectedPaths = (cleanupProtectedPaths ?? _protectedPaths).Where(path => !string.IsNullOrWhiteSpace(path)).ToArray();
         FolderText.Text = string.IsNullOrWhiteSpace(DataFolder) ? "No folder configured. Choose one in App settings first." : DataFolder;
         FolderText.ToolTip = "Reviewed EuroScope data destination:\n" + FolderText.Text + "\nClose this window to choose a different folder.";
         UpdatePackageKind();
         ShowPendingRecovery();
+        if (!_recoveryRequired && !string.IsNullOrWhiteSpace(recoveryFolder))
+            ShowCompletion("Review GNG recovery", "Choose Restore backup to review the selected recovery copy. Nothing is restored until you confirm the backup and destination.", recoveryFolder);
         RefreshEuroScopeStatus();
         _euroScopeTimer.Tick += (_, _) => RefreshEuroScopeStatus();
         Loaded += (_, _) => _euroScopeTimer.Start();
@@ -250,13 +254,20 @@ public partial class GngUpdateWindow : Window
                 var result = await WebViewRuntimeService.InstallAsync(new Progress<string>(message => { if (_busy) StatusText.Text = message; }),
                     onRestartRequired: () => RestartRequired = true);
                 RestartRequired |= result.RestartRequired;
+                ActivityHistoryService.Record(ActivityApplication.Gng, ActivityOperation.Prerequisite,
+                    ActivityOutcome.Completed, restartRequired: RestartRequired);
                 if (!RestartRequired)
                 {
                     ResetBrowser();
                     ShowBrowserFallback("Microsoft WebView2 is installed. Choose Download Swedish GNG to continue.");
                 }
             }
-            catch (Exception ex) { failure = "Runtime setup stopped: " + ex.Message; StatusText.Text = failure; }
+            catch (Exception ex)
+            {
+                ActivityHistoryService.Record(ActivityApplication.Gng, ActivityOperation.Prerequisite,
+                    ActivityOutcome.Stopped, restartRequired: RestartRequired);
+                failure = "Runtime setup stopped: " + ex.Message; StatusText.Text = failure;
+            }
             finally
             {
                 if (RestartRequired) StatusText.Text = (failure is null ? "" : failure + Environment.NewLine) + "Restart Windows before further installation or recovery.";
@@ -851,8 +862,9 @@ public partial class GngUpdateWindow : Window
             PackageText.Text = plan.PackageName;
             PackageSummaryText.Text = $"Version {plan.Version} · {plan.Files.Count:N0} package files" +
                 (plan.ReferencePackageName is null ? "" : " · Matching Full Package will be kept for cleanup comparisons; its files will not be installed.");
-            WarningsText.Text = "Recovery backups: " + GngUpdateService.GetBackupRoot(DataFolder) + Environment.NewLine + string.Join(Environment.NewLine, plan.Warnings);
-            WarningsText.ScrollToHome();
+            SetPackageNotes(plan.Warnings, GngUpdateService.GetBackupRoot(DataFolder));
+            ReviewSummaryText.Text = ReviewSummaries.Gng(plan, GngUpdateService.GetBackupRoot(DataFolder));
+            ReviewSummaryText.ScrollToHome();
             SetReviewFiles(plan.Files);
             BrowserPanel.Visibility = CompletePanel.Visibility = Visibility.Collapsed;
             ReviewPanel.Visibility = Visibility.Visible;
@@ -892,6 +904,8 @@ public partial class GngUpdateWindow : Window
         {
             AttemptedChanges = true;
             var result = await Task.Run(() => GngUpdateService.Install(plan, progress));
+            ActivityHistoryService.Record(ActivityApplication.Gng, ActivityOperation.Install, ActivityOutcome.Completed,
+                plan.Version, result.BackupFolder, DataFolder);
             InstallationCompleted = true;
             _newCompleteZip = result.CompletePackagePath;
             _oldCompleteZip = result.PreviousCompletePackagePath;
@@ -910,6 +924,8 @@ public partial class GngUpdateWindow : Window
             ConfirmInstall.IsChecked = false;
             StatusText.Text = "Installation stopped. Keep any recovery backup and review these details before retrying: " + ex.Message;
             ShowPendingRecovery("Installation stopped: " + ex.Message);
+            ActivityHistoryService.Record(ActivityApplication.Gng, ActivityOperation.Install, ActivityOutcome.Stopped,
+                plan.Version, _pendingBackup, DataFolder);
         }
         finally { SetBusy(false); }
     }
@@ -925,6 +941,7 @@ public partial class GngUpdateWindow : Window
             var backups = GngUpdateService.GetBackupRoot(DataFolder);
             if (Directory.Exists(backups)) dialog.InitialDirectory = backups;
             if (_pendingBackup is not null) dialog.FolderName = _pendingBackup;
+            else if (_suggestedRecoveryFolder is not null && Directory.Exists(_suggestedRecoveryFolder)) dialog.FolderName = _suggestedRecoveryFolder;
         }
         catch (Exception ex) { StatusText.Text = "The recovery location could not be checked: " + ex.Message; return; }
         if (dialog.ShowDialog(this) != true) return;
@@ -944,6 +961,9 @@ public partial class GngUpdateWindow : Window
             _newCompleteZip = _oldCompleteZip = null;
             CleanupButton.Visibility = Visibility.Collapsed;
             var result = await Task.Run(() => GngUpdateService.Restore(dialog.FolderName, DataFolder, _protectedPaths, progress));
+            ActivityHistoryService.Record(ActivityApplication.Gng, ActivityOperation.Restore,
+                result.SkippedFiles.Count == 0 ? ActivityOutcome.Completed : ActivityOutcome.NeedsAttention,
+                recoveryFolder: result.BackupFolder, dataFolder: DataFolder);
             _recoveryRequired = result.SkippedFiles.Count > 0;
             _pendingBackup = _recoveryRequired ? result.BackupFolder : null;
             var details = $"{result.InstalledFileCount:N0} files restored.";
@@ -957,6 +977,8 @@ public partial class GngUpdateWindow : Window
             ShowCompletion("Restore stopped", "Keep the backup and resolve this problem before trying recovery again. " + ex.Message, dialog.FolderName);
             StatusText.Text = "Restore did not complete. Review the recovery details above before using EuroScope.";
             ShowPendingRecovery("Restore stopped: " + ex.Message);
+            ActivityHistoryService.Record(ActivityApplication.Gng, ActivityOperation.Restore, ActivityOutcome.Stopped,
+                recoveryFolder: dialog.FolderName, dataFolder: DataFolder);
         }
         finally { SetBusy(false); }
     }

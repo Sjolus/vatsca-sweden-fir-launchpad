@@ -86,6 +86,12 @@ jobs:
       - name: Test application status
         run: dotnet run --project Tests/CheckResult.Tests/CheckResult.Tests.csproj -c Release
 
+      - name: Test presentation preferences and process identity
+        run: dotnet run --project Tests/Presentation.Tests/Presentation.Tests.csproj -c Release
+
+      - name: Test activity history
+        run: dotnet run --project Tests/ActivityHistory.Tests/ActivityHistory.Tests.csproj -c Release
+
       - name: Test VatEFS installation detection
         run: dotnet run --project Tests/VatEfs.Tests/VatEfs.Tests.csproj -c Release
 

@@ -51,6 +51,8 @@ public partial class FreshSoftwareInstallWindow : Window
     private void InvalidateReview()
     {
         _plan = null; ConfirmInstall.IsChecked = false; ConfirmInstall.IsEnabled = false; ApplyButton.IsEnabled = false;
+        ReviewSummaryText.Text = "Review the installation again to see the current version, destination and recovery plan.";
+        ReviewDetails.IsExpanded = false;
     }
     private void ChooseBackup_Click(object sender, RoutedEventArgs e)
     {
@@ -71,16 +73,17 @@ public partial class FreshSoftwareInstallWindow : Window
             bool allowBeta = AllowVatisBeta.IsChecked == true;
             _plan = await Task.Run(() => _service.PreviewAsync(_app, _settings, backup, allowBeta, _cancellation.Token));
             ReviewText.Text = _plan.Review;
+            ReviewSummaryText.Text = ReviewSummaries.Fresh(_plan);
             if (_app == SoftwareApp.Vatis) ApplyButton.Content = _plan.Release.Version.Contains('-') ? "Install vATIS beta" : "Install vATIS";
             if (_app == SoftwareApp.VatEfs) ApplyButton.Content = _plan.Release.IsPrerelease ? "Install VatEFS prerelease" : "Install VatEFS";
-            StatusText.Text = "Review the full plan. No application package has been downloaded or installed.";
+            StatusText.Text = "Review what changes and where it will be installed. Expand the full plan for package checks and individual files. Nothing has been installed.";
         }
         catch (OperationCanceledException) { StatusText.Text = "Review cancelled. Nothing was installed."; }
         catch (Exception ex) { StatusText.Text = ex.Message; }
         finally { _previewing = false; _cancellation.Dispose(); _cancellation = null; SetBusy(false); }
         if (_plan != null) ShowReviewedPlan();
     }
-    private void ShowReviewedPlan() => ReviewScrollHelper.Show(ContentScroll, ReviewPanel, ReviewText,
+    private void ShowReviewedPlan() => ReviewScrollHelper.Show(ContentScroll, ReviewPanel, ReviewSummaryText,
         () => !_busy && _plan != null && IsVisible);
     private async void Apply_Click(object sender, RoutedEventArgs e)
     {
@@ -100,14 +103,26 @@ public partial class FreshSoftwareInstallWindow : Window
             });
             Result = await Task.Run(() => _service.ApplyAsync(plan, progress, _cancellation.Token));
             RestartRequired |= Result.RestartRequired;
+            ActivityHistoryService.Record(ActivityHistoryService.ForSoftware(_app), ActivityOperation.Install,
+                ActivityOutcome.Completed, plan.Release.Version, Result.BackupFolder, restartRequired: RestartRequired);
             _finished = true;
             StatusText.Text = (_app == SoftwareApp.VatEfs
                 ? "Installation verified. VatEFS remains closed. Enable its plugin through Controller profile before starting EuroScope."
                 : "Installation verified. The application remains closed.") +
                 (Result.RestartRequired ? " Restart Windows before further changes." : "") + BackupNotice();
         }
-        catch (OperationCanceledException) { StatusText.Text = "Preparation cancelled. Review again before retrying." + BackupNotice(); }
-        catch (Exception ex) { StatusText.Text = "Installation stopped: " + ex.Message + BackupNotice(); }
+        catch (OperationCanceledException)
+        {
+            ActivityHistoryService.Record(ActivityHistoryService.ForSoftware(_app), ActivityOperation.Install,
+                ActivityOutcome.Cancelled, plan.Release.Version, _service.LastBackupFolder, restartRequired: _service.RestartRequired);
+            StatusText.Text = "Preparation cancelled. Review again before retrying." + BackupNotice();
+        }
+        catch (Exception ex)
+        {
+            ActivityHistoryService.Record(ActivityHistoryService.ForSoftware(_app), ActivityOperation.Install,
+                ActivityOutcome.Stopped, plan.Release.Version, _service.LastBackupFolder, restartRequired: _service.RestartRequired);
+            StatusText.Text = "Installation stopped: " + ex.Message + BackupNotice();
+        }
         finally { _cancellation.Dispose(); _cancellation = null; InvalidateReview(); KeepRestartRequirement(); SetBusy(false); }
     }
     private string BackupNotice() => _service.LastBackupFolder == null ? "" : " Recovery export: " + _service.LastBackupFolder;
@@ -121,6 +136,7 @@ public partial class FreshSoftwareInstallWindow : Window
     private async void Prerequisite_Click(object sender, RoutedEventArgs e)
     {
         if (_busy || _finished) return;
+        bool requested = false;
         InvalidateReview(); SetBusy(true, "Checking required runtime…");
         try
         {
@@ -129,13 +145,21 @@ public partial class FreshSoftwareInstallWindow : Window
             if (MessageBox.Show(this, problem + "\n\nDownload and install the required Microsoft runtime now? Windows may request administrator approval. Shared runtimes are kept when Launchpad is removed.",
                 "Application prerequisite", MessageBoxButton.YesNo, MessageBoxImage.Information) != MessageBoxResult.Yes)
             { StatusText.Text = "Runtime installation was not requested."; return; }
+            requested = true;
             var progress = new Progress<string>(message => { if (_busy) StatusText.Text = message; });
             var result = await Task.Run(() => SoftwarePrerequisiteService.InstallAsync(_app, progress, onRestartRequired: () => RestartRequired = true));
             RestartRequired |= result.RestartRequired;
+            ActivityHistoryService.Record(ActivityHistoryService.ForSoftware(_app), ActivityOperation.Prerequisite,
+                ActivityOutcome.Completed, restartRequired: RestartRequired);
             StatusText.Text = result.RestartRequired ? "Runtime installed. Restart Windows before continuing." : "Runtime ready. Review the application installation when ready.";
             if (result.RestartRequired) _finished = true;
         }
-        catch (Exception ex) { StatusText.Text = "Runtime setup stopped: " + ex.Message; }
+        catch (Exception ex)
+        {
+            if (requested) ActivityHistoryService.Record(ActivityHistoryService.ForSoftware(_app), ActivityOperation.Prerequisite,
+                ActivityOutcome.Stopped, restartRequired: RestartRequired);
+            StatusText.Text = "Runtime setup stopped: " + ex.Message;
+        }
         finally { KeepRestartRequirement(); SetBusy(false); }
     }
     private void SetBusy(bool busy, string? message = null)

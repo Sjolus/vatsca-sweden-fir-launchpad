@@ -2,32 +2,33 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:models="clr-namespace:VatscaUpdateChecker.Models"
-        Title="Set up Launchpad" Width="720" Height="680" MinWidth="500" MinHeight="440"
+        Title="Set up Launchpad" Width="720" Height="680" MinWidth="500" MinHeight="520"
         ResizeMode="CanResize" WindowStartupLocation="CenterOwner"
-        Background="{DynamicResource AppBg}">
-    <DockPanel Margin="20">
+        Background="{DynamicResource AppBg}" FontSize="{DynamicResource TextSize12}">
+    <DockPanel Margin="16">
         <StackPanel DockPanel.Dock="Top" Margin="0,0,0,14">
-            <TextBlock Text="Set up Launchpad" FontSize="23" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryText}"/>
+            <TextBlock Text="Set up Launchpad" FontSize="{DynamicResource TextSize23}" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryText}"/>
             <TextBlock x:Name="StepText" Margin="0,6,0,0" Foreground="{DynamicResource SecondaryText}" TextWrapping="Wrap"/>
         </StackPanel>
-        <StackPanel DockPanel.Dock="Bottom" Margin="0,14,0,0">
+        <StackPanel DockPanel.Dock="Bottom" Margin="0,14,0,0" KeyboardNavigation.TabIndex="1" KeyboardNavigation.TabNavigation="Local">
             <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" MaxHeight="76">
                 <TextBlock x:Name="StatusText" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,8"/>
             </ScrollViewer>
-            <TextBlock Text="Leaving keeps programs installed and anything you saved in Settings or Controller profile. Finish saves the preferences chosen here."
-                       TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" FontSize="12" Margin="0,0,0,8"/>
+            <TextBlock Text="Your progress is saved. Finish saves appearance preferences."
+                       TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" FontSize="{DynamicResource TextSize12}" Margin="0,0,0,8"/>
             <WrapPanel HorizontalAlignment="Right">
-                <Button x:Name="SkipButton" Content="Skip for now" IsCancel="True" Click="Skip_Click" Padding="12,7" Margin="0,0,8,4"/>
+                <Button x:Name="SkipButton" Content="Continue later" IsCancel="True" Click="Skip_Click" Padding="12,7" Margin="0,0,8,4"/>
                 <Button x:Name="BackButton" Content="Back" Click="Back_Click" Padding="12,7" Margin="0,0,8,4"/>
                 <Button x:Name="NextButton" Content="Next" Click="Next_Click" Padding="16,7" Margin="0,0,0,4"
                         Background="#1a475f" Foreground="White"/>
             </WrapPanel>
         </StackPanel>
-        <ScrollViewer x:Name="ContentScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <ScrollViewer x:Name="ContentScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                      KeyboardNavigation.TabIndex="0" KeyboardNavigation.TabNavigation="Local">
             <Grid>
                 <StackPanel x:Name="WelcomePage">
-                    <TextBlock Text="Start with what you already have" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryText}" Margin="0,0,0,10"/>
-                    <TextBlock Text="Launchpad can find ATC programs already on this PC or help install missing ones. Choose only what you use. Opening this guide or choosing Next does not download, install or start programs."
+                    <TextBlock Text="Start with what you already have" FontSize="{DynamicResource TextSize18}" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryText}" Margin="0,0,0,10"/>
+                    <TextBlock Text="Choose applications, set up Swedish airspace, review your controller details and check fonts. Use your existing setup or install what is missing. You can skip any step. Next only moves through the guide; each change needs your action."
                                TextWrapping="Wrap" Foreground="{DynamicResource PrimaryText}" Margin="0,0,0,20"/>
                     <RadioButton x:Name="ExistingChoice" GroupName="SetupRoute" IsChecked="True" Checked="Route_Changed" Margin="0,0,0,18" Foreground="{DynamicResource PrimaryText}">
                         <TextBlock TextWrapping="Wrap"><Run FontWeight="SemiBold" Text="I already have ATC software"/><LineBreak/><Run Text="Find installed EuroScope, TrackAudio, VACS or vATIS, plus existing GNG and VatEFS folders. Choose which copies Launchpad should use."/></TextBlock>
@@ -41,90 +42,135 @@
                 </StackPanel>
 
                 <StackPanel x:Name="ApplicationsPage" Visibility="Collapsed">
-                    <TextBlock Text="Find programs or install missing ones" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryText}" Margin="0,0,0,10"/>
-                    <TextBlock x:Name="ApplicationsHint" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,10"/>
-                    <WrapPanel Margin="0,0,0,12">
-                        <Button Content="Find installed programs…" Click="Discover_Click" Padding="10,7" Margin="0,0,8,5"/>
-                        <Button Content="Choose files and folders…" Click="Paths_Click" Padding="10,7" Margin="0,0,0,5"/>
-                    </WrapPanel>
-                    <TextBlock Text="Find installed programs looks for EuroScope, TrackAudio, VACS and vATIS, plus GNG and VatEFS folders. Choose files and folders lets you browse custom locations. Selecting a location does not download, install or move anything."
-                               TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" FontSize="12" Margin="0,0,0,16"/>
+                    <TextBlock Text="Choose the applications you use" FontSize="{DynamicResource TextSize18}" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryText}" Margin="0,0,0,8"/>
+                    <TextBlock x:Name="ApplicationsHint" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,8"/>
+                    <Button x:Name="DiscoveryButton" Content="Find installed applications" Click="Discover_Click" HorizontalAlignment="Left" Padding="10,6" Margin="0,0,0,8"/>
+                    <TextBlock x:Name="DiscoveryStatus" Text="Search known installation locations, then choose a copy below. Nothing is selected automatically." TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,10"/>
 
-                    <Border Background="{DynamicResource RowBg}" Padding="12" Margin="0,0,0,8">
+                    <Border Background="{DynamicResource RowBg}" Padding="10,8" Margin="0,0,0,6">
                         <StackPanel>
-                            <DockPanel LastChildFill="True">
-                                <Button x:Name="EuroScopeButton" DockPanel.Dock="Right" Content="Review EuroScope setup…" Click="EuroScope_Click" Padding="10,6" Margin="10,0,0,0"/>
-                                <TextBlock Text="EuroScope" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryText}" VerticalAlignment="Center"/>
+                            <DockPanel>
+                                <CheckBox x:Name="EuroScopeNotUsed" Content="Not used" AutomationProperties.Name="Mark EuroScope as not used" Tag="EuroScope" Checked="NotUsed_Changed" Unchecked="NotUsed_Changed" DockPanel.Dock="Right" Margin="10,0,0,0" Foreground="{DynamicResource SecondaryText}" VerticalAlignment="Center"/>
+                                <TextBlock Text="EuroScope" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryText}"/>
                             </DockPanel>
-                            <TextBlock Text="{x:Static models:ApplicationDescriptions.EuroScope}"
-                                       TextWrapping="Wrap" Foreground="{DynamicResource PrimaryText}" Margin="0,6,0,0"/>
-                            <TextBlock Text="Supported version 3.2.3.2. Review installing it, repairing it or switching an existing version."
-                                       TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,6,0,0"/>
-                            <TextBlock x:Name="EuroScopePath" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,5,0,0"/>
+                            <TextBlock Text="{x:Static models:ApplicationDescriptions.EuroScope}" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,3,0,0"/>
+                            <TextBlock x:Name="EuroScopePath" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,4,0,5"/>
+                            <WrapPanel>
+                                <Button Content="Choose copy…" Tag="EuroScopeExecutable" Click="BrowseLocation_Click" Padding="8,4" Margin="0,0,6,0" AutomationProperties.Name="Choose EuroScope location"/>
+                                <Button x:Name="EuroScopeButton" Content="Review setup…" Tag="EuroScope" Click="EuroScope_Click" Padding="8,4" AutomationProperties.Name="Review setup… EuroScope"/>
+                            </WrapPanel>
+                            <Grid x:Name="EuroScopeDiscovery" Visibility="Collapsed" Margin="0,6,0,0">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <ComboBox x:Name="EuroScopeCopies" DisplayMemberPath="Label" AutomationProperties.Name="Discovered EuroScope copies"/>
+                                <Button Content="Use this copy" Tag="EuroScopeExecutable" Click="UseCopy_Click" Grid.Column="1" Padding="8,4" Margin="6,0,0,0"/>
+                            </Grid>
                         </StackPanel>
                     </Border>
-                    <Border Background="{DynamicResource RowBg}" Padding="12" Margin="0,0,0,8">
+
+                    <Border Background="{DynamicResource RowBg}" Padding="10,8" Margin="0,0,0,6">
                         <StackPanel>
-                            <DockPanel LastChildFill="True">
-                                <Button x:Name="VacsButton" DockPanel.Dock="Right" Content="Review VACS installation…" Tag="Vacs" Click="Software_Click" Padding="10,6" Margin="10,0,0,0"/>
-                                <TextBlock Text="VACS" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryText}" VerticalAlignment="Center"/>
+                            <DockPanel>
+                                <CheckBox x:Name="TrackAudioNotUsed" Content="Not used" AutomationProperties.Name="Mark TrackAudio as not used" Tag="TrackAudio" Checked="NotUsed_Changed" Unchecked="NotUsed_Changed" DockPanel.Dock="Right" Margin="10,0,0,0" Foreground="{DynamicResource SecondaryText}" VerticalAlignment="Center"/>
+                                <TextBlock Text="TrackAudio" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryText}"/>
                             </DockPanel>
-                            <TextBlock Text="{x:Static models:ApplicationDescriptions.Vacs}"
-                                       TextWrapping="Wrap" Foreground="{DynamicResource PrimaryText}" Margin="0,6,0,0"/>
-                            <TextBlock Text="Optional. Installs for all Windows users and may ask for administrator approval."
-                                       TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,6,0,0"/>
-                            <TextBlock x:Name="VacsPath" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,5,0,0"/>
+                            <TextBlock Text="{x:Static models:ApplicationDescriptions.TrackAudio}" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,3,0,0"/>
+                            <TextBlock x:Name="TrackAudioPath" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,4,0,5"/>
+                            <WrapPanel>
+                                <Button Content="Choose copy…" Tag="TrackAudioExecutable" Click="BrowseLocation_Click" Padding="8,4" Margin="0,0,6,0" AutomationProperties.Name="Choose TrackAudio location"/>
+                                <Button x:Name="TrackAudioButton" Content="Install…" Tag="TrackAudio" Click="Software_Click" Padding="8,4" AutomationProperties.Name="Install… TrackAudio"/>
+                            </WrapPanel>
+                            <Grid x:Name="TrackAudioDiscovery" Visibility="Collapsed" Margin="0,6,0,0">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <ComboBox x:Name="TrackAudioCopies" DisplayMemberPath="Label" AutomationProperties.Name="Discovered TrackAudio copies"/>
+                                <Button Content="Use this copy" Tag="TrackAudioExecutable" Click="UseCopy_Click" Grid.Column="1" Padding="8,4" Margin="6,0,0,0"/>
+                            </Grid>
                         </StackPanel>
                     </Border>
-                    <Border Background="{DynamicResource RowBg}" Padding="12" Margin="0,0,0,8">
+
+                    <Border Background="{DynamicResource RowBg}" Padding="10,8" Margin="0,0,0,6">
                         <StackPanel>
-                            <DockPanel LastChildFill="True">
-                                <Button x:Name="TrackAudioButton" DockPanel.Dock="Right" Content="Review TrackAudio installation…" Tag="TrackAudio" Click="Software_Click" Padding="10,6" Margin="10,0,0,0"/>
-                                <TextBlock Text="TrackAudio" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryText}" VerticalAlignment="Center"/>
+                            <DockPanel>
+                                <CheckBox x:Name="VacsNotUsed" Content="Not used" AutomationProperties.Name="Mark VACS as not used" Tag="VACS" Checked="NotUsed_Changed" Unchecked="NotUsed_Changed" DockPanel.Dock="Right" Margin="10,0,0,0" Foreground="{DynamicResource SecondaryText}" VerticalAlignment="Center"/>
+                                <TextBlock Text="VACS" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryText}"/>
                             </DockPanel>
-                            <TextBlock Text="{x:Static models:ApplicationDescriptions.TrackAudio}"
-                                       TextWrapping="Wrap" Foreground="{DynamicResource PrimaryText}" Margin="0,6,0,0"/>
-                            <TextBlock Text="Optional. Installed for your Windows account. If settings already exist, a recovery copy is required before installation."
-                                       TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,6,0,0"/>
-                            <TextBlock x:Name="TrackAudioPath" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,5,0,0"/>
+                            <TextBlock Text="{x:Static models:ApplicationDescriptions.Vacs}" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,3,0,0"/>
+                            <TextBlock x:Name="VacsPath" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,4,0,5"/>
+                            <WrapPanel>
+                                <Button Content="Choose copy…" Tag="VacsExecutable" Click="BrowseLocation_Click" Padding="8,4" Margin="0,0,6,0" AutomationProperties.Name="Choose VACS location"/>
+                                <Button x:Name="VacsButton" Content="Install…" Tag="Vacs" Click="Software_Click" Padding="8,4" AutomationProperties.Name="Install… VACS"/>
+                            </WrapPanel>
+                            <Grid x:Name="VacsDiscovery" Visibility="Collapsed" Margin="0,6,0,0">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <ComboBox x:Name="VacsCopies" DisplayMemberPath="Label" AutomationProperties.Name="Discovered VACS copies"/>
+                                <Button Content="Use this copy" Tag="VacsExecutable" Click="UseCopy_Click" Grid.Column="1" Padding="8,4" Margin="6,0,0,0"/>
+                            </Grid>
                         </StackPanel>
                     </Border>
-                    <Border Background="{DynamicResource RowBg}" Padding="12" Margin="0,0,0,14">
+
+                    <Border Background="{DynamicResource RowBg}" Padding="10,8" Margin="0,0,0,6">
                         <StackPanel>
-                            <DockPanel LastChildFill="True">
-                                <Button x:Name="VatisButton" DockPanel.Dock="Right" Content="Review vATIS installation…" Tag="Vatis" Click="Software_Click" Padding="10,6" Margin="10,0,0,0"/>
-                                <TextBlock Text="vATIS" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryText}" VerticalAlignment="Center"/>
+                            <DockPanel>
+                                <CheckBox x:Name="VatisNotUsed" Content="Not used" AutomationProperties.Name="Mark vATIS as not used" Tag="vATIS" Checked="NotUsed_Changed" Unchecked="NotUsed_Changed" DockPanel.Dock="Right" Margin="10,0,0,0" Foreground="{DynamicResource SecondaryText}" VerticalAlignment="Center"/>
+                                <TextBlock Text="vATIS" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryText}"/>
                             </DockPanel>
-                            <TextBlock Text="{x:Static models:ApplicationDescriptions.Vatis}"
-                                       TextWrapping="Wrap" Foreground="{DynamicResource PrimaryText}" Margin="0,6,0,0"/>
-                            <TextBlock Text="Optional. Beta versions require your agreement. This setup cannot overwrite an existing vATIS data folder."
-                                       TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,6,0,0"/>
-                            <TextBlock x:Name="VatisPath" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,5,0,0"/>
+                            <TextBlock Text="{x:Static models:ApplicationDescriptions.Vatis}" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,3,0,0"/>
+                            <TextBlock x:Name="VatisPath" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,4,0,5"/>
+                            <WrapPanel>
+                                <Button Content="Choose copy…" Tag="VatisExecutable" Click="BrowseLocation_Click" Padding="8,4" Margin="0,0,6,0" AutomationProperties.Name="Choose vATIS location"/>
+                                <Button x:Name="VatisButton" Content="Install…" Tag="Vatis" Click="Software_Click" Padding="8,4" AutomationProperties.Name="Install… vATIS"/>
+                            </WrapPanel>
+                            <Grid x:Name="VatisDiscovery" Visibility="Collapsed" Margin="0,6,0,0">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <ComboBox x:Name="VatisCopies" DisplayMemberPath="Label" AutomationProperties.Name="Discovered vATIS copies"/>
+                                <Button Content="Use this copy" Tag="VatisExecutable" Click="UseCopy_Click" Grid.Column="1" Padding="8,4" Margin="6,0,0,0"/>
+                            </Grid>
                         </StackPanel>
                     </Border>
-                    <Border Background="{DynamicResource RowBg}" Padding="12" Margin="0,0,0,14">
+
+                    <Border Background="{DynamicResource RowBg}" Padding="10,8" Margin="0,0,0,6">
                         <StackPanel>
-                            <DockPanel LastChildFill="True">
-                                <Button x:Name="VatEfsButton" DockPanel.Dock="Right" Content="Review VatEFS installation…" Tag="VatEfs" Click="Software_Click" Padding="10,6" Margin="10,0,0,0"/>
-                                <TextBlock Text="VatEFS" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryText}" VerticalAlignment="Center"/>
+                            <DockPanel>
+                                <CheckBox x:Name="VatEfsNotUsed" Content="Not used" AutomationProperties.Name="Mark VatEFS as not used" Tag="VatEFS" Checked="NotUsed_Changed" Unchecked="NotUsed_Changed" DockPanel.Dock="Right" Margin="10,0,0,0" Foreground="{DynamicResource SecondaryText}" VerticalAlignment="Center"/>
+                                <TextBlock Text="VatEFS" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryText}"/>
                             </DockPanel>
-                            <TextBlock Text="{x:Static models:ApplicationDescriptions.VatEfs}" TextWrapping="Wrap" Foreground="{DynamicResource PrimaryText}" Margin="0,6,0,0"/>
-                            <TextBlock Text="Optional. Includes the EuroScope plugin and local flight-strip service. Official prereleases are included. Close EuroScope before installing; Windows may ask for administrator approval."
-                                       TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,6,0,0"/>
-                            <TextBlock x:Name="VatEfsPath" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,5,0,0"/>
+                            <TextBlock Text="{x:Static models:ApplicationDescriptions.VatEfs}" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,3,0,0"/>
+                            <TextBlock x:Name="VatEfsPath" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,4,0,5"/>
+                            <WrapPanel>
+                                <Button Content="Choose folder…" Tag="VatEfsFolder" Click="BrowseLocation_Click" Padding="8,4" Margin="0,0,6,0" AutomationProperties.Name="Choose VatEFS location"/>
+                                <Button x:Name="VatEfsButton" Content="Install…" Tag="VatEfs" Click="Software_Click" Padding="8,4" AutomationProperties.Name="Install… VatEFS"/>
+                            </WrapPanel>
+                            <Grid x:Name="VatEfsDiscovery" Visibility="Collapsed" Margin="0,6,0,0">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <ComboBox x:Name="VatEfsCopies" DisplayMemberPath="Label" AutomationProperties.Name="Discovered VatEFS copies"/>
+                                <Button Content="Use this copy" Tag="VatEfsFolder" Click="UseCopy_Click" Grid.Column="1" Padding="8,4" Margin="6,0,0,0"/>
+                            </Grid>
                         </StackPanel>
                     </Border>
-                    <TextBlock Text="Swedish GNG package" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryText}" Margin="0,0,0,6"/>
-                    <TextBlock Text="{x:Static models:ApplicationDescriptions.SwedishGng}" TextWrapping="Wrap"
-                               Foreground="{DynamicResource PrimaryText}" Margin="0,0,0,6"/>
-                    <TextBlock Text="Already have GNG? Choose its EuroScope data folder in Settings. Need to install or update it? You can open GNG setup after finishing this guide: sign in on AeroNav, download a package and review its installation. Choosing folders alone does not import or move settings."
-                               TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}"/>
+                </StackPanel>
+                <StackPanel x:Name="GngPage" Visibility="Collapsed">
+                    <TextBlock Text="Set up Swedish airspace" FontSize="{DynamicResource TextSize18}" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryText}" Margin="0,0,0,8"/>
+                    <TextBlock Text="{x:Static models:ApplicationDescriptions.SwedishGng}" TextWrapping="Wrap" Foreground="{DynamicResource PrimaryText}" Margin="0,0,0,10"/>
+                    <TextBlock Text="Already using GNG? Choose its EuroScope data folder — the folder containing ESAA and your Swedish profiles. Your existing settings stay in place." TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,8"/>
+                    <TextBlock x:Name="GngPath" TextWrapping="Wrap" Foreground="{DynamicResource PrimaryText}" Margin="0,0,0,8"/>
+                    <WrapPanel Margin="0,0,0,8">
+                        <Button Content="Find existing GNG" Click="Discover_Click" Padding="10,6" Margin="0,0,6,4"/>
+                        <Button Content="Choose data folder…" Tag="EuroScopeDataFolder" Click="BrowseLocation_Click" Padding="10,6" Margin="0,0,0,4"/>
+                    </WrapPanel>
+                    <Grid x:Name="GngDiscovery" Visibility="Collapsed" Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <ComboBox x:Name="GngCopies" DisplayMemberPath="Label" AutomationProperties.Name="Discovered GNG folders"/>
+                        <Button Content="Use this copy" Tag="EuroScopeDataFolder" Click="UseCopy_Click" Grid.Column="1" Padding="8,4" Margin="6,0,0,0"/>
+                    </Grid>
+                    <TextBlock x:Name="GngDiscoveryStatus" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,12"/>
+                    <TextBlock Text="Need GNG, or want to update it? Sign in to AeroNav, download a package and review the changes. After you close that window, this guide continues with your controller profile and fonts." TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,10"/>
+                    <Button x:Name="GngButton" Content="Install or update GNG…" Click="Gng_Click" HorizontalAlignment="Left" Padding="10,7" Margin="0,0,0,12"/>
+                    <TextBlock Text="Keep your current GNG setup? Choose Next. Installing or selecting a folder does not apply your controller credentials." TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}"/>
                 </StackPanel>
 
                 <StackPanel x:Name="PreferencesPage" Visibility="Collapsed">
-                    <TextBlock Text="Your profile and preferences" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryText}" Margin="0,0,0,10"/>
+                    <TextBlock Text="Controller profile and preferences" FontSize="{DynamicResource TextSize18}" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryText}" Margin="0,0,0,10"/>
                     <TextBlock Text="Controller profile — optional" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryText}" Margin="0,0,0,6"/>
-                    <TextBlock Text="Keep your current settings, or enter your VATSIM details. You can save them in Launchpad or preview and apply them to your Swedish EuroScope profiles. Anything you explicitly save here is kept even if you leave this guide."
+                    <TextBlock Text="Review your VATSIM details after GNG is in place. In Controller profile, choose Preview to inspect the file changes, then Save &amp; apply to save your details and update your Swedish EuroScope profiles. Keep your current configuration by choosing Next."
                                TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,10"/>
                     <Button x:Name="ProfileButton" Content="Review controller profile…" Click="Profile_Click" HorizontalAlignment="Left" Padding="10,7" Margin="0,0,0,22"/>
                     <TextBlock Text="Appearance" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryText}" Margin="0,0,0,8"/>
@@ -138,17 +184,26 @@
                                TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="22,0,0,0"/>
                 </StackPanel>
 
+                <StackPanel x:Name="FontsPage" Visibility="Collapsed">
+                    <TextBlock Text="Check the radar fonts" FontSize="{DynamicResource TextSize18}" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryText}" Margin="0,0,0,10"/>
+                    <TextBlock Text="EuroScope uses fonts included with GNG for radar symbols and lists. Check them against the package you selected. If fonts are missing or older, open their Windows previews and choose Install in each." TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,12"/>
+                    <WrapPanel Margin="0,0,0,12">
+                        <Button x:Name="FontsCheckButton" Content="Check fonts" Click="FontsCheck_Click" Padding="10,7" Margin="0,0,6,4"/>
+                        <Button x:Name="FontsInstallButton" Content="Open missing font previews…" IsEnabled="False" Click="FontsInstall_Click" Padding="10,7" Margin="0,0,0,4"/>
+                    </WrapPanel>
+                    <TextBlock x:Name="FontsStatus" Text="Not checked in this setup session. Choose Check fonts, or Next to leave this for later." TextWrapping="Wrap" Foreground="{DynamicResource PrimaryText}"/>
+                    <TextBlock Text="After installing a font, choose Check fonts again. This guide never starts EuroScope." TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,12,0,0"/>
+                </StackPanel>
+
                 <StackPanel x:Name="SummaryPage" Visibility="Collapsed">
-                    <TextBlock Text="Review your choices" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryText}" Margin="0,0,0,10"/>
+                    <TextBlock Text="Review your choices" FontSize="{DynamicResource TextSize18}" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryText}" Margin="0,0,0,10"/>
                     <TextBlock Text="You do not need every program. Finish saves your choices. It does not download, install or launch ATC applications. You can run this guide again later."
                                TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,14"/>
-                    <CheckBox x:Name="GngAfterFinishChoice" Foreground="{DynamicResource PrimaryText}" Margin="0,0,0,6">
-                        <TextBlock Text="Open GNG setup after I choose Finish" TextWrapping="Wrap"/>
-                    </CheckBox>
-                    <TextBlock Text="Optional. The next window lets you sign in, download and review a GNG package. Nothing installs until you confirm there."
-                               TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="22,0,0,14"/>
+                    <TextBox x:Name="SummaryText" IsReadOnly="True" TextWrapping="Wrap" BorderThickness="0" Padding="10" Margin="0,0,0,18"
+                             Background="{DynamicResource RowBg}" Foreground="{DynamicResource PrimaryText}"
+                             AutomationProperties.Name="Setup choices and completed actions"/>
                     <StackPanel x:Name="NextStepsPanel" Visibility="Collapsed" Margin="0,0,0,18">
-                        <TextBlock Text="Next steps (optional)" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryText}" Margin="0,0,0,6"/>
+                        <TextBlock Text="Next steps (optional)" FontSize="{DynamicResource TextSize16}" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryText}" Margin="0,0,0,6"/>
                         <TextBlock Text="These VATSIM Scandinavia guides cover setup inside the applications. Each button opens your browser."
                                    TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,12"/>
                         <StackPanel x:Name="EuroScopeGuidePanel" Visibility="Collapsed" Margin="0,0,0,14">
@@ -173,9 +228,6 @@
                                     ToolTip="Open the VATSIM Scandinavia wiki in your default browser."/>
                         </StackPanel>
                     </StackPanel>
-                    <TextBox x:Name="SummaryText" IsReadOnly="True" TextWrapping="Wrap" BorderThickness="0" Padding="10"
-                             Background="{DynamicResource RowBg}" Foreground="{DynamicResource PrimaryText}"
-                             AutomationProperties.Name="Setup choices and completed actions"/>
                 </StackPanel>
             </Grid>
         </ScrollViewer>

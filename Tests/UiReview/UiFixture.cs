@@ -20,6 +20,7 @@ internal static class UiReviewProgram
         try
         {
             app.InitializeComponent();
+            UiFixture.SetTextScale(1);
             if (args.Contains("--check") || args.Contains("--validate-layouts"))
             {
                 app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
@@ -47,9 +48,10 @@ public sealed class UiReviewHost : Window
 {
     public UiReviewHost()
     {
-        Title = "UI review — synthetic"; Width = 620; Height = 400;
+        Title = "UI review — synthetic"; Width = 700; Height = 510;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
-        var panel = new StackPanel { Margin = new Thickness(18) }; Content = panel;
+        var panel = new StackPanel { Margin = new Thickness(18) };
+        Content = new ScrollViewer { Content = panel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         panel.Children.Add(new TextBlock { Text = "Production WPF layouts • inert fixture handlers", FontSize = 19, FontWeight = FontWeights.SemiBold });
         panel.Children.Add(new TextBlock { Text = "No production services, startup hooks, credentials, registry, network or process operations are compiled into this fixture.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0,10,0,10) });
         var screens = new WrapPanel(); panel.Children.Add(screens);
@@ -57,6 +59,7 @@ public sealed class UiReviewHost : Window
         Add(screens, "Settings", () => Open(new SettingsWindow()));
         Add(screens, "Controller profile", () => Open(new AppConfigWindow()));
         Add(screens, "Manage / remove", () => Open(new MaintenanceWindow()));
+        Add(screens, "Recent activity", () => Open(new ActivityWindow()));
         Add(screens, "Find installations", () => Open(new InstallationDiscoveryWindow()));
         Add(screens, "Manage EuroScope", () => Open(new EuroScopeInstallWindow()));
         Add(screens, "Set up vATIS", () => Open(new FreshSoftwareInstallWindow()));
@@ -70,10 +73,13 @@ public sealed class UiReviewHost : Window
         Add(options, "Default / minimum", () => { UiFixture.Minimum = !UiFixture.Minimum; UiFixture.Refresh(); });
         Add(options, "Cycle simulated progress", UiFixture.CycleProgress);
         Add(options, "Toggle restart notice", () => { UiFixture.RestartRequired = !UiFixture.RestartRequired; UiFixture.Refresh(); });
+        var textSizes = new WrapPanel(); panel.Children.Add(textSizes);
+        foreach (double scale in new[] { 1d, 1.25d, 1.5d })
+            Add(textSizes, "Text size " + (scale*100) + "%", () => UiFixture.SetTextScale(scale));
         var scales = new WrapPanel(); panel.Children.Add(scales);
         foreach (double scale in new[] { 1d, 1.5d, 2d })
-            Add(scales, "Content " + (scale*100) + "%", () => { UiFixture.Scale = scale; UiFixture.Refresh(); });
-        panel.Children.Add(new TextBlock { Text = "Content scaling is a layout simulation, NOT actual OS DPI. Original resize modes remain unchanged. Launch/install/download buttons are inert.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0,8,0,0) });
+            Add(scales, "Layout simulation " + (scale*100) + "%", () => { UiFixture.Scale = scale; UiFixture.Refresh(); });
+        panel.Children.Add(new TextBlock { Text = "Text size uses Launchpad's production resources independently of row density. Layout simulation scales the whole content and is NOT actual OS DPI. Launch/install/download buttons are inert.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0,8,0,0) });
     }
     private void Open(Window window) { window.Owner = this; window.Show(); }
     private static void Add(Panel panel, string label, Action action)
@@ -93,6 +99,15 @@ internal static partial class UiFixture
     private static readonly Dictionary<Window,int> Steps = [];
     public static bool Blank, Minimum, Dark, RestartRequired;
     public static double Scale = 1;
+    public static double TextScale { get; private set; } = 1;
+
+    public static void SetTextScale(double scale)
+    {
+        TextScale = ApplicationPreferences.EffectiveTextScale(scale);
+        PresentationResources.ApplyTextScale(Application.Current.Resources, TextScale);
+        foreach (var window in Windows.ToArray())
+            if (window.Content is FrameworkElement content) content.UpdateLayout();
+    }
 
     public static void Initialize(Window window)
     {
@@ -123,6 +138,7 @@ internal static partial class UiFixture
         if (window is GngCleanupWindow cleanup) cleanup.RefreshSyntheticScenario();
         if (window is GngUpdateWindow update) update.RefreshSyntheticScenario();
         if (window is SetupWizardWindow wizard) wizard.RefreshSyntheticScenario();
+        if (window is ActivityWindow activity) activity.RefreshSyntheticScenario();
         if (window is MainWindow main)
         {
             main.SetSyntheticRestart(RestartRequired);
@@ -219,6 +235,9 @@ internal static partial class UiFixture
             case "Header_MouseLeftButtonDown": if (args is MouseButtonEventArgs { LeftButton:MouseButtonState.Pressed }) window.DragMove(); return;
             case "ThemeToggle_Click": ToggleTheme(); return;
             case "DensityToggle_Click": window.Tag=Equals(window.Tag,"Compact")?"Comfortable":"Compact"; return;
+            case "Pin_Click":
+                if (sender is Button pin) pin.Content = Equals(pin.Content, "Pin") ? "Unpin" : "Pin";
+                return;
             case "Minimize_Click": window.WindowState=WindowState.Minimized; return;
             case "Maximize_Click": window.WindowState=window.WindowState==WindowState.Maximized?WindowState.Normal:WindowState.Maximized; return;
             case "Close_Click": case "Cancel_Click": window.Close(); return;
@@ -226,6 +245,7 @@ internal static partial class UiFixture
             case "SetupWizard_Click": Show(new SetupWizardWindow(),window); return;
             case "AppConfig_Click": Show(new AppConfigWindow(),window); return;
             case "Maintenance_Click": Show(new MaintenanceWindow(),window); return;
+            case "Activity_Click": Show(new ActivityWindow(),window); return;
             case "GngCleanup_Click": Show(new GngCleanupWindow(),window); return;
             case "GngUpdate_Click": Show(new GngUpdateWindow(),window); return;
             case "DiscoverInstallations_Click": case "FindInstallations_Click": Show(new InstallationDiscoveryWindow(),window); return;
@@ -240,7 +260,7 @@ internal static partial class UiFixture
                 { var menu = new ContextMenu(); foreach(var profile in row.Profiles) { var item=new MenuItem { Header=profile.DisplayName }; item.Click+=(_,_)=>row.SelectedProfile=profile; menu.Items.Add(item); } profileButton.ContextMenu=menu; menu.IsOpen=true; }
                 return;
             case "Save_Click": Text(window,window is AppConfigWindow?"SyncText":"DiscoveryStatus","Synthetic save only. No settings, credentials or external profiles were changed."); return;
-            case "Preview_Click": Text(window,"SyncText","Synthetic preview: fake name, rating and profile fields only. No real files were read."); return;
+            case "Preview_Click": Show(CreateProfilePreview(), window); return;
             case "Clear_Click": case "InsertDefault_Click": case "BrowseExe_Click": case "BrowseFolder_Click":
                 var tag=(sender as FrameworkElement)?.Tag as string ?? "EuroscopeData";
                 var field=tag switch { "EuroScope"=>"EuroscopeExePath","EuroscopeData"=>"EuroscopePath","TrackAudio"=>"TrackAudioPath","VACS"=>"VacsPath","vATIS"=>"VatisPath",_=>"VatEfsPath" };
@@ -266,10 +286,12 @@ internal static partial class UiFixture
                 goto case "SelectionChanged";
             case "Review_Click":
                 Text(window,"ReviewText","SYNTHETIC REVIEW — NO REAL PLAN\n\nApplication: " + (window is EuroScopeInstallWindow ? "EuroScope 3.2.3.2 (replace newer copy; downgrade)" : window is FreshSoftwareInstallWindow ? "vATIS 4.1.0-beta.19 (explicit beta)" : "Selected ATC applications") + "\nDestination: " + FakePath("Reviewed installation") + "\nRecovery export: " + FakePath("Recovery exports/2026-10-03-synthetic") + "\n\nExisting settings remain where supported. Removed or replaced files may need manual recovery from the export.\nNo clients will be started.\n\nThis text exercises the production review layout only.");
+                Text(window,"ReviewSummaryText","What changes\nSynthetic reviewed application operation. Nothing will actually change.\n\nWhat stays\nUnselected applications and settings.\n\nRecovery\n" + FakePath("Recovery exports/2026-10-03-synthetic") + "\nFiles may need manual restoration. Keep recovery copies private.");
+                if (Find<Expander>(window,"ReviewDetails") is {} reviewDetails) reviewDetails.IsExpanded=false;
                 if (confirmation is not null) { confirmation.IsEnabled=true; confirmation.IsChecked=false; }
                 Text(window,"StatusText","Synthetic review ready. Confirm to exercise the layout.");
                 if (Find<ScrollViewer>(window,"ContentScroll") is {} reviewScroll &&
-                    Find<FrameworkElement>(window,"ReviewPanel") is {} reviewPanel && Find<TextBox>(window,"ReviewText") is {} reviewText)
+                    Find<FrameworkElement>(window,"ReviewPanel") is {} reviewPanel && Find<TextBox>(window,"ReviewSummaryText") is {} reviewText)
                     ReviewScrollHelper.Show(reviewScroll, reviewPanel, reviewText, () => confirmation?.IsEnabled == true);
                 return true;
             case "ConfirmationChanged":
@@ -321,6 +343,20 @@ internal static partial class UiFixture
         public string ScopeLabel {get;set;}="";
         public string SupportText => Candidate.SupportSummary;
     }
+    internal static ProfilePreviewWindow CreateProfilePreview()
+    {
+        const string masked = "ES_TEST.prf\n  Name: Test Controller\n  CID: 1234567\n  Rating: Student 2\n  Password: ********\n  Server: AUTOMATIC\n\nTopSkyHoppieCode.txt\n  Existing Hoppie code stays unchanged.\n\nES_OBS.prf\n  Callsign: TEST_OBS\n  Password: ********\n\nNo real settings, credentials or profile files are used by this preview.";
+        const string summary = "What changes\nApply the entered name, CID, rating and password to the Swedish EuroScope profiles. The server selection becomes AUTOMATIC.\n\nProfile folder: C:\\Synthetic UI review\\EuroScope\n\nWhat stays\nOther profile settings stay in place. Existing Hoppie codes stay unchanged because the code field is blank.\n\nRecovery\nThis action does not create a recovery copy. Copy any custom profiles you want to keep before applying.\n\nBefore you continue\nPasswords are saved in Windows Credential Manager and also written into profile files. The preview is read-only; return to the profile form to save and apply.";
+        var preview = new ProfilePreviewWindow(summary, masked,
+            () => masked.Replace("********", "SYNTHETIC-NOT-A-PASSWORD"));
+        if (Minimum)
+        {
+            preview.Width = preview.MinWidth;
+            preview.Height = preview.MinHeight;
+        }
+        return preview;
+    }
+
     private static void Show(Window child,Window owner) { child.Owner=owner; child.Show(); }
     private static void TogglePassword(Window window,string passwordName,string textName)
     {

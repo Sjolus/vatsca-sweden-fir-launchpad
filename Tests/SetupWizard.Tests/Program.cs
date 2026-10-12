@@ -4,6 +4,55 @@ using VatscaUpdateChecker.Models;
 // In-memory only: no WPF, settings service, registry, credential or installer dependency.
 var tests = new List<(string Name, Action Test)>
 {
+    ("progress checkpoints resume without committing tentative appearance choices", () =>
+    {
+        var current = new AppSettings { IsDarkMode = true, CompactLayout = true };
+        var state = new SetupWizardState(current) { Route = SetupWizardRoute.Fresh };
+        state.Draft.IsDarkMode = false; state.Draft.CompactLayout = false;
+        state.MoveTo(SetupWizardStep.Gng);
+        var saved = state.Dismiss();
+        Equal(2, saved.SetupWizardStep); Equal("Fresh", saved.SetupWizardRoute);
+        True(saved.IsDarkMode && saved.CompactLayout && !saved.SetupWizardCompleted);
+        var resumed = new SetupWizardState(saved);
+        Equal(SetupWizardStep.Gng, resumed.Step); Equal(SetupWizardRoute.Fresh, resumed.Route);
+        Equal(SetupWizardStep.Welcome, new SetupWizardState(new AppSettings { SetupWizardCompleted = true, SetupWizardStep = 4 }).Step);
+    }),
+    ("invalid persisted progress starts at welcome and unknown moves are rejected", () =>
+    {
+        var state = new SetupWizardState(new AppSettings { SetupWizardStep = 999, SetupWizardRoute = "unknown" });
+        Equal(SetupWizardStep.Welcome, state.Step); Equal(SetupWizardRoute.Existing, state.Route);
+        Throws<ArgumentOutOfRangeException>(() => state.MoveTo((SetupWizardStep)999));
+    }),
+    ("GNG completion checkpoints its folder before profile and preserves tentative preferences", () =>
+    {
+        var state = new SetupWizardState(new AppSettings { IsDarkMode = true });
+        state.MoveTo(SetupWizardStep.Gng); state.Draft.IsDarkMode = false;
+        state.AcceptGngFolder(@"C:\Synthetic\GNG", installed: true);
+        state.MoveTo(SetupWizardStep.Profile);
+        Equal(@"C:\Synthetic\GNG", state.Dismiss().EuroscopeDataPath);
+        Equal(SetupWizardStep.Profile, new SetupWizardState(state.Dismiss()).Step);
+        True(state.Dismiss().IsDarkMode && !state.Draft.IsDarkMode && state.HasSavedActions);
+        Throws<ArgumentException>(() => state.AcceptGngFolder(" ", installed: false));
+    }),
+    ("direct adoption saves only the selected path and re-enables the chosen application", () =>
+    {
+        var state = new SetupWizardState(Existing());
+        state.SetNotUsed("TrackAudio", true); state.Draft.IsDarkMode = false;
+        state.AcceptLocation(SetupWizardApplication.TrackAudio, @"C:\Synthetic\adopted\trackaudio.exe");
+        Equal(@"C:\Synthetic\adopted\trackaudio.exe", state.Dismiss().TrackAudioExePath);
+        Equal(Existing().VatsimCid, state.Dismiss().VatsimCid);
+        True(state.Dismiss().IsDarkMode && !state.IsNotUsed("TrackAudio"));
+    }),
+    ("not used keeps existing paths and profile choices and survives dismissal", () =>
+    {
+        var state = new SetupWizardState(Existing());
+        state.SetNotUsed("vATIS", true); state.SetNotUsed("VACS", true);
+        Equal(Existing().VatisExePath, state.Dismiss().VatisExePath);
+        Equal(Existing().VatsimCid, state.Dismiss().VatsimCid);
+        True(ApplicationPreferences.IsNotUsed(state.Dismiss(), "vATIS"));
+        state.SetNotUsed("vATIS", false);
+        True(!state.IsNotUsed("vATIS") && state.IsNotUsed("VACS"));
+    }),
     ("opening wizard preserves settings and creates independent copies", () =>
     {
         var current = Existing(); var before = JsonSerializer.Serialize(current);

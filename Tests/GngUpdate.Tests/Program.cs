@@ -41,6 +41,20 @@ sealed class Suite(string fixturesDirectory, string? filter)
     public void Run()
     {
         Directory.CreateDirectory(fixturesDirectory);
+        Test("review notes surface compatibility and unknown warnings without hiding rules", _ =>
+        {
+            var warnings = new[]
+            {
+                "Every replaced file is backed up before installation. Close EuroScope; a failed installation will attempt rollback.",
+                "A preserved local TopSky file overrides RDF_Mode: ESAA/Plugins/TopSkySettingsLocal.txt.",
+                "Existing profile is not supplied by this package and will not be upgraded: ESSA.prf.",
+                "New profile needs controller settings review: ESAA.prf.",
+                "A future package-specific warning."
+            };
+            var notes = GngReviewNotes.ForAttention(warnings);
+            if (!notes.SequenceEqual(warnings.Skip(1)))
+                throw new Exception("Installation-specific and future warnings must be prominent; the original full rules must remain intact.");
+        });
         TextDiffTests.Run(Test);
         FilePreviewTests.Run(Test);
         EuroScopeProcessGuardTests.Run(Test);

@@ -62,6 +62,27 @@ var tests = new (string Name, Action Run)[]
         Check(login.Contains("PROFILE:ES_OBS:300:0") && login.Contains(Fixture.Comment), "OBS change damaged unrelated login text.");
         Check(!Logger.Messages.Any(message => message.Contains(Fixture.Password) || message.Contains(Fixture.Hoppie)), "Application log included a credential.");
     }),
+    ("blank Hoppie preview keeps existing codes without exposing them", () =>
+    {
+        using var f = new Fixture(); f.CreateProfiles();
+        var path = Path.Combine(f.Root, "ESAA", "Plugins", "TopSkyCPDLChoppieCode.txt");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, Fixture.Hoppie);
+        var before = File.ReadAllBytes(path);
+        foreach (var blank in new[] { "", " \t" })
+        {
+            foreach (var reveal in new[] { false, true })
+            {
+                var preview = ProfileService.GeneratePreview(f.Settings, Fixture.Password, blank, f.Root, reveal);
+                Check(preview.Contains("No Hoppie code entered — this file will not be changed."), "Blank code preview implies clearing instead of keeping the file.");
+                Check(!preview.Contains(Fixture.Hoppie), "An unchanged Hoppie code was exposed by the preview.");
+            }
+            Check(before.SequenceEqual(File.ReadAllBytes(path)), "Preview changed a Hoppie file.");
+            CredentialManagerService.Values[CredentialManagerService.TargetHoppie] = blank;
+            ProfileService.Apply(f.Settings, f.Root);
+            Check(before.SequenceEqual(File.ReadAllBytes(path)), "Blank code apply differs from the preservation shown in preview.");
+        }
+    }),
     ("enabling VatEFS preserves unrelated plugin slots and display rows", () =>
     {
         using var f = new Fixture(); f.CreateProfiles();

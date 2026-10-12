@@ -2,10 +2,10 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Set up an ATC application" Width="790" Height="690" MinWidth="580" MinHeight="450"
-        WindowStartupLocation="CenterOwner" Background="{DynamicResource AppBg}" Foreground="{DynamicResource PrimaryText}">
+        WindowStartupLocation="CenterOwner" Background="{DynamicResource AppBg}" Foreground="{DynamicResource PrimaryText}" FontSize="{DynamicResource TextSize12}">
     <DockPanel Margin="20">
         <StackPanel DockPanel.Dock="Top" Margin="0,0,0,14">
-            <TextBlock x:Name="Heading" FontSize="24" FontWeight="SemiBold" TextWrapping="Wrap"/>
+            <TextBlock x:Name="Heading" FontSize="{DynamicResource TextSize24}" FontWeight="SemiBold" TextWrapping="Wrap"/>
             <TextBlock Text="Keep your current setup, bring it into Launchpad, or install a missing application. Nothing changes until you choose and confirm an action."
                        TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,8,0,0"/>
         </StackPanel>
@@ -31,7 +31,7 @@
                         <Button Content="Find existing installations…" Click="Adopt_Click" Padding="10,6" Margin="0,0,8,6"/>
                         <Button Content="Remove apps / settings…" Click="Removal_Click" Padding="10,6" Margin="0,0,0,6"/>
                     </WrapPanel>
-                    <TextBlock Text="Installing a missing application" FontWeight="SemiBold" FontSize="16" Margin="0,0,0,6"/>
+                    <TextBlock Text="Installing a missing application" FontWeight="SemiBold" FontSize="{DynamicResource TextSize16}" Margin="0,0,0,6"/>
                 <TextBlock Text="Existing installations must be linked or removed first. Leftover settings are kept where supported; choose a private recovery folder if the review requires one. To reset settings, use Remove / reset on the main window."
                                TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,12"/>
                     <DockPanel Margin="0,0,0,12">
@@ -48,11 +48,17 @@
                     </CheckBox>
                 </StackPanel>
                 <StackPanel x:Name="ReviewPanel" Margin="0,8,0,0">
-                    <TextBlock Text="Review" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                    <TextBlock Text="Review" FontSize="{DynamicResource TextSize16}" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                    <TextBox x:Name="ReviewSummaryText" IsReadOnly="True" IsReadOnlyCaretVisible="True" TextWrapping="Wrap" MaxHeight="280"
+                             VerticalScrollBarVisibility="Auto" Padding="10" Background="{DynamicResource RowBg}" Foreground="{DynamicResource PrimaryText}"
+                             AutomationProperties.Name="What changes, what stays, and recovery"
+                             Text="Choose Review fresh install to see the version, destination and any settings that need a recovery copy. Nothing is installed by reviewing."/>
+                    <Expander x:Name="ReviewDetails" Header="Full plan, package checks and file list" Foreground="{DynamicResource PrimaryText}" Margin="0,8,0,0">
                     <TextBox x:Name="ReviewText" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" Height="210"
                              VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Reviewed installation plan"
                              Background="{DynamicResource RowBg}" Foreground="{DynamicResource PrimaryText}" Padding="12"
                              Text="Review checks the official release and the intended destination. Download and installation require a separate confirmation. The application remains closed afterward."/>
+                    </Expander>
                     <CheckBox x:Name="ConfirmInstall" IsEnabled="False" Checked="ConfirmationChanged" Unchecked="ConfirmationChanged"
                               Foreground="{DynamicResource PrimaryText}" Margin="0,10,0,8"
                               AutomationProperties.Name="Confirm the reviewed version, installation location and existing-data plan">

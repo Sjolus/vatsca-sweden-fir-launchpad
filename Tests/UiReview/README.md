@@ -2,7 +2,7 @@
 
 This fixture uses production XAML, themes and presentation models with synthetic settings
 and inert button handlers. It covers the main window, Settings, Controller profile,
-maintenance, discovery, EuroScope management, fresh client setup, the setup wizard and
+maintenance, discovery, recent activity, EuroScope management, fresh client setup, the setup wizard and
 GNG cleanup and GNG setup/update. Both GNG windows use inert file rows; installation,
 archive and restore cannot touch files. The production GNG browser host is a lazy
 `ContentControl` that remains empty here; WebView2 and download/runtime services are not linked.
@@ -21,7 +21,7 @@ layout or binding failures. Results go to `layout-validation.txt` and errors to
 `fixture-errors.log` beside the built executable. `--validate-layouts` is an alias for
 `--check` and is used in CI.
 
-Add `--snapshots artifacts/ui-review` to render the measured main-window and GNG layouts
+Add `--snapshots artifacts/ui-review` to render the measured application and workflow layouts
 as PNGs. Cleanup and GNG fresh/existing start, sign-in waiting, package/reference download progress, preparation between downloads, cancellation, review,
 completion and runtime-fallback states capture both themes at default and minimum size,
 without showing windows or initializing a browser. The website area is a labelled inert
@@ -33,14 +33,24 @@ GNG review checks also link the production EuroScope-blocking presentation with 
 ## Coverage
 
 The matrix checks light/dark themes, minimum/default sizes, compact/expanded rows,
-configured/missing paths, wizard steps and scaled content. Assertions cover:
+configured/missing paths, wizard steps and scaled content. Text-size cases use the same
+100%/125%/150% presentation resources as the app, independently of whole-content scaling.
+Assertions cover:
 
-- Equal row heights, reachable actions and the selected application's details panel.
+- Equal row heights, readable action captions and the selected application's details panel.
+- Text-size changes retain density and selected EuroScope profile; header controls and
+  More/Less space remain reachable at minimum size in both layouts.
+- Recent activity has a reachable Close action, scrollable details, selectable recovery
+  locations and separate GNG, vendor-recovery and no-backup examples. Its handlers are
+  inert; recovery eligibility, filesystem safety and persistence belong to service tests.
 - Progress bindings, long diagnostics, restart notices and status changes.
 - Scrolling, fixed footers, review positioning and keyboard-focus styling.
 - Text/control contrast, resolved resources and WPF binding errors.
 - Setup summaries, application descriptions and optional guide links.
-- Optional GNG setup after Finish, including its unchecked default and restart guard.
+- The shared profile preview keeps synthetic credentials masked until explicitly revealed,
+  reuses its prepared preview, and retains both footer actions at larger text sizes.
+- All six setup pages, the explicit GNG step and its restart guard; advancing the guide
+  never implies a download or installation.
 - GNG destination/recovery readability, explicit confirmation, package-change reset,
   minimum-size file review, runtime fallback routes and guarded main-window actions.
 - Explicit Download Swedish GNG and retry/stop controls, a readable origin, download
@@ -62,7 +72,8 @@ configured/missing paths, wizard steps and scaled content. Assertions cover:
   an explicit zero-change message. Snapshots include changes-only, all and zero-change reviews.
 - The production file-preview dialog, preview model and pure text-diff helper use
   synthetic sanitized text: Changes and Before / After tabs, exact proposed text,
-  selectable monospace panes, binary/personal/large summaries and minimum-size scrolling.
+  selectable monospace panes, highlighted additions/removals, Next change navigation,
+  binary/personal/large summaries and minimum-size scrolling.
 - Synthetic Lists.txt and Plugin.txt previews keep `m_X`, `m_Y` and `m_Visible`
   while showing changed package columns. The merged-list review row wraps its action
   and explanation, and its View button remains reachable at minimum size. This checks
@@ -82,8 +93,9 @@ screen readers and installed workflows require desktop testing.
 
 Open `Tests/UiReview/bin/Release/net9.0-windows/Launchpad.UiReview.exe` from the repository
 root. The **UI review — synthetic** window lets you select a screen, theme, size, configured
-or blank paths, and 100%/150%/200% content scaling. Controls simulate progress, errors,
-review steps and restart notices.
+or blank paths, 100%/125%/150% text size and a separate 100%/150%/200% layout simulation.
+Text size uses production resources; layout simulation scales the whole content within
+fixed bounds. Controls simulate progress, errors, review steps and restart notices.
 
 The fixture does not link production startup, persistence, credentials or installer
 services. Buttons change in-memory state rather than launching applications, opening

@@ -118,6 +118,8 @@ public partial class GngUpdateWindow : Window
         WarningsText.Text = "SYNTHETIC REVIEW — no files will change.\n" +
             "Package defaults and shipped plugins will be refreshed. Personal sign-in fields and Local/Hoppie files stay.\n" +
             "Recovery backup: " + SyntheticBackupPath;
+        ReviewSummaryText.Text = "What changes\nSynthetic GNG package files and shared settings.\n\nWhat stays\nSign-in details, supported personal files, list positions and visibility.\n\nRecovery\n" + SyntheticBackupPath;
+        ReviewDetails.IsExpanded = false;
         SetReviewFiles(ExampleRows(PreserveListLayout.IsChecked == true));
         CompleteTitle.Text = "GNG installation complete";
         CompleteText.Text = "Synthetic completion only. Package defaults and plugins were reviewed; personal settings remain. No files were installed and EuroScope was not started.";
@@ -177,6 +179,12 @@ public partial class GngUpdateWindow : Window
     }
 
     internal void SetSyntheticReviewRows(IReadOnlyList<GngUpdateFile> rows) => SetReviewFiles(rows);
+
+    internal void SetSyntheticPackageNotes() => SetPackageNotes(
+    [
+        "Every replaced file is backed up before installation. Close EuroScope; a failed installation will attempt rollback.",
+        "A preserved local TopSky file overrides RDF_Mode: ESAA/Plugins/TopSkySettingsLocal.txt. Review compatibility before use."
+    ], SyntheticBackupPath);
 
     internal void SetSyntheticReviewProgress()
     {
@@ -676,6 +684,8 @@ internal static partial class LayoutMatrix
     {
         var grid = Required<DataGrid>(window, "FilesGrid");
         var warnings = Required<TextBox>(window, "WarningsText");
+        var summary = Required<TextBox>(window, "ReviewSummaryText");
+        var details = Required<Expander>(window, "ReviewDetails");
         var confirm = Required<CheckBox>(window, "ConfirmInstall");
         var install = Required<Button>(window, "InstallButton");
         CheckGngReviewFilter(window);
@@ -693,6 +703,19 @@ internal static partial class LayoutMatrix
         Require(grid.ActualHeight >= 90 && grid.ActualWidth > 450, "GNG review has too little room for readable file rows.");
         Require(warnings.IsReadOnly && warnings.Focusable && warnings.VerticalScrollBarVisibility == ScrollBarVisibility.Auto,
             "GNG warnings and backup location need a selectable, scrollable review area.");
+        Require(summary.IsReadOnly && IsPresented(summary) && !details.IsExpanded,
+            "GNG review must lead with a readable summary and optional full details.");
+        window.SetSyntheticPackageNotes();
+        DrainBindings();
+        LayoutValidation.CheckWindowContent(window);
+        Require(details.IsExpanded && IsPresented(warnings) && warnings.Text.StartsWith("Notes for this installation\nA preserved local TopSky", StringComparison.Ordinal),
+            "Package-specific compatibility notes must expand automatically and appear before routine rules.");
+        var information = Required<ScrollViewer>(window, "ReviewInformationScroll");
+        var noteBounds = Bounds(warnings, information);
+        Require(information.ViewportHeight >= warnings.FontSize && noteBounds.Top >= -.5 &&
+            noteBounds.Top + warnings.FontSize <= information.ActualHeight + .5 && warnings.VerticalOffset < .5,
+            "Package-specific notes must start inside the visible information area, including at minimum size.");
+        details.IsExpanded = false;
         Require(confirm.IsChecked != true && IsPresented(install) && !install.IsEnabled,
             "GNG review must start unchecked with installation unavailable.");
         var content = (FrameworkElement)window.Content;
@@ -802,26 +825,19 @@ internal static partial class LayoutMatrix
 
     private static void CheckWizardGngChoice(SetupWizardWindow window)
     {
-        var choice = Required<CheckBox>(window, "GngAfterFinishChoice");
-        Require(IsPresented(choice) && choice.IsEnabled && choice.IsChecked != true,
-            "Wizard GNG follow-up must be visible, optional and unchecked on the final page.");
+        var choice = Required<Button>(window, "GngButton");
+        Require(IsPresented(choice) && choice.IsEnabled && !window.SyntheticGngSetupRequested,
+            "Wizard GNG setup must be an available explicit action, never opened by advancing to its page.");
         choice.BringIntoView(); DrainBindings(); ((FrameworkElement)window.Content).UpdateLayout();
         var scroll = Required<ScrollViewer>(window, "ContentScroll");
         Require(new Rect(0, 0, scroll.ViewportWidth, scroll.ViewportHeight).IntersectsWith(Bounds(choice, scroll)),
-            "The optional GNG setup choice cannot be reached by scrolling.");
-        window.SyntheticNext();
-        Require(!window.SyntheticGngSetupRequested, "Finishing setup without opt-in must not request GNG setup.");
-        choice.IsChecked = true;
+            "The explicit GNG setup action cannot be reached by scrolling.");
         window.SetSyntheticRestart(true);
-        Require(!choice.IsEnabled && choice.IsChecked != true, "A restart requirement must disable and clear the GNG follow-up choice.");
-        window.SyntheticNext();
-        Require(!window.SyntheticGngSetupRequested, "A restart requirement must suppress GNG setup after Finish.");
+        Require(!choice.IsEnabled && !window.SyntheticGngSetupRequested, "A restart requirement must disable GNG setup without opening it.");
         window.SetSyntheticRestart(false);
-        Require(choice.IsEnabled && choice.IsChecked != true, "Releasing the restart guard must not opt into GNG automatically.");
-        choice.IsChecked = true;
-        window.SyntheticNext();
-        Require(window.SyntheticGngSetupRequested, "Finish should record an explicit GNG follow-up request in memory.");
-        choice.IsChecked = false;
+        Require(choice.IsEnabled && !window.SyntheticGngSetupRequested, "Releasing the restart guard must not open GNG automatically.");
+        choice.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Require(window.SyntheticGngSetupRequested, "An explicit click must record the inert GNG setup request.");
         Required<TextBlock>(window, "StatusText").Text = "";
     }
 }

@@ -38,6 +38,8 @@ Keep the client closed until the update finishes. Launchpad does not request a n
 
 If a restart is required, restart Windows before further changes. Reopening Launchpad alone does not complete that restart. After a failed update, read the error and check the installation again before retrying.
 
+**Activity** retains recent operation outcomes and recovery locations. It records what happened at the time, rather than checking whether that application still has the same version. Open a listed recovery folder for manual instructions; choosing a history entry never rolls back an application automatically.
+
 ## vATIS backups
 
 **Do not use vATIS Setup to update an existing installation.** Setup can replace the folder containing your profiles. Launchpad uses the installed updater instead and first exports the complete installation to:

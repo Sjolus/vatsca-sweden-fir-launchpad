@@ -61,7 +61,7 @@ For Setup, portable and update packages, use PowerShell 7 on Windows:
 
 ```powershell
 ./scripts/New-DevelopmentCertificate.ps1
-./scripts/Build-Installer.ps1 -Version 2.1.0-dev.1
+./scripts/Build-Installer.ps1 -Version 2.2.0-dev.1
 ```
 
 The certificate script creates or reuses a non-exportable key in the current user's Personal certificate store. Only its public certificate and thumbprint are saved under `%LOCALAPPDATA%\VatscaUpdateChecker\Signing`. It does not add trust. Never commit or distribute the private key.
