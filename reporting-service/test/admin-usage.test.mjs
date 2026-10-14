@@ -45,3 +45,23 @@ test('filters state cohort scope without treating source absence as a missing in
   assert.doesNotMatch(inventory, /Usage cohort:/);
   assert.match(inventory, /inventory denominator still includes every matching snapshot/);
 });
+
+test('usage and inventory identify today as partial using the server observation time', () => {
+  const render=renderer(),data=usageFixture();
+  const dashboard=render.renderUsageDashboard(data),inventory=render.renderInventory(data);
+  for(const node of [dashboard,inventory]) {
+    assert.match(node.text,/2026-10-08 – 2026-10-14 · 7 UTC days, including today/);
+    assert.match(node.text,/Today is partial; updated 14:30 UTC/);
+    assert.doesNotMatch(node.text,/Today is excluded|full UTC days|Partial coverage/);
+  }
+  assert.match(dashboard.text,/Today\*/);assert.match(dashboard.text,/2026-10-14 · Today, partial/);
+  assert.match(dashboard.text,/Also seen in the preceding 7 complete UTC days/);
+  const walk=node=>[node,...node.children.filter(child=>child instanceof TestNode).flatMap(walk)];
+  const chart=walk(dashboard).find(node=>node.attributes.role==='img');
+  assert.match(chart.attributes['aria-label'],/2026-10-14 \(today, partial\): 14 active installations/);
+  data.window.coverage_complete=false;
+  assert.match(render.renderUsageDashboard(data).text,/Today is partial.*Partial coverage/);
+  data.window.days=30;data.cohort.returning_available=false;data.cohort.returning_reason='retention';
+  const month=render.renderUsageDashboard(data).text;
+  assert.match(month,/30 UTC days, including today/);assert.match(month,/Returning installations Unavailable/);
+});

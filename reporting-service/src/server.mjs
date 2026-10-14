@@ -30,7 +30,7 @@ export function createServer({store,config,adminHandler,now=Date.now}={}) {
         const health=store.health();metrics.push(`launchpad_store_physical_bytes ${health.physical_bytes}`,`launchpad_store_ready ${health.ok?1:0}`);
         res.writeHead(200,{'Content-Type':'text/plain; version=0.0.4'});res.end(metrics.join('\n')+'\n');return;
       }
-      release=gate.enter(req);
+      if (!admin?.isAuthenticatedDashboardRequest?.(req,path)) release=gate.enter(req);
       if(await intake(req,res,path)) return;
       if(admin && await admin(req,res,{store,readJson,sendJson})) return;
       sendJson(res,404,{error:'not_found'});

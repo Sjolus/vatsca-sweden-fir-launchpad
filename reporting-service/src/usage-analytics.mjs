@@ -14,7 +14,12 @@ export function createUsageAnalytics({db,now,limits}) {
     const application=input.application || null,release=input.launchpad_version || null;
     if(application && !ENUMS.application.includes(application))invalid();
     if(release && (typeof release!=='string' || release.length>40 || !VERSION.test(release)))invalid();
-    const clock=now(),end=Math.floor(clock/DAY)*DAY,start=end-days*DAY,previousStart=start-days*DAY;
+    // Include today up to the server's observation time. Millisecond timestamps
+    // at exactly `clock` belong to this view; accepted clock-skewed future events
+    // do not. Returning IDs overlap the contiguous preceding full UTC dates;
+    // this measures repeat use, not growth between equal-duration samples.
+    const clock=now(),today=Math.floor(clock/DAY)*DAY,start=today-(days-1)*DAY,end=clock+1;
+    const previousStart=start-days*DAY,previousEnd=start;
     const coverage=db.prepare('SELECT coverage_start FROM analytics_state WHERE singleton=1').get();
     if(!coverage)throw new IntakeError(503,'storage_unavailable',60);
     const availableSince=Math.max(coverage.coverage_start,clock-limits.eventTtlDays*DAY);
@@ -44,10 +49,10 @@ export function createUsageAnalytics({db,now,limits}) {
     const returningAvailable=previousStart>=availableSince;
     let returning=null;
     if(returningAvailable) {
-      const previous=scope(previousStart,start);
+      const previous=scope(previousStart,previousEnd);
       returning=db.prepare(`SELECT COUNT(*) n FROM (SELECT support_id FROM (${current.sql} SELECT support_id FROM cohort) INTERSECT SELECT support_id FROM (${previous.sql} SELECT support_id FROM cohort))`).get(...current.params,...previous.params).n;
     }
-    const daily=new Map(Array.from({length:days},(_,i)=>{const d=date(start+i*DAY);return[d,{date:d,active_installations:0,sessions:0,app_launches:0}];}));
+    const daily=new Map(Array.from({length:days},(_,i)=>{const d=date(start+i*DAY);return[d,{date:d,partial:i===days-1,active_installations:0,sessions:0,app_launches:0}];}));
     for(const row of all(",daily_sessions AS (SELECT DISTINCT strftime('%Y-%m-%d',occurred_at/1000,'unixepoch') date,support_id,session_id FROM scoped) SELECT date,COUNT(DISTINCT support_id) active_installations,COUNT(*) sessions FROM daily_sessions GROUP BY date"))Object.assign(daily.get(row.date),row);
     for(const row of all(`SELECT strftime('%Y-%m-%d',occurred_at/1000,'unixepoch') date,COUNT(*) app_launches FROM scoped WHERE event_name='application_opened'${application?' AND application=?':''} GROUP BY date`,application?[application]:[]))daily.get(row.date).app_launches=row.app_launches;
     const releases=all(`,latest AS (SELECT launchpad_version,ROW_NUMBER() OVER(PARTITION BY support_id ORDER BY occurred_at DESC,received_at DESC,event_id DESC) rn FROM scoped),counts AS (
@@ -83,7 +88,7 @@ export function createUsageAnalytics({db,now,limits}) {
       for(const count of counts)if(count.component===component)row[count.status]=count.installations;
       return row;
     });
-    return {window:{days,start:iso(start),end_exclusive:iso(end),timezone:'UTC',complete_days:true,raw_retention_days:limits.eventTtlDays,coverage_start:iso(availableSince),coverage_complete:start>=availableSince},filters:{application,launchpad_version:release},
+    return {window:{days,start:iso(start),end_exclusive:iso(end),as_of:iso(clock),timezone:'UTC',complete_days:false,partial_day:date(today),previous_start:iso(previousStart),previous_end_exclusive:iso(previousEnd),raw_retention_days:limits.eventTtlDays,coverage_start:iso(availableSince),coverage_complete:start>=availableSince},filters:{application,launchpad_version:release},
       cohort:{active_installations:active,sessions,app_launches:launches.launches,app_launch_installations:launches.installations,returning_installations:returning,returning_available:returningAvailable,returning_reason:returningAvailable?'available':previousStart<clock-limits.eventTtlDays*DAY?'retention':'coverage'},
       daily:[...daily.values()],releases,applications,features,setup_routes:setupRoutes,gng_sources:gngSources,display_preferences:display,
       inventory:{snapshot_installations:inventoryTotals.installations,latest_snapshot_at:inventoryTotals.latest_at===null?null:iso(inventoryTotals.latest_at),cohort:'inventory_snapshots',components}};
