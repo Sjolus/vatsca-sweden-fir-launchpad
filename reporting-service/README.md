@@ -63,6 +63,8 @@ SQLite uses `DELETE` journals, `synchronous=FULL`, in-memory temporary tables an
 
 ## Deployment
 
+The **Reporting service** workflow tests and builds pull requests, and publishes `ghcr.io/sjolus/launchpad-reporting:git-<full commit SHA>` after successful `main` checks. To publish an approved branch commit, run the workflow on that branch with **publish** enabled. The Node 24 base is resolved once to an official registry digest and reused for publication; existing commit tags are never overwritten by this workflow. The job summary gives the application image digest for deployment. Images target Linux x64; publication does not deploy the service. After the first publication, the package owner must set its GHCR visibility to **Public** for anonymous pulls.
+
 `deploy/example.yaml` is a single-replica `Recreate` deployment with a read-only root filesystem, unprivileged user, resource limits and a network policy. It references an existing data claim instead of creating a PVC whose requested size might not be enforced. Replace its deliberately unresolved image/claim/namespace/TLS values in the hosting repository. Do not scale this service horizontally: in-memory request limits and notification cooldowns assume one process even though SQLite admission transactions are serialized.
 
 Before public intake is enabled, the operator must establish the actual filesystem quota, backup quota and retention, resource/log ceilings, valid HTTPS routing, owner enrollment and published operator/contact details. Test these against synthetic data on isolated staging storage. Source manifests do not establish production readiness, and application readiness does not verify the backup service or disk allocation.
@@ -94,6 +96,14 @@ node scripts/backup.mjs --database /data/reporting.sqlite --directory /backup/la
 ```
 
 Use a dedicated, independently quota-enforced backup mount, private to the operator. Defaults retain at most **two completed snapshots plus one temporary copy** and remove snapshots older than two days whenever the helper runs. Reserve at least 3 GiB for the default 768 MiB per-file ceiling and free-space headroom. Schedule it daily using the hosting platform, with failure/staleness alerts and independent backup expiry so a failed schedule cannot silently extend retention. Snapshots, replicas and external backup services need their own matching count/age/byte policies. A stale lock or unexpected file makes the helper stop for inspection; it does not automatically remove arbitrary files or accumulate retry copies. Health intentionally reports backup verification as an operator responsibility.
+
+Run the independent expiry and freshness check hourly on that same backup mount, offset from the daily snapshot job:
+
+```sh
+node scripts/check-backups.mjs --directory /backup/launchpad
+```
+
+It removes only recognized regular snapshots older than 48 hours and exits unsuccessfully if no snapshot remains or the newest is older than 30 hours. It shares the backup lock and preserves existing locks, pending copies, links and unexpected files for inspection. Inventory is bounded to three completed files (including a possible interrupted rotation), each at most 768 MiB. Logs contain counts, sizes, timestamps and status only. Monitor failed or missed hourly Jobs separately; this helper cannot expire files while its own schedule is stopped.
 
 A restore stays offline until expiry and deletion requests have been reapplied. Maintain the reviewed support-ID deletion record separately from these rotating database snapshots, with operator-only access and bounded retention covering the backup window. If that record is unavailable, do not reopen an older database containing potentially deleted records.
 

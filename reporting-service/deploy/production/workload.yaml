@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: launchpad-reporting
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app: launchpad-reporting}
+  template:
+    metadata:
+      labels: {app: launchpad-reporting}
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 20
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: api
+          image: ghcr.io/sjolus/launchpad-reporting
+          ports: [{name: http, containerPort: 3000}]
+          env:
+            - {name: PUBLIC_ORIGIN, value: 'https://launchpad.space.sjolus.org'}
+            - {name: DATA_PATH, value: /data/reporting.sqlite}
+            - {name: PRIVACY_OPERATOR, value: Sjolus}
+            - {name: PRIVACY_CONTACT, value: 'Contact Sjolus on Discord.'}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          resources:
+            requests: {cpu: 100m, memory: 128Mi, ephemeral-storage: 16Mi}
+            limits: {cpu: '1', memory: 384Mi, ephemeral-storage: 64Mi}
+          volumeMounts: [{name: data, mountPath: /data}]
+          readinessProbe:
+            httpGet: {path: /readyz, port: http}
+            periodSeconds: 15
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet: {path: /healthz, port: http}
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 3
+      volumes:
+        - name: data
+          persistentVolumeClaim: {claimName: launchpad-reporting-data}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: launchpad-reporting
+spec:
+  type: ClusterIP
+  selector: {app: launchpad-reporting}
+  ports: [{name: http, port: 3000, targetPort: http}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: launchpad-reporting
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: kube-system}
+          podSelector:
+            matchLabels: {app: traefik-ingress-lb}
+      ports: [{protocol: TCP, port: 3000}]
+  egress: []

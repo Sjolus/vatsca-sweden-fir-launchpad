@@ -137,6 +137,8 @@ Optional inventory has a separate intake endpoint and consent. A complete snapsh
 
 `reporting-service/` is a separate Node 24 service with SQLite and SimpleWebAuthn for a single owner's passkey. It has strict request validation, atomic persistent quotas, idempotency, retention and bounded storage. Public intake is untrusted, including claimed support IDs. Authenticated backoffice routes provide support lookup, grouped errors, reports and service health; UUIDs are not authorization. See its README for operational configuration and enrollment/recovery. Use one service instance with a quota-enforced data volume; a requested PVC size alone does not establish a physical bound. Internal health/metrics routes, raw connection addresses and access logs must remain outside the public reporting data. Deployment, privacy operator details and real passkey enrollment require separate review before release.
 
+The reporting CI publishes full-commit GHCR images after tests on main or an explicit publish dispatch; deployment uses an immutable digest. `reporting-service/deploy/production` owns only Launchpad's namespace, dedicated Longhorn class and bounded data/backup volumes. Its separate ArgoCD bootstrap uses manual sync. Daily SQLite snapshots and an independent hourly expiry/freshness check share a lock; backup jobs never enroll the owner. The initial router permits enrollment but excludes intake until operational checks finish. Do not change shared cluster services as part of an application rollout.
+
 ---
 
 ## Non-obvious decisions

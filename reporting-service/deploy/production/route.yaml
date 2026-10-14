@@ -1,0 +1,33 @@
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: launchpad-reporting-reject-path
+spec:
+  replacePath: {path: /route-not-available}
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: launchpad-reporting
+spec:
+  entryPoints: [websecure]
+  routes:
+    - kind: Rule
+      priority: 100
+      match: >-
+        Host(`launchpad.space.sjolus.org`) &&
+        (Path(`/`) || PathRegexp(`^/privacy(/|/info)?$`)
+        || PathRegexp(`^/backoffice(/|/(app[.]js|usage[.]js|style[.]css|logo[.]png|passkey[.]js))?$`)
+        || PathRegexp(`^/auth/(session|register-options|register-verify|authenticate-options|authenticate-verify|logout)$`)
+        || PathPrefix(`/api/admin/`))
+      observability: {accessLogs: false, tracing: false, metrics: false}
+      services: [{name: launchpad-reporting, port: 3000}]
+    # Cover unknown paths too so requests cannot fall into shared access logs.
+    # Intake is deliberately blocked until owner enrollment and validation.
+    - kind: Rule
+      priority: 10
+      match: Host(`launchpad.space.sjolus.org`)
+      middlewares: [{name: launchpad-reporting-reject-path}]
+      observability: {accessLogs: false, tracing: false, metrics: false}
+      services: [{name: launchpad-reporting, port: 3000}]
+  tls: {}
