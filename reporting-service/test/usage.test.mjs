@@ -16,7 +16,7 @@ function inventory(f,id=A,overrides={},version='2.3.0') {
 function at(f,date){f.advance(Date.parse(date)-f.now());}
 const add=(f,...rows)=>f.store.admitBatch('usage',batch(...rows));
 
-test('usage counts distinct active cohorts over complete UTC days and latest independent inventory snapshots',t=>{
+test('usage includes today in distinct active cohorts and latest independent inventory snapshots',t=>{
   const f=fixture(t,{initialClock:Date.parse('2026-10-01T00:00:00Z')}),attempt=randomUUID();
   at(f,'2026-10-10T12:00:00Z');
   add(f,record(f,'session_started',{launchpad_version:'2.2.0',session_id:randomUUID()}),record(f,'application_opened',{application:'trackaudio'}));
@@ -42,20 +42,21 @@ test('usage counts distinct active cohorts over complete UTC days and latest ind
   add(f,record(f,'session_started',{support_id:C}),record(f,'application_opened',{support_id:C,application:'trackaudio'}),record(f,'session_started',{support_id:randomUUID(),occurred_at:new Date(f.now()+120000).toISOString()}));
   f.store.admitBatch('inventory',batch(inventory(f,C,{trackaudio:{status:'known',version:'1.5.0'}},'2.2.0')));
   const result=f.store.usage({days:7});
-  assert.equal(result.window.start,'2026-10-13T00:00:00.000Z');assert.equal(result.window.end_exclusive,'2026-10-20T00:00:00.000Z');assert.equal(result.window.coverage_complete,true);
-  assert.deepEqual(result.cohort,{active_installations:2,sessions:3,app_launches:3,app_launch_installations:2,returning_installations:1,returning_available:true,returning_reason:'available'});
-  assert.equal(result.daily.reduce((n,d)=>n+d.active_installations,0),4,'daily IDs must not be summed for the window headline');
-  assert.deepEqual(result.releases,[{version:'2.2.0',installations:1},{version:'2.3.0',installations:1}]);
+  assert.equal(result.window.start,'2026-10-14T00:00:00.000Z');assert.equal(result.window.as_of,'2026-10-20T12:00:00.000Z');assert.equal(result.window.end_exclusive,'2026-10-20T12:00:00.001Z');assert.equal(result.window.coverage_complete,true);
+  assert.equal(result.window.complete_days,false);assert.equal(result.window.partial_day,'2026-10-20');
+  assert.deepEqual(result.cohort,{active_installations:3,sessions:4,app_launches:4,app_launch_installations:3,returning_installations:1,returning_available:true,returning_reason:'available'});
+  assert.equal(result.daily.reduce((n,d)=>n+d.active_installations,0),5,'daily IDs must not be summed for the window headline');
+  assert.deepEqual(result.releases,[{version:'2.3.0',installations:2},{version:'2.2.0',installations:1}]);
   assert.deepEqual(result.features,[{feature:'check_updates',uses:3,installations:2}]);
   assert.deepEqual(result.setup_routes,[{route:'fresh',attempts:1,installations:1}],'route changes replace earlier route; missing attempt IDs do not invent attempts');
-  assert.deepEqual(result.display_preferences.compact_layout,[{value:false,installations:1}]);assert.equal(result.display_preferences.missing_installations,1);
-  assert.equal(result.inventory.snapshot_installations,2,'inventory-only IDs form their own cohort');
+  assert.deepEqual(result.display_preferences.compact_layout,[{value:false,installations:1}]);assert.equal(result.display_preferences.missing_installations,2);
+  assert.equal(result.inventory.snapshot_installations,2,'inventory uses its independent snapshot cohort');
   const track=result.inventory.components.find(row=>row.component==='trackaudio');
-  assert.equal(track.known,1);assert.equal(track.unknown,1);assert.deepEqual(track.versions,[{version:'1.4.0',installations:1}]);
+  assert.equal(track.known,2);assert.equal(track.unknown,0);assert.deepEqual(track.versions,[{version:'1.4.0',installations:1},{version:'1.5.0',installations:1}]);
   assert.equal(result.inventory.components.find(row=>row.component==='vatefs').absent,2,'latest full snapshot replaces the previous unknown state');
   assert.ok(!JSON.stringify(result).includes(A));assert.ok(!JSON.stringify(result).includes(C),'analytics never return support IDs');
   const filtered=f.store.usage({days:7,application:'trackaudio'});
-  assert.equal(filtered.cohort.active_installations,1);assert.equal(filtered.cohort.sessions,2);assert.equal(filtered.cohort.app_launches,2);assert.equal(filtered.cohort.returning_installations,1);
+  assert.equal(filtered.cohort.active_installations,2);assert.equal(filtered.cohort.sessions,3);assert.equal(filtered.cohort.app_launches,3);assert.equal(filtered.cohort.returning_installations,1);
   assert.equal(filtered.inventory.snapshot_installations,2);assert.equal(filtered.inventory.components.length,1);
   const oldRelease=f.store.usage({days:7,launchpad_version:'2.2.0'});
   assert.equal(oldRelease.cohort.active_installations,1);assert.equal(oldRelease.cohort.sessions,1);assert.equal(oldRelease.inventory.snapshot_installations,1);
@@ -84,6 +85,58 @@ test('long-lived sessions count each day with activity and use the latest usage 
   assert.equal(app.cohort.active_installations,1);assert.equal(app.cohort.sessions,1);
   assert.deepEqual(app.features,[{feature:'check_updates',uses:1,installations:1}]);
   assert.equal(app.cohort.returning_installations,0,'previous window must match the same application scope');
+});
+
+test('today-only activity appears immediately while inventory, errors and future observations keep separate denominators',t=>{
+  const f=fixture(t),futureId=randomUUID(),session=record(f,'session_started');
+  add(f,session,session,record(f,'feature_used',{feature:'check_updates'}),record(f,'application_opened',{application:'trackaudio'}),
+    record(f,'session_started',{support_id:futureId,occurred_at:new Date(f.now()+1).toISOString()}));
+  f.store.admitBatch('errors',batch(record(f,'operation_failed',{support_id:B})));
+  f.store.admitBatch('inventory',batch(inventory(f,C,{trackaudio:{status:'known',version:'1.4.0'}},'2.2.0'),
+    {...inventory(f,futureId,{trackaudio:{status:'known',version:'1.5.0'}}),occurred_at:new Date(f.now()+1).toISOString()}));
+  const result=f.store.usage();
+  assert.equal(result.cohort.active_installations,1);assert.equal(result.cohort.sessions,1);assert.equal(result.cohort.app_launches,1);
+  assert.equal(result.inventory.snapshot_installations,1);assert.equal(result.inventory.latest_snapshot_at,new Date(f.now()).toISOString());
+  assert.equal(result.daily.length,7);assert.equal(result.daily.at(-1).date,new Date(f.now()).toISOString().slice(0,10));
+  assert.equal(result.daily.at(-1).partial,true);assert.equal(result.daily.at(-1).active_installations,1);
+  assert.equal(result.daily.filter(row=>row.partial).length,1);assert.equal(result.window.coverage_complete,false);
+  const app=f.store.usage({application:'trackaudio'});assert.equal(app.cohort.active_installations,1);assert.equal(app.inventory.snapshot_installations,1);
+  const release=f.store.usage({launchpad_version:'2.2.0'});assert.equal(release.cohort.active_installations,0);assert.equal(release.inventory.snapshot_installations,1);
+  f.advance(1);assert.equal(f.store.usage().cohort.active_installations,2);assert.equal(f.store.usage().inventory.snapshot_installations,2);
+});
+
+test('7- and 30-date windows roll at UTC midnight, include exact boundaries and deduplicate installations across days',t=>{
+  for(const days of [7,30]) {
+    const clock=Date.parse('2026-10-20T12:00:00Z'),today=Date.parse('2026-10-20T00:00:00Z'),start=today-(days-1)*DAY;
+    const f=fixture(t,{initialClock:start-35*DAY}),outside=randomUUID();
+    at(f,new Date(start-1).toISOString());add(f,record(f,'session_started',{support_id:outside}));
+    at(f,new Date(start).toISOString());add(f,record(f,'session_started'));
+    at(f,new Date(start+DAY).toISOString());add(f,record(f,'feature_used',{support_id:B,feature:'font_check'}));
+    at(f,new Date(clock).toISOString());add(f,record(f,'feature_used',{support_id:B,feature:'check_updates'}));
+    const current=f.store.usage({days});
+    assert.equal(current.window.start,new Date(start).toISOString());assert.equal(current.daily.length,days);
+    assert.equal(current.cohort.active_installations,2);assert.equal(current.cohort.sessions,2);
+    assert.equal(current.daily.reduce((sum,row)=>sum+row.active_installations,0),3);
+    assert.equal(current.window.coverage_complete,true);assert.equal(current.cohort.returning_available,days===7);
+    at(f,new Date(today+DAY).toISOString());add(f,record(f,'session_started',{support_id:C}));
+    const midnight=f.store.usage({days});
+    assert.equal(midnight.window.start,new Date(start+DAY).toISOString());
+    assert.equal(midnight.cohort.active_installations,2,'oldest date rolls out; exact midnight activity is counted');
+    assert.equal(midnight.cohort.sessions,2);assert.equal(midnight.daily.at(-1).active_installations,1);
+    assert.equal(midnight.daily.at(-1).partial,true);assert.equal(midnight.daily[0].active_installations,1);
+  }
+});
+
+test('returning overlap includes the entire contiguous preceding UTC period without a partial-day gap',t=>{
+  const f=fixture(t,{initialClock:Date.parse('2026-09-01T00:00:00Z')});
+  at(f,'2026-10-06T23:59:59.999Z');add(f,record(f,'session_started',{support_id:C}));
+  at(f,'2026-10-07T00:00:00.000Z');add(f,record(f,'session_started',{support_id:B}));
+  at(f,'2026-10-13T23:59:59.999Z');add(f,record(f,'session_started'));
+  at(f,'2026-10-14T00:00:00.000Z');add(f,record(f,'feature_used',{feature:'font_check'}));
+  at(f,'2026-10-20T12:00:00.000Z');add(f,record(f,'feature_used',{support_id:B,feature:'check_updates'}),record(f,'feature_used',{support_id:C,feature:'check_updates'}));
+  const result=f.store.usage();
+  assert.equal(result.window.previous_start,'2026-10-07T00:00:00.000Z');assert.equal(result.window.previous_end_exclusive,result.window.start);
+  assert.equal(result.cohort.active_installations,3);assert.equal(result.cohort.returning_installations,2);
 });
 
 test('inventory shares durable capped storage without entering usage, session or historical aggregate metrics',t=>{

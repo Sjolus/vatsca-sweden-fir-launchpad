@@ -10,6 +10,11 @@ const publicDirectory = fileURLToPath(new URL('../public/', import.meta.url));
 const require = createRequire(import.meta.url);
 const uuid = value => /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 const statuses = ['new', 'investigating', 'fixed', 'closed'];
+const adminReadPaths = new Set(['/api/admin/overview', '/api/admin/usage', '/api/admin/health', '/api/admin/errors', '/api/admin/reports']);
+const reportPath = /^\/api\/admin\/reports\/([A-Za-z0-9-]{1,80})$/;
+const reportStatusPath = /^\/api\/admin\/reports\/([A-Za-z0-9-]{1,80})\/status$/;
+const supportPath = /^\/api\/admin\/support\/([^/]+)$/;
+const supportDeletePath = /^\/api\/admin\/support\/([^/]+)\/delete$/;
 const headers = {
   'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'no-referrer', 'X-Frame-Options': 'DENY', 'X-Robots-Tag': 'noindex, nofollow',
@@ -117,26 +122,26 @@ export function createAdminHandler({ store, config, now = () => Date.now() }) {
           if ((status && !statuses.includes(status)) || !Number.isInteger(offset) || offset < 0 || offset > 10_000) throw new Error('Invalid filters');
           audit('reports_viewed'); reply(res, 200, store.listReports({ status, limit: 50, offset, application, launchpad_version, days })); return true;
         }
-        const support = /^\/api\/admin\/support\/([^/]+)$/.exec(path);
+        const support = supportPath.exec(path);
         if (support && uuid(support[1])) {
           const records = store.lookupSupport(support[1]);
           if (records.reports.length || records.events.length) audit('support_viewed', support[1]);
           else audit('support_lookup_empty');
           reply(res, 200, records); return true;
         }
-        const report = /^\/api\/admin\/reports\/([A-Za-z0-9-]{1,80})$/.exec(path);
+        const report = reportPath.exec(path);
         if (report) { const found = store.getReport(report[1]); if (found) audit('report_viewed', report[1]); reply(res, found ? 200 : 404, found ?? { error: 'Report not found.' }); return true; }
       } else if (req.method === 'POST') {
         if (!sameOrigin(req, config.origin)) { reply(res, 403, { error: 'Use the Launchpad backoffice for changes.' }); return true; }
         const body = await json(req);
-        const report = /^\/api\/admin\/reports\/([A-Za-z0-9-]{1,80})\/status$/.exec(path);
+        const report = reportStatusPath.exec(path);
         if (report) {
           onlyKeys(body, ['status']); if (!statuses.includes(body.status)) throw new Error('Invalid status');
           const found = store.setReportStatus(report[1], body.status);
           if (found) audit('status_' + body.status, report[1]);
           reply(res, found ? 200 : 404, found ?? { error: 'Report not found.' }); return true;
         }
-        const support = /^\/api\/admin\/support\/([^/]+)\/delete$/.exec(path);
+        const support = supportDeletePath.exec(path);
         if (support && uuid(support[1])) {
           onlyKeys(body, ['confirm']);
           if (!auth.recent(token)) { reply(res, 403, { error: 'Sign out and sign in again before deleting records.' }); return true; }
@@ -156,6 +161,17 @@ export function createAdminHandler({ store, config, now = () => Date.now() }) {
     }
     return true;
   }
+  adminHandler.isAuthenticatedDashboardRequest = (req, path) => {
+    const support = (req.method === 'GET' ? supportPath : supportDeletePath).exec(path);
+    const knownRead = req.method === 'GET' && (staticFiles.has(path) ||
+      ['/', '/privacy/info', '/backoffice/passkey.js', '/auth/session'].includes(path) ||
+      adminReadPaths.has(path) || reportPath.test(path) || (support && uuid(support[1])));
+    const knownChange = req.method === 'POST' && (path === '/auth/logout' ||
+      reportStatusPath.test(path) || (support && uuid(support[1])));
+    // Validate the stored passkey session before bypassing public admission limits.
+    // Intake and sign-in ceremonies stay limited even when a session cookie is sent.
+    return !!((knownRead || knownChange) && auth.current(cookieValue(req.headers.cookie, SESSION_COOKIE)));
+  };
   adminHandler.prune = () => {
     auth.prune();
     store.db.prepare('DELETE FROM admin_audit WHERE occurred_at<?').run(now() - 30 * 86400_000);

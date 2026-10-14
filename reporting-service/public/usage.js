@@ -27,8 +27,9 @@ function usageCard(label, value, note) {
 }
 function usageWindow(data, inventory = false) {
   const window = data.window ?? {}, note = element('div', undefined, 'scope-note');
-  const start = window.start ? String(window.start).slice(0, 10) : '—', end = window.end_exclusive ? new Date(new Date(window.end_exclusive).valueOf() - 86400_000).toISOString().slice(0, 10) : '—';
-  note.append(element('span', `${start} – ${end} · ${window.days ?? '—'} full UTC days. Today is excluded.`));
+  const start = window.start ? String(window.start).slice(0, 10) : '—', asOf = window.as_of ?? (window.end_exclusive ? new Date(new Date(window.end_exclusive).valueOf() - 1).toISOString() : null);
+  const end = asOf ? String(asOf).slice(0, 10) : '—', updated = asOf ? `${String(asOf).slice(11, 16)} UTC` : 'the latest refresh';
+  note.append(element('span', `${start} – ${end} · ${window.days ?? '—'} UTC days, including today. Today is partial; updated ${updated}.`));
   if (!window.coverage_complete) note.append(element('strong', 'Partial coverage: the service does not have observations for the entire selected period.', 'coverage-warning'));
   if (data.filters?.application && !inventory) note.append(element('span', `Usage cohort: installations with ${usageLabel(data.filters.application)} activity. Sessions, features and preferences describe those installations; launch counts describe the selected application.`));
   if (data.filters?.launchpad_version) note.append(element('span', `Only observations from Launchpad ${data.filters.launchpad_version} are included.`));
@@ -50,15 +51,16 @@ function dailyUsage(rows) {
   const panel = usagePanel('Everyday use', 'Installations with recorded usage each day, including sessions kept open overnight. Daily counts overlap.');
   if (!rows?.length) { panel.append(element('div', 'No daily observations yet.', 'empty')); return panel; }
   const chart = element('div', undefined, `daily-chart${rows.length > 7 ? ' month' : ''}`), max = Math.max(1, ...rows.map(row => row.active_installations));
-  chart.setAttribute('role', 'img'); chart.setAttribute('aria-label', rows.map(row => `${row.date}: ${number(row.active_installations)} active installations`).join('; '));
+  chart.setAttribute('role', 'img'); chart.setAttribute('aria-label', rows.map(row => `${row.date}${row.partial ? ' (today, partial)' : ''}: ${number(row.active_installations)} active installations`).join('; '));
   for (const row of rows) {
     const day = element('div', undefined, 'chart-day'), bar = document.createElementNS('http://www.w3.org/2000/svg', 'svg'), rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
     bar.setAttribute('viewBox', '0 0 40 100'); bar.setAttribute('preserveAspectRatio', 'none'); bar.setAttribute('aria-hidden', 'true');
     const height = row.active_installations / max * 100; rect.setAttribute('x', '3'); rect.setAttribute('y', String(100 - height)); rect.setAttribute('width', '34'); rect.setAttribute('height', String(height)); rect.setAttribute('rx', '2'); bar.append(rect);
-    day.append(element('strong', number(row.active_installations)), bar, element('span', row.date.slice(5))); chart.append(day);
+    day.append(element('strong', number(row.active_installations)), bar, element('span', row.partial ? 'Today*' : row.date.slice(5))); chart.append(day);
   }
   panel.append(chart);
-  const detail = element('details'); detail.append(element('summary', 'Daily sessions and launch actions'), table(rows, [{ key: 'date', label: 'Date · UTC' }, { key: 'active_installations', label: 'Active installations', render: number }, { key: 'sessions', label: 'Sessions', render: number }, { key: 'app_launches', label: 'Launch actions', render: number }])); panel.append(detail);
+  if (rows.some(row => row.partial)) panel.append(element('p', '* Today is partial and includes observations received so far.', 'panel-note'));
+  const detail = element('details'); detail.append(element('summary', 'Daily sessions and launch actions'), table(rows, [{ key: 'date', label: 'Date · UTC', render: (value, row) => `${value}${row.partial ? ' · Today, partial' : ''}` }, { key: 'active_installations', label: 'Active installations', render: number }, { key: 'sessions', label: 'Sessions', render: number }, { key: 'app_launches', label: 'Launch actions', render: number }])); panel.append(detail);
   return panel;
 }
 function preferencePanel(data) {
@@ -84,7 +86,7 @@ function renderUsageDashboard(data) {
   const fragment = document.createDocumentFragment(), cohort = data.cohort ?? {}, total = cohort.active_installations ?? 0;
   fragment.append(usageWindow(data));
   const headline = element('div', undefined, 'cards usage-cards');
-  const returnNote = cohort.returning_available ? `Also active in the preceding ${data.window.days} days.` : cohort.returning_reason === 'retention' ? 'The preceding period falls outside raw-data retention. Use 7 days.' : 'A full preceding period is not available yet.';
+  const returnNote = cohort.returning_available ? `Also seen in the preceding ${data.window.days} complete UTC days.` : cohort.returning_reason === 'retention' ? 'The preceding period falls outside raw-data retention. Use 7 days.' : 'A full preceding period is not available yet.';
   headline.append(usageCard('Active installations', number(total), 'Distinct support IDs with recorded usage.'), usageCard('Recorded sessions', number(cohort.sessions), 'Distinct sessions with activity in this period, not app starts or running time.'), usageCard('Returning installations', cohort.returning_available ? share(cohort.returning_installations, total) : 'Unavailable', returnNote), usageCard('Application launch actions', number(cohort.app_launches), `${number(cohort.app_launch_installations)} installations used Launchpad to open a tool.`));
   fragment.append(headline);
   if (!total) fragment.append(element('p', 'No usage observations for this selection. Inventory may still be available separately. No observations does not mean nobody uses Launchpad.', 'notice'));

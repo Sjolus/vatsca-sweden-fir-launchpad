@@ -13,10 +13,10 @@ export function usageFixture() {
     ['afv_euroscope_bridge', 'plugin_file', 0, 2, 27, 1, []],
   ].map(([component, source, known, unknown, absent, unavailable, versions]) => ({ component, source, known, unknown, absent, unavailable, versions: versions.map(([version, installations]) => ({version, installations})) }));
   return {
-    window: {days:7,start:'2026-10-07T00:00:00.000Z',end_exclusive:'2026-10-14T00:00:00.000Z',timezone:'UTC',complete_days:true,raw_retention_days:30,coverage_start:'2026-09-20T00:00:00.000Z',coverage_complete:true},
+    window: {days:7,start:'2026-10-08T00:00:00.000Z',end_exclusive:'2026-10-14T14:30:00.001Z',as_of:'2026-10-14T14:30:00.000Z',timezone:'UTC',complete_days:false,partial_day:'2026-10-14',previous_start:'2026-10-01T00:00:00.000Z',previous_end_exclusive:'2026-10-08T00:00:00.000Z',raw_retention_days:30,coverage_start:'2026-09-20T00:00:00.000Z',coverage_complete:true},
     filters:{application:null,launchpad_version:null},
     cohort:{active_installations:42,sessions:96,app_launches:148,app_launch_installations:35,returning_installations:27,returning_available:true,returning_reason:'available'},
-    daily:[8,10,12,9,13,11,14].map((active_installations,index)=>({date:`2026-10-${String(index+7).padStart(2,'0')}`,active_installations,sessions:[12,13,13,12,16,14,16][index],app_launches:[18,19,22,20,25,19,25][index]})),
+    daily:[8,10,12,9,13,11,14].map((active_installations,index)=>({date:`2026-10-${String(index+8).padStart(2,'0')}`,partial:index===6,active_installations,sessions:[12,13,13,12,16,14,16][index],app_launches:[18,19,22,20,25,19,25][index]})),
     releases:[{version:'2.2.0',installations:31},{version:'2.1.0',installations:8},{version:'2.0.2',installations:3}],
     applications:[['euroscope',46,32],['trackaudio',39,29],['vacs',22,20],['vatis',18,16],['vatefs',14,12],['vatiris',9,9]].map(([application,launches,installations])=>({application,launches,installations})),
     features:[['check_updates',51,28],['gng_package_review',18,14],['controller_profile_review',15,12],['install_or_update',14,11],['setup_guide',8,8],['gng_cleanup_review',5,4]].map(([feature,uses,installations])=>({feature,uses,installations})),

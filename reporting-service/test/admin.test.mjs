@@ -10,17 +10,18 @@ import { readConfig } from '../src/config.mjs';
 import { prepareEnrollment, secret, SESSION_COOKIE, FLOW_COOKIE } from '../src/auth.mjs';
 import { authenticator } from './auth-fixture.mjs';
 const origin = 'https://launchpad.example';
-async function fixture(t) {
+async function fixture(t, limits = {}) {
   const directory = mkdtempSync(join(tmpdir(), 'launchpad-admin-'));
   const config = { ...readConfig({ PUBLIC_ORIGIN: origin }), dataPath: join(directory, 'synthetic.sqlite'), privacyOperator: 'Synthetic maintainer', privacyContact: 'Synthetic support contact' };
+  config.limits = { ...config.limits, ...limits };
   const store = createStore({ path: config.dataPath, freeSpace: () => 10 ** 12 }); let clock = Date.now();
-  const { server } = createServer({ store, config, now: () => clock });
+  const { server, gate } = createServer({ store, config, now: () => clock });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   t.after(async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); store.close(); rmSync(directory, { recursive: true, force: true }); });
   const base = `http://127.0.0.1:${server.address().port}`;
   const request = (path, body, cookie, other = {}) => fetch(base + path, { method: body === undefined ? 'GET' : 'POST', headers: { ...(body === undefined ? {} : { 'Content-Type': 'application/json', Origin: origin }), ...(cookie ? { Cookie: cookie } : {}), ...other }, body: body === undefined ? undefined : JSON.stringify(body), redirect: 'manual' });
   const code = secret(); prepareEnrollment(store, { token: code, now: clock });
-  return { store, config, request, code, advance: value => { clock += value; }, now: () => clock };
+  return { store, config, gate, request, code, advance: value => { clock += value; }, now: () => clock };
 }
 async function enroll(f) {
   const device = authenticator(), optionsResponse = await f.request('/auth/register-options', { enrollment_code: f.code });
@@ -54,13 +55,16 @@ test('usage analytics default to a bounded UTC window and reject ambiguous filte
   const response = await f.request('/api/admin/usage', undefined, session); assert.equal(response.status, 200);
   const data = await response.json(); assert.equal(data.window.days, 7); assert.equal(data.window.timezone, 'UTC');
   assert.equal(data.cohort.active_installations, 0); assert.equal(data.inventory.snapshot_installations, 0);
+  assert.equal(data.window.complete_days, false); assert.equal(data.daily.at(-1).partial, true);
   assert.match(response.headers.get('cache-control'), /no-store/);
   for (const filter of ['days=365', 'days=', 'days=7&days=30', 'application=unrecognized', 'launchpad_version=private-path', 'support_id=anything']) {
     assert.equal((await f.request('/api/admin/usage?' + filter, undefined, session)).status, 400, filter);
   }
+  f.store.admitBatch('usage', {schema_version:1,events:[{event_id:randomUUID(),support_id:randomUUID(),session_id:randomUUID(),occurred_at:new Date(f.now()).toISOString(),launchpad_version:'2.2.0',event_name:'application_opened',application:'euroscope'}]});
   const filtered = await f.request('/api/admin/usage?days=30&application=euroscope&launchpad_version=2.2.0', undefined, session);
   assert.equal(filtered.status, 200); const selection = await filtered.json();
   assert.equal(selection.window.days, 30); assert.equal(selection.filters.application, 'euroscope'); assert.equal(selection.filters.launchpad_version, '2.2.0');
+  assert.equal(selection.cohort.active_installations, 1); assert.equal(selection.cohort.app_launches, 1);
   assert.equal(selection.cohort.returning_available, false);
 });
 
@@ -72,6 +76,72 @@ test('HTTP passkey flow binds cookies, uses private responses and supports logou
   const duplicate = await f.request('/api/admin/reports', undefined, `${session}; ${session}`); assert.equal(duplicate.status, 401);
   const foreign = await f.request('/auth/logout', {}, session, { Origin: 'https://attacker.example' }); assert.equal(foreign.status, 403);
   const logout = await f.request('/auth/logout', {}, session); assert.equal(logout.status, 200); assert.equal((await f.request('/api/admin/reports', undefined, session)).status, 401);
+});
+
+test('verified dashboard refreshes do not spend public capacity or fail when it is exhausted', async t => {
+  for (const limits of [{ sourceRequestsPerMinute: 3 }, { globalRequestsPerMinute: 3 }]) {
+    const f = await fixture(t, limits), session = await enroll(f), seeded = seedReport(f);
+    const paths = ['/', '/backoffice', '/backoffice/', '/backoffice/app.js', '/backoffice/usage.js',
+      '/backoffice/style.css', '/backoffice/logo.png', '/backoffice/passkey.js', '/privacy', '/privacy/', '/privacy/info',
+      '/auth/session', '/api/admin/overview', '/api/admin/usage?days=7', '/api/admin/health', '/api/admin/errors',
+      '/api/admin/reports', `/api/admin/reports/${seeded.reference}`, `/api/admin/support/${seeded.support_id}`];
+    async function refresh() {
+      for (const path of paths) {
+        const response = await f.request(path, undefined, session);
+        assert.equal(response.status, path === '/' ? 302 : 200, path);
+        await response.arrayBuffer();
+      }
+    }
+    const initial = f.gate.stats();
+    for (let attempt = 0; attempt < 7; attempt++) await refresh();
+    assert.deepEqual(f.gate.stats(), initial, 'Authenticated refreshes do not charge public request, source, byte or concurrency budgets');
+    assert.equal((await f.request('/backoffice/')).status, 200);
+    const limited = await f.request('/backoffice/'); assert.equal(limited.status, 429); assert.equal(limited.headers.get('retry-after'), '60');
+    const exhausted = f.gate.stats();
+    await refresh();
+    assert.deepEqual(f.gate.stats(), exhausted, 'Already-exhausted public limits cannot block the verified dashboard');
+
+    const statusPath = `/api/admin/reports/${seeded.reference}/status`;
+    assert.equal((await f.request(statusPath, { status: 'fixed' }, session)).status, 200);
+    assert.equal((await f.request(statusPath, { status: 'closed' }, session, { Origin: 'https://attacker.example' })).status, 403);
+    assert.equal((await f.request(statusPath, { status: 'x'.repeat(33000) }, session)).status, 413);
+    assert.deepEqual(f.gate.stats(), exhausted, 'Authenticated actions retain body/origin checks without consuming public budgets');
+
+    for (const path of ['/api/v1/usage/batches', '/api/v1/inventory/batches', '/api/v1/errors/batches', '/api/v1/reports',
+      '/auth/register-options', '/auth/register-verify', '/auth/authenticate-options', '/auth/authenticate-verify']) {
+      assert.equal((await f.request(path, {}, session)).status, 429, `${path} remains limited even with a real session`);
+    }
+    for (const path of ['/api/admin/not-a-route', '/api/admin/support/invalid', '/backoffice/unknown.js']) {
+      assert.equal((await f.request(path, undefined, session)).status, 429, 'Only known dashboard paths are exempt');
+    }
+    for (const cookie of [`${SESSION_COOKIE}=${secret()}`, `${session}; ${session}`]) {
+      assert.equal((await f.request('/backoffice/', undefined, cookie)).status, 429, 'Forged or duplicate cookies do not bypass limits');
+    }
+    assert.equal((await f.request('/auth/logout', {}, session)).status, 200, 'Exhausted public budgets cannot trap a signed-in maintainer');
+    assert.equal((await f.request('/api/admin/health', undefined, session)).status, 429, 'A revoked session immediately loses its exemption');
+    f.advance(60000);
+    assert.equal((await f.request('/api/admin/health', undefined, session)).status, 401, 'Revoked cookies never authorize the private API');
+  }
+});
+
+test('idle and absolute session expiry remove the dashboard rate-limit exemption', async t => {
+  for (const expiry of ['idle', 'absolute']) {
+    const f = await fixture(t, { sourceRequestsPerMinute: 3 }), session = await enroll(f);
+    if (expiry === 'absolute') {
+      for (let visit = 0; visit < 4; visit++) {
+        f.advance(14 * 60000);
+        assert.equal((await f.request('/auth/session', undefined, session)).status, 200);
+      }
+      f.advance(4 * 60000 + 1);
+    } else f.advance(15 * 60000 + 1);
+    for (let attempt = 0; attempt < 3; attempt++) assert.equal((await f.request('/backoffice/')).status, 200);
+    for (const path of ['/backoffice/', '/auth/session', '/api/admin/health']) {
+      assert.equal((await f.request(path, undefined, session)).status, 429, `${expiry}-expired session cannot bypass exhausted limits`);
+    }
+    f.advance(60000);
+    assert.equal((await f.request('/api/admin/health', undefined, session)).status, 401);
+    assert.equal((await (await f.request('/auth/session', undefined, session)).json()).signed_in, false);
+  }
 });
 
 test('private report access, validated filters and origin-checked status changes', async t => {
