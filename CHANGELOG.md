@@ -1,5 +1,9 @@
 # Changelog
 
+## [2.3.1] — 2026-10-14
+
+- Fix GNG update checks getting stuck on Checking after the latest version is found. Keep status notifications on the UI thread, including failures and portable Launchpad version checks.
+
 ## [2.3.0] — 2026-10-14
 
 - Add independent choices for usage statistics, software/plugin versions and automatic error reports, with a first-use prompt and a support ID that survives updates. Change the ID or clear unsent reports from Help.

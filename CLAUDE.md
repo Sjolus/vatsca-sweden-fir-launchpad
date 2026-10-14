@@ -55,6 +55,8 @@ Themes/       Light.xaml and Dark.xaml resource dictionaries (hot-swapped at run
 
 Windows use code-behind intentionally; do not introduce a DI container or MVVM framework. MainWindow's eight-row initialization, launch-path assignment and check results share positional indices. Keep them aligned when changing rows. Partial MainWindow files isolate the larger operation workflows.
 
+`UpdateChecker` updates UI-bound `CheckResult` instances and must retain the caller's synchronization context across awaits. MainWindow invokes these methods on its UI thread; property-change observers also update the application summary directly. Only pure network helpers such as `FetchLatestTag` may opt out of context capture. `Tests/UpdateChecker.Tests` checks delayed success and failure responses with a synthetic single-thread context, without opening windows or contacting release services.
+
 ### Explicit third-party updates
 
 `SoftwareReleaseSource` reads official VACS/TrackAudio/VatEFS GitHub metadata and vATIS's Windows feed. `SoftwareVersion` retains full prerelease ordering. `SoftwareUpdateService` coordinates explicit checks versus updates; neither construction nor checking installs anything. `SoftwareInstaller` recognizes existing installations and invokes each vendor's silent/no-restart route. The vATIS adapter must never use Setup over an existing root: that can delete profiles. Its installed helper requires a recoverable backup outside the root.

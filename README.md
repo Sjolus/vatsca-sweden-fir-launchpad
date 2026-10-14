@@ -4,6 +4,8 @@ A Windows desktop app for [VATSIM Scandinavia](https://vatsca.org) controllers. 
 
 **Launchpad 2.3.0** adds optional usage, software-version and error reporting, plus problem reports you can preview before sending. A persistent support ID helps the maintainer find your reports without collecting your name or CID.
 
+**2.3.1** fixes GNG update checks getting stuck on Checking and the same problem when a portable Launchpad copy checks its own version.
+
 ![Launchpad's compact application list with TrackAudio selected and its update status shown below](Assets/screenshot.png)
 
 *Compact view with application details, shown in a development build.*

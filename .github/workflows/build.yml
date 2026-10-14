@@ -86,6 +86,9 @@ jobs:
       - name: Test application status
         run: dotnet run --project Tests/CheckResult.Tests/CheckResult.Tests.csproj -c Release
 
+      - name: Test update-check notifications after asynchronous responses
+        run: dotnet run --project Tests/UpdateChecker.Tests/UpdateChecker.Tests.csproj -c Release
+
       - name: Test presentation preferences and process identity
         run: dotnet run --project Tests/Presentation.Tests/Presentation.Tests.csproj -c Release
 
