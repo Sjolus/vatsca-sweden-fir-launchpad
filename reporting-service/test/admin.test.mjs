@@ -54,7 +54,10 @@ test('usage analytics default to a bounded UTC window and reject ambiguous filte
   const f = await fixture(t), session = await enroll(f);
   const response = await f.request('/api/admin/usage', undefined, session); assert.equal(response.status, 200);
   const data = await response.json(); assert.equal(data.window.days, 7); assert.equal(data.window.timezone, 'UTC');
-  assert.equal(data.cohort.active_installations, 0); assert.equal(data.inventory.snapshot_installations, 0);
+  assert.equal(data.cohort.active_installations, 0); assert.equal(Object.hasOwn(data, 'inventory'), false);
+  const inventory = await (await f.request('/api/admin/inventory', undefined, session)).json();
+  assert.equal(inventory.inventory.snapshot_installations, 0);
+  assert.deepEqual(Object.keys(inventory).sort(), ['filters', 'inventory', 'window']);
   assert.equal(data.window.complete_days, false); assert.equal(data.daily.at(-1).partial, true);
   assert.match(response.headers.get('cache-control'), /no-store/);
   for (const filter of ['days=365', 'days=', 'days=7&days=30', 'application=unrecognized', 'launchpad_version=private-path', 'support_id=anything']) {

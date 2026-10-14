@@ -75,7 +75,7 @@ export function createUsageAnalytics({db,now,limits}) {
         .map(row=>({...row,value:['compact_layout','always_on_top'].includes(field)?row.value===1:row.value}));
     }
     const inventoryParams=[start,end,clock,...(release?[release]:[])];
-    const latestInventory=`WITH ordered AS (SELECT event_id,occurred_at,ROW_NUMBER() OVER(PARTITION BY support_id ORDER BY occurred_at DESC,received_at DESC,event_id DESC) rn FROM events WHERE stream='usage' AND event_name='inventory_snapshot' AND occurred_at>=? AND occurred_at<? AND expires_at>?${release?' AND launchpad_version=?':''}),latest AS (SELECT e.payload,o.occurred_at FROM ordered o JOIN events e ON e.event_id=o.event_id WHERE rn=1),items AS (
+    const latestInventory=`WITH ordered AS (SELECT event_id,occurred_at,ROW_NUMBER() OVER(PARTITION BY support_id ORDER BY occurred_at DESC,received_at DESC,event_id DESC) rn FROM events WHERE stream='usage' AND event_name='inventory_snapshot' AND occurred_at>=? AND occurred_at<? AND expires_at>?${release?' AND launchpad_version=?':''}),latest AS (SELECT e.support_id,e.payload,o.occurred_at FROM ordered o JOIN events e ON e.event_id=o.event_id WHERE rn=1),items AS (
       SELECT json_extract(j.value,'$.component') component,json_extract(j.value,'$.status') status,json_extract(j.value,'$.version') version FROM latest,json_each(latest.payload,'$.items') j
     )`;
     const invQuery=suffix=>db.prepare(latestInventory+' '+suffix).all(...inventoryParams);
@@ -88,9 +88,43 @@ export function createUsageAnalytics({db,now,limits}) {
       for(const count of counts)if(count.component===component)row[count.status]=count.installations;
       return row;
     });
+    const dlls=dllInventory(invQuery,application);
     return {window:{days,start:iso(start),end_exclusive:iso(end),as_of:iso(clock),timezone:'UTC',complete_days:false,partial_day:date(today),previous_start:iso(previousStart),previous_end_exclusive:iso(previousEnd),raw_retention_days:limits.eventTtlDays,coverage_start:iso(availableSince),coverage_complete:start>=availableSince},filters:{application,launchpad_version:release},
       cohort:{active_installations:active,sessions,app_launches:launches.launches,app_launch_installations:launches.installations,returning_installations:returning,returning_available:returningAvailable,returning_reason:returningAvailable?'available':previousStart<clock-limits.eventTtlDays*DAY?'retention':'coverage'},
       daily:[...daily.values()],releases,applications,features,setup_routes:setupRoutes,gng_sources:gngSources,display_preferences:display,
-      inventory:{snapshot_installations:inventoryTotals.installations,latest_snapshot_at:inventoryTotals.latest_at===null?null:iso(inventoryTotals.latest_at),cohort:'inventory_snapshots',components}};
+      inventory:{snapshot_installations:inventoryTotals.installations,latest_snapshot_at:inventoryTotals.latest_at===null?null:iso(inventoryTotals.latest_at),cohort:'inventory_snapshots',components,...(dlls?{dll_inventory:dlls}:{})}};
   };
+}
+
+function dllInventory(query,application) {
+  if(application && !['euroscope','gng','vatefs','vatiris'].includes(application))return null;
+  const product=['vatefs','vatiris'].includes(application)?application:null;
+  // These are scan outcomes for the entire independent inventory sample, not a
+  // claim that an unreported DLL is absent. A newer legacy snapshot replaces an
+  // older detailed snapshot rather than carrying stale file observations forward.
+  const summary=query(`SELECT
+    COUNT(CASE WHEN json_extract(payload,'$.dll_inventory.status')='complete' THEN 1 END) complete_installations,
+    COUNT(CASE WHEN json_extract(payload,'$.dll_inventory.status')='partial' THEN 1 END) partial_installations,
+    COUNT(CASE WHEN json_extract(payload,'$.dll_inventory.status')='unavailable' THEN 1 END) unavailable_installations,
+    COUNT(CASE WHEN json_type(payload,'$.dll_inventory') IS NULL THEN 1 END) not_shared_installations,
+    COALESCE(SUM(json_extract(payload,'$.dll_inventory.unreadable_files')),0) unreadable_files FROM latest`)[0];
+  const entries=`,dll_entries AS (SELECT support_id,
+    json_extract(j.value,'$.sha256') sha256,json_extract(j.value,'$.product') product,
+    json_extract(j.value,'$.role') role,json_extract(j.value,'$.copies') copies,
+    json_extract(j.value,'$.version') version,json_extract(j.value,'$.file_version') file_version,
+    json_extract(j.value,'$.version_source') version_source
+    FROM latest,json_each(latest.payload,'$.dll_inventory.entries') j
+    ${product?`WHERE json_extract(j.value,'$.product')='${product}'`:''})`;
+  const roles=query(entries+` SELECT COUNT(DISTINCT CASE WHEN role='current' THEN support_id END) current_installations,
+    COUNT(DISTINCT CASE WHEN role='staged' THEN support_id END) staged_installations FROM dll_entries`)[0];
+  // Group inside SQLite and return at most 100 binary groups. Copies describe
+  // repeated files; each installation is counted only once per binary and role.
+  const groups=query(entries+`,groups AS (SELECT sha256,product,role,version,file_version,version_source,
+    COUNT(DISTINCT support_id) installations,SUM(copies) copies FROM dll_entries
+    GROUP BY sha256,product,role,version,file_version,version_source)
+    SELECT *,COUNT(*) OVER() total_groups FROM groups
+    ORDER BY role,installations DESC,product,sha256,version,file_version,version_source LIMIT 100`);
+  const total=groups[0]?.total_groups??0;
+  return {...summary,...roles,shared_installations:summary.complete_installations+summary.partial_installations+summary.unavailable_installations,
+    product_filter:product,total_groups:total,omitted_groups:Math.max(0,total-groups.length),rows:groups.map(({total_groups,...row})=>({...row}))};
 }

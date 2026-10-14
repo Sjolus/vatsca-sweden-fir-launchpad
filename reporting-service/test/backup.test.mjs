@@ -5,7 +5,7 @@ import {mkdirSync,readdirSync,readFileSync,writeFileSync,statSync,copyFileSync} 
 import {DatabaseSync} from 'node:sqlite';
 import {createBackup} from '../scripts/backup.mjs';
 import {prepareRestore} from '../scripts/prepare-restore.mjs';
-import {initializeAuth,prepareEnrollment,secret} from '../src/auth.mjs';
+import {initializeAuth,prepareEnrollment,secret,createAuth} from '../src/auth.mjs';
 import {createStore} from '../src/store.mjs';
 import {fixture,event,batch,report,SUPPORT} from './intake-helpers.mjs';
 
@@ -55,7 +55,11 @@ test('offline restore reapplies expiry/deletions, revokes all authentication and
   const f=fixture(t),directory=join(f.directory,'backups'),staging=join(f.directory,'restore-staging.sqlite');
   initializeAuth(f.store);prepareEnrollment(f.store,{token:secret(),now:f.now()});
   f.store.admitReport(report());f.store.admitBatch('usage',batch(event()));
-  f.store.db.prepare('INSERT INTO auth_sessions VALUES(?,?,?,?,?)').run('synthetic',f.store.db.prepare('SELECT epoch FROM auth_owner').get().epoch,f.now(),f.now(),f.now()+3600000);
+  f.store.db.prepare('INSERT INTO auth_sessions(token_hash,epoch,created_at,last_seen,expires_at) VALUES(?,?,?,?,?)').run('synthetic',f.store.db.prepare('SELECT epoch FROM auth_owner').get().epoch,f.now(),f.now(),f.now()+3600000);
+  const auth=createAuth({store:f.store,origin:'https://launchpad.example',now:f.now});
+  const invited=auth.createUser({username:'helper',permissions:['reports']});
+  const enrolled=auth.createUser({username:'reviewer',permissions:['usage']});
+  f.store.db.prepare("UPDATE auth_users SET credential_id='synthetic-credential',public_key=?,invitation_hash=NULL,invitation_expires=NULL WHERE id=?").run(Buffer.from('synthetic'),enrolled.user.id);
   await createBackup({source:f.path,directory,now:f.now,maxBytes:1048576,reserveBytes:131072,freeSpace:()=>1e9});
   copyFileSync(join(directory,readdirSync(directory)[0]),staging);f.advance(31*86400000);
   assert.throws(()=>prepareRestore({path:staging}),'omitting the operator deletion record must stop restore');
@@ -68,6 +72,11 @@ test('offline restore reapplies expiry/deletions, revokes all authentication and
     assert.equal(store.db.prepare('SELECT coverage_start FROM analytics_state WHERE singleton=1').get().coverage_start,f.now());
     assert.equal(store.usage().window.coverage_complete,false);
     const owner=store.db.prepare('SELECT credential_id,enrollment_hash FROM auth_owner').get();assert.equal(owner.credential_id,null);assert.equal(owner.enrollment_hash,null);
+    for(const id of [invited.user.id,enrolled.user.id]) {
+      const user=store.db.prepare('SELECT * FROM auth_users WHERE id=?').get(id);
+      assert.equal(user.enabled,0);assert.equal(user.credential_id,null);assert.equal(user.public_key,null);
+      assert.equal(user.invitation_hash,null);assert.equal(user.invitation_expires,null);assert.equal(user.counter,0);
+    }
     assert.throws(()=>store.admitReport(report()),{status:429});
     f.advance(86400000);assert.ok(store.admitReport(report()).reference);
   } finally {store.close();}
