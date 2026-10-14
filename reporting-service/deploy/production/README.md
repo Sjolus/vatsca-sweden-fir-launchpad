@@ -16,6 +16,11 @@ hourly check expires old snapshots and fails on missing/stale backups. Both jobs
 must be monitored. These backups share the cluster's failure domain and are not
 off-site disaster recovery. Do not add unconstrained NAS copies or snapshots.
 
+After provisioning, set `spec.snapshotMaxCount: 2` on each of the two associated
+Longhorn Volume resources. Longhorn 1.11 does not apply this field from a storage
+class parameter. Verify those limits and the disabled default recurring-job group
+on the actual volumes before enabling intake; never patch unrelated volumes.
+
 The application runs as UID/GID 10001 with a read-only container filesystem and
 no service-account token. It has no configured notification service or outbound
 work. The NetworkPolicy is a desired boundary; enforcement depends on the cluster
