@@ -344,7 +344,20 @@ public class CheckResult : INotifyPropertyChanged
     public bool SoftwareCanCancel => SoftwareUpdate?.CanCancel == true;
     public double SoftwareProgressValue => SoftwareUpdate?.ProgressPercent ?? 0;
     public bool SoftwareProgressIndeterminate => SoftwareUpdateBusy && SoftwareUpdate?.ProgressPercent == null;
-    public bool LaunchEnabled => !HasSoftwareUpdate || SoftwareActionsAllowed && !SoftwareUpdateBusy;
+    private bool _applicationActionsAllowed = true;
+    public bool ApplicationActionsAllowed
+    {
+        get => _applicationActionsAllowed;
+        set { Set(ref _applicationActionsAllowed, value); OnPropertyChanged(nameof(LaunchEnabled)); }
+    }
+    private bool _applicationStartsAllowed = true;
+    public bool ApplicationStartsAllowed
+    {
+        get => _applicationStartsAllowed;
+        set { Set(ref _applicationStartsAllowed, value); OnPropertyChanged(nameof(LaunchEnabled)); }
+    }
+    public bool LaunchEnabled => ApplicationActionsAllowed && !SoftwareUpdateBusy &&
+        (ShowRunningActions || ApplicationStartsAllowed && (!HasSoftwareUpdate || SoftwareActionsAllowed));
     public bool SoftwareActionEnabled => SoftwareActionsAllowed && !(SoftwareUpdate?.CanUpdate == true &&
         ((!IsWebApp && IsRunning) || !string.IsNullOrEmpty(SoftwareBlockingReason)));
     public bool SoftwareNeedsSetup => HasSoftwareUpdate && (string.IsNullOrWhiteSpace(SoftwareCheckPath) ||
@@ -523,6 +536,7 @@ public class CheckResult : INotifyPropertyChanged
         {
             Set(ref _isRunning, value);
             OnPropertyChanged(nameof(LaunchTooltip));
+            OnPropertyChanged(nameof(LaunchEnabled));
             OnPropertyChanged(nameof(SoftwareActionEnabled));
             OnPropertyChanged(nameof(SoftwareSummary));
         }
@@ -536,13 +550,15 @@ public class CheckResult : INotifyPropertyChanged
                       File.Exists(LaunchPath));
 
     /// <summary>Launch button for apps without a profile picker.</summary>
-    public bool ShowSimpleLaunch => ShowLaunch && !HasProfiles;
+    public bool ShowSimpleLaunch => ShowLaunch && !HasProfiles && !ShowRunningActions;
 
     /// <summary>Split launch+profile button for EuroScope.</summary>
-    public bool ShowSplitLaunch => ShowLaunch && HasProfiles;
+    public bool ShowSplitLaunch => ShowLaunch && HasProfiles && !ShowRunningActions;
+
+    public bool ShowRunningActions => IsRunning && !IsFolder && !HasSelfUpdate;
 
     public string LaunchTooltip => IsFolder ? "Open the GNG package folder." : IsRunning
-        ? $"Show the running {DisplayName} window. Closing is a separate action in Details."
+        ? $"Show the running {DisplayName} window."
         : IsWebApp ? $"Open {DisplayName} in its browser window." : $"Launch {DisplayName}.";
 
     public string InstalledVersion
@@ -627,7 +643,7 @@ public class CheckResult : INotifyPropertyChanged
         foreach (var name in new[] { nameof(DisplayInstalledVersion), nameof(DisplayLatestVersion),
             nameof(LatestVersionCaption), nameof(RowStatusText), nameof(RowStatusKind), nameof(RowStatusSymbol),
             nameof(RowExplanation), nameof(DetailHeading), nameof(DetailText), nameof(LaunchActionText),
-            nameof(UsageActionText), nameof(SelectedProfileCaption), nameof(ShowLaunch), nameof(ShowSimpleLaunch), nameof(ShowSplitLaunch) })
+            nameof(UsageActionText), nameof(SelectedProfileCaption), nameof(ShowLaunch), nameof(ShowSimpleLaunch), nameof(ShowSplitLaunch), nameof(ShowRunningActions) })
             OnPropertyChanged(name);
     }
 

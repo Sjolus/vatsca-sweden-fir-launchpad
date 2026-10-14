@@ -202,7 +202,8 @@ function dllInventoryPanel(dlls, total) {
     { key: 'version', label: 'Version read from DLL', render: (version, row) => {
       const cell = element('div', undefined, 'inventory-dll-version');
       cell.append(element('strong', version ? version.replace(/-(alpha|beta|rc)\./, ' $1 ') : 'Version unknown'));
-      if (version) cell.append(element('small', row.version_source === 'embedded' ? 'Embedded version label' : 'Windows version resource'));
+      if (version) cell.append(element('small', row.version_source === 'registration' ? 'EuroScope plugin registration'
+        : row.version_source === 'embedded' ? 'Embedded version label' : 'Windows version resource'));
       if (row.file_version) cell.append(element('small', `File version: ${row.file_version}`));
       if (!version && !row.file_version) cell.append(element('small', 'No readable version; age is unknown'));
       return cell;

@@ -31,7 +31,23 @@ internal static class WireFixture
         foreach (var value in Enum.GetValues<ReportingErrorCode>()) errors.Add(Event() with { EventName = ReportingEventName.OperationFailed, ErrorCode = value });
         var inventory = Enum.GetValues<ReportingInventoryStatus>().Select(status => new ReportingEvent(Guid.NewGuid(), support, session,
             now, "2.2.0", ReportingEventName.InventorySnapshot, Items: InventoryTests.Items().Select(item => item with
-            { Status = status, Version = status == ReportingInventoryStatus.Known ? item.Version : null }).ToArray())).ToArray();
+            { Status = status, Version = status == ReportingInventoryStatus.Known ? item.Version : null }).ToArray())).ToList();
+        var dlls = Enum.GetValues<ReportingDllProduct>().Select((product, index) => new ReportingDllEntry((index + 1).ToString("x64"),
+            product, ReportingDllRole.Current, 1, product == ReportingDllProduct.Unknown ? null : "1.2.3", null,
+            product == ReportingDllProduct.Unknown ? ReportingDllVersionSource.Unknown : ReportingDllVersionSource.Resource)).ToArray();
+        foreach (var status in Enum.GetValues<ReportingDllInventoryStatus>())
+            inventory.Add(new(Guid.NewGuid(), support, session, now, "2.2.0", ReportingEventName.InventorySnapshot,
+                Items: InventoryTests.Items(), DllInventory: new(status, status == ReportingDllInventoryStatus.Unavailable ? [] : dlls,
+                    status == ReportingDllInventoryStatus.Partial ? 1 : 0)));
+        inventory.Add(new(Guid.NewGuid(), support, session, now, "2.2.0", ReportingEventName.InventorySnapshot, Items: InventoryTests.Items(),
+            DllInventory: new(ReportingDllInventoryStatus.Complete, new[] { dlls[1] with
+            { Role = ReportingDllRole.Staged, Copies = 2, Version = "2.6-beta.4", FileVersion = "2.5.99.4", VersionSource = ReportingDllVersionSource.Embedded } })));
+        inventory.Add(new(Guid.NewGuid(), support, session, now, "2.2.0", ReportingEventName.InventorySnapshot, Items: InventoryTests.Items(),
+            DllInventory: new(ReportingDllInventoryStatus.Complete, new[] { dlls[1] with
+            { Product = ReportingDllProduct.VatcanBookings, Version = "1.1.6-2022wb", FileVersion = "1.0.0.1", VersionSource = ReportingDllVersionSource.Registration } })));
+        inventory.Add(new(Guid.NewGuid(), support, session, now, "2.2.0", ReportingEventName.InventorySnapshot, Items: InventoryTests.Items(),
+            DllInventory: new(ReportingDllInventoryStatus.Complete, new[] { dlls[1] with
+            { Product = ReportingDllProduct.ArrivalLoadBalancer, Version = "0.2.11T", FileVersion = "1.0.0.2", VersionSource = ReportingDllVersionSource.Registration } })));
         foreach (var entry in usage.Concat(errors).Concat(inventory))
             if (!ReportingWire.ValidEvent(entry, DateTime.UtcNow)) throw new InvalidDataException("Invalid synthetic wire fixture.");
         var reports = Enum.GetValues<ReportingCategory>().Select(category => new ReportingReport(1, Guid.NewGuid(), support,

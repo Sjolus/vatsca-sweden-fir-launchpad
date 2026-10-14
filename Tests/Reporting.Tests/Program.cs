@@ -411,6 +411,11 @@ await Test("repeated errors are combined before storage access while fatal envel
     return Task.CompletedTask;
 });
 passed += await InventoryTests.Run();
+passed += PluginVersionTests.Run();
+passed += PluginRegistrationTests.Run();
+passed += await DllInventoryTests.Run();
+passed += await HistoryTests.Run();
+passed += HistoryPresentationTests.Run();
 Console.WriteLine($"{passed} reporting checks passed. Synthetic temporary storage and fake HTTP only.");
 
 async Task Test(string name, Func<Task> body) { await body(); passed++; Console.WriteLine("PASS " + name); }

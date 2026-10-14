@@ -13,13 +13,21 @@ public enum ReportingInventoryStatus { Known, Unknown, Absent, Unavailable }
 public enum ReportingInventorySource { ConfiguredApp, RegisteredMsi, PackageMetadata, PluginFile }
 public sealed record ReportingInventoryEntry(ReportingInventoryComponent Component, ReportingInventoryStatus Status, ReportingInventorySource Source, string? Version = null);
 public sealed record ReportingAppObservation(ReportingInventoryComponent Component, ReportingInventoryStatus Status, string? Version = null);
+public enum ReportingDllInventoryStatus { Complete, Partial, Unavailable }
+public enum ReportingDllProduct { Unknown, Topsky, Rdf, Vatefs, AfvEuroscopeBridge, ArrivalLoadBalancer, Cdm, GroundRadar, Maestro, Vatiris, Vch, VatcanBookings }
+public enum ReportingDllRole { Current, Staged }
+public enum ReportingDllVersionSource { Unknown, Resource, Embedded, Registration }
+public sealed record ReportingDllEntry(string Sha256, ReportingDllProduct Product, ReportingDllRole Role, int Copies,
+    string? Version, string? FileVersion, ReportingDllVersionSource VersionSource);
+public sealed record ReportingDllInventory(ReportingDllInventoryStatus Status, IReadOnlyList<ReportingDllEntry> Entries, int UnreadableFiles = 0);
 public sealed class ReportingInventoryCapture
 {
     internal Guid SupportId { get; }
     internal Guid Generation { get; }
     internal DateTime StartedAt { get; }
-    internal ReportingInventoryCapture(Guid supportId, Guid generation, DateTime startedAt)
-    { SupportId = supportId; Generation = generation; StartedAt = startedAt; }
+    public bool IncludeDllInventory { get; }
+    internal ReportingInventoryCapture(Guid supportId, Guid generation, DateTime startedAt, bool includeDllInventory = false)
+    { SupportId = supportId; Generation = generation; StartedAt = startedAt; IncludeDllInventory = includeDllInventory; }
 }
 public enum ReportingOperation { Install, Update, Repair, Replace, Remove, Cleanup, Restore, RestoreCleanup, Prerequisite, Setup, Adopt, Check, Save, Download, Launch }
 public enum ReportingOutcome { Completed, Cancelled, Blocked, Failed, Unknown }
@@ -35,8 +43,12 @@ public enum ReportingDurationBucket
     [JsonStringEnumMemberName("over_5m")] Over5m
 }
 
-public sealed record ReportingPreferences(bool Confirmed = false, bool Usage = false, bool Errors = false, bool Inventory = false);
+public sealed record ReportingPreferences(bool Confirmed = false, bool Usage = false, bool Errors = false, bool Inventory = false, bool DetailedPlugins = false);
 public sealed record ReportingState(Guid SupportId, ReportingPreferences Preferences, bool StorageAvailable, int PendingCount, long SuppressedCount = 0);
+public enum ReportingStream { Usage, Inventory, Errors, ManualReport }
+public sealed record ReportingDelivery(ReportingStream Stream, DateTime ConfirmedAt, string Json, string? Reference = null);
+public sealed record ReportingHistoryState(bool StorageAvailable, Guid SupportId, ReportingPreferences Preferences,
+    IReadOnlyList<ReportingDelivery> LastSent, int UsagePending, int InventoryPending, int ErrorPending);
 
 // No free-form message, exception, path, account or arbitrary property bag is accepted.
 public sealed record ReportingDetails(
@@ -77,7 +89,8 @@ internal sealed record ReportingEvent(
     ReportingDurationBucket? DurationBucket = null, string? PackageVersion = null, string? PreviousVersion = null,
     ReportingSource? Source = null, bool? RestartRequired = null, bool? RecoveryAvailable = null,
     ReportingFeature? Feature = null, bool? CompactLayout = null, ReportingTextScale? TextScale = null,
-    bool? AlwaysOnTop = null, ReportingTheme? Theme = null, IReadOnlyList<ReportingInventoryEntry>? Items = null);
+    bool? AlwaysOnTop = null, ReportingTheme? Theme = null, IReadOnlyList<ReportingInventoryEntry>? Items = null,
+    ReportingDllInventory? DllInventory = null);
 
 internal sealed record ReportingBatch(int SchemaVersion, IReadOnlyList<ReportingEvent> Events);
 internal sealed record ReportingReport(int SchemaVersion, Guid ReportId, Guid SupportId, string LaunchpadVersion,

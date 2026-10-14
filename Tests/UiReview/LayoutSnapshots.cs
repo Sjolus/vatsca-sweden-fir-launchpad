@@ -10,6 +10,42 @@ namespace VatscaUpdateChecker;
 
 internal static class LayoutSnapshots
 {
+    internal static void CaptureApplicationControls(string outputDirectory)
+    {
+        Directory.CreateDirectory(outputDirectory);
+        try
+        {
+            UiFixture.Blank = false;
+            UiFixture.Scale = 1;
+            foreach (bool dark in new[] { false, true })
+            foreach (double scale in new[] { 1d, 1.25d, 1.5d })
+            foreach (bool minimum in new[] { false, true })
+            foreach (string density in new[] { "Compact", "Comfortable" })
+            {
+                if (UiFixture.Dark != dark) UiFixture.ToggleTheme();
+                UiFixture.SetTextScale(scale);
+                UiFixture.Minimum = minimum;
+                var window = new MainWindow { Tag = density };
+                try
+                {
+                    window.RefreshSyntheticDetailsLayout();
+                    UiFixture.SetRunningScenario(window, RunningFixtureState.Mixed);
+                    ((TextBlock)window.FindName("ApplicationsSummary")).Text = "Applications · 2 updates · 1 to review";
+                    Save(window, Path.Combine(outputDirectory, $"{(dark ? "dark" : "light")}-controls-{density.ToLowerInvariant()}-{scale * 100:0}-{(minimum ? "minimum" : "default")}.png"));
+                }
+                finally { window.Close(); }
+                if (density == "Compact")
+                foreach (var action in Enum.GetValues<ApplicationBatchAction>())
+                {
+                    var review = UiFixture.CreateBulkReview(action, minimum);
+                    try { Save(review, Path.Combine(outputDirectory, $"{(dark ? "dark" : "light")}-bulk-{action.ToString().ToLowerInvariant()}-{scale * 100:0}-{(minimum ? "minimum" : "default")}.png")); }
+                    finally { review.Close(); }
+                }
+            }
+        }
+        finally { UiFixture.SetTextScale(1); UiFixture.Minimum = false; }
+    }
+
     // Render only the already measured synthetic content; never create or show an HWND.
     internal static void Capture(string outputDirectory)
     {
@@ -217,6 +253,8 @@ internal static class LayoutSnapshots
             {
                 ("maintenance", () => new MaintenanceWindow()),
                 ("reporting-choices", () => new ReportingPreferencesWindow()),
+                ("reporting-last-sent", () => ReportingHistoryFixture.Create()),
+                ("reporting-last-inventory", () => ReportingHistoryFixture.Create(Models.ReportingStream.Inventory)),
                 ("report-problem", () => new ReportProblemWindow()),
                 ("report-received", () => new ReportProblemWindow(received: true)),
                 ("euroscope", () => new EuroScopeInstallWindow()),

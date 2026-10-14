@@ -16,7 +16,10 @@ internal static partial class LayoutMatrix
         () => new MainWindow(), () => new SettingsWindow(), () => new AppConfigWindow(),
         () => new MaintenanceWindow(), () => new InstallationDiscoveryWindow(), () => new ActivityWindow(),
         () => new EuroScopeInstallWindow(), () => new FreshSoftwareInstallWindow(), () => new FreshSoftwareInstallWindow(vatEfs: true), () => new GngCleanupWindow(),
-        () => new ReportingPreferencesWindow(), () => new ReportProblemWindow(), () => new ReportProblemWindow(received: true)
+        () => new ReportingPreferencesWindow(), () => new ReportProblemWindow(), () => new ReportProblemWindow(received: true),
+        () => ReportingHistoryFixture.Create(), () => ReportingHistoryFixture.Create(ReportingStream.Inventory),
+        () => ReportingHistoryFixture.Create(ReportingStream.Errors), () => ReportingHistoryFixture.Create(ReportingStream.ManualReport),
+        () => ReportingHistoryFixture.Create(empty: true), () => ReportingHistoryFixture.Create(unavailable: true)
     ];
 
     public static string Run()
@@ -40,6 +43,7 @@ internal static partial class LayoutMatrix
                 layouts += CheckProfilePreviewLayouts();
                 CheckCompactDensity();
                 layouts++;
+                layouts += CheckApplicationControlsLayouts();
                 CheckRestartNotice();
                 layouts++;
                 layouts += CheckPathVerificationLayouts();
@@ -57,6 +61,7 @@ internal static partial class LayoutMatrix
                         {
                             LayoutValidation.CheckWindowContent(window);
                             CheckFooter(window);
+                            if (window is ReportingHistoryWindow reports) CheckReportingHistory(reports);
                             if (window is MainWindow main) { CheckRowReadability(main); CheckFirstRunActions(main); CheckSoftwareStates(main); CheckLongStatusWidth(main); }
                             if (window is SettingsWindow settings) CheckSettingsExpansion(settings);
                             if (window is AppConfigWindow profile) CheckProfileScroll(profile, minimum);
@@ -141,6 +146,7 @@ internal static partial class LayoutMatrix
             MainWindow => new[] { "CheckButton", "SetupButton", "MaintenanceButton", "ActivityButton" },
             SettingsWindow => new[] { "SaveButton" },
             ReportingPreferencesWindow => new[] { "SaveChoices", "DismissButton" },
+            ReportingHistoryWindow => new[] { "RefreshButton", "CloseButton" },
             ReportProblemWindow => new[] { "SendButton", "SaveReportButton", "CloseButton" },
             AppConfigWindow => new[] { "PreviewButton", "SaveProfileButton" },
             ProfilePreviewWindow => new[] { "ToggleCredentialsButton", "BackButton" },

@@ -15,6 +15,10 @@ public partial class MainWindow : Window
         DetailsSizeButton.Content = ApplicationDetails.Height > 150 ? "Less space" : "More space";
     }
     private void RunningActions_Click(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "RunningActions_Click");
+    private void ShowRunning_Click(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "ShowRunning_Click");
+    private void CloseApplication_Click(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "CloseApplication_Click");
+    private void StartAll_Click(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "StartAll_Click");
+    private void CloseAll_Click(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "CloseAll_Click");
     private void Usage_Click(object sender, RoutedEventArgs e)
     {
         if (sender is FrameworkElement { DataContext: Models.CheckResult row }) row.IsNotUsed = !row.IsNotUsed;

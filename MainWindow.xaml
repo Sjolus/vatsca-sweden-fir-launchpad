@@ -75,7 +75,15 @@
                     <Button Content="□" Style="{StaticResource FlatButton}" Margin="0,0,2,0" ToolTip="Maximise or restore" AutomationProperties.Name="Maximise or restore Launchpad" Click="Maximize_Click"/>
                     <Button Content="✕" Style="{StaticResource CloseButton}" ToolTip="Close" AutomationProperties.Name="Close Launchpad" Click="Close_Click"/>
                 </StackPanel>
-                <TextBlock x:Name="ApplicationsSummary" Grid.Row="1" Text="Applications" Foreground="White" FontSize="{DynamicResource TextSize14}" FontWeight="Medium" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+                <WrapPanel x:Name="ApplicationsToolbar" Grid.Row="1" VerticalAlignment="Center">
+                    <TextBlock x:Name="ApplicationsSummary" Text="Applications" MaxWidth="240" Foreground="White" FontSize="{DynamicResource TextSize14}" FontWeight="Medium" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}" Margin="0,0,10,0"/>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button x:Name="StartAllButton" Content="Start all…" Click="StartAll_Click" Style="{StaticResource FlatButton}" Padding="6,4" Margin="0,0,5,0" IsEnabled="False"
+                                ToolTip="Choose which configured applications to start" AutomationProperties.Name="Review starting applications"/>
+                        <Button x:Name="CloseAllButton" Content="Close all…" Click="CloseAll_Click" Style="{StaticResource FlatButton}" Padding="6,4" Margin="0,0,6,0" IsEnabled="False"
+                                ToolTip="Review which running applications to ask to close normally" AutomationProperties.Name="Review closing running applications"/>
+                    </StackPanel>
+                </WrapPanel>
                 <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                     <Button x:Name="AppConfigButton" Content="Controller profile" Style="{StaticResource FlatButton}" Margin="0,0,8,0"
                             ToolTip="Your identity and optional EuroScope profile configuration" Click="AppConfig_Click"/>
@@ -185,7 +193,7 @@
             </DockPanel>
         </Border>
         <ScrollViewer x:Name="ApplicationsScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
-        <StackPanel MinWidth="714" Width="{Binding ViewportWidth, ElementName=ApplicationsScroll}">
+        <StackPanel MinWidth="{DynamicResource ApplicationTableMinWidth}" Width="{Binding ViewportWidth, ElementName=ApplicationsScroll}">
             <Border Background="{DynamicResource ColumnHeaderBg}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" MinHeight="28" Padding="0,3">
                 <Grid Width="{Binding ActualWidth, ElementName=AppList}" HorizontalAlignment="Left">
                     <Grid.ColumnDefinitions>
@@ -193,7 +201,7 @@
                         <ColumnDefinition Width="1.1*" MinWidth="104"/><ColumnDefinition Width="1.2*" MinWidth="122"/>
                         <ColumnDefinition Width="1.6*" MinWidth="150"/><ColumnDefinition Width="{DynamicResource OptionsColumnWidth}"/>
                     </Grid.ColumnDefinitions>
-                    <TextBlock Text="Open" Margin="10,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource ApplicationSecondaryText}" FontSize="{DynamicResource TextSize12}"/>
+                    <TextBlock Text="Controls" Margin="10,0,8,0" VerticalAlignment="Center" Foreground="{DynamicResource ApplicationSecondaryText}" FontSize="{DynamicResource TextSize12}"/>
                     <TextBlock Grid.Column="1" Text="Application" VerticalAlignment="Center" Foreground="{DynamicResource ApplicationSecondaryText}" FontSize="{DynamicResource TextSize12}"/>
                     <TextBlock Grid.Column="2" Text="Your version" VerticalAlignment="Center" Foreground="{DynamicResource ApplicationSecondaryText}" FontSize="{DynamicResource TextSize12}"/>
                     <TextBlock Grid.Column="3" Text="Latest / supported" TextWrapping="Wrap" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="{DynamicResource ApplicationSecondaryText}" FontSize="{DynamicResource TextSize12}"/>
@@ -219,6 +227,15 @@
                                     <Button Click="Launch_Click" Style="{StaticResource LaunchButton}" Padding="2,4"/>
                                     <Button Grid.Column="1" Content="▾" Click="ProfileDropdown_Click" Padding="2,4" Style="{StaticResource RowActionButton}"
                                             IsEnabled="{Binding LaunchEnabled}" ToolTip="{Binding SelectedProfile.DisplayName}" AutomationProperties.Name="Choose EuroScope profile"/>
+                                </Grid>
+                                <Grid Margin="8,0,8,0" VerticalAlignment="Center" Visibility="{Binding ShowRunningActions, Converter={StaticResource BoolToVisibility}}">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                    <Button x:Name="RowShowButton" Content="Show" Click="ShowRunning_Click" Style="{StaticResource RowActionButton}" Padding="3,4" Margin="0,0,4,0"
+                                            IsEnabled="{Binding LaunchEnabled}" ToolTip="Bring the running application's window forward"
+                                            AutomationProperties.Name="{Binding DisplayName, StringFormat=Show {0}}"/>
+                                    <Button x:Name="RowCloseButton" Grid.Column="1" Content="Close…" Click="CloseApplication_Click" Style="{StaticResource RowActionButton}" Padding="3,4"
+                                            IsEnabled="{Binding LaunchEnabled}" ToolTip="Review and ask this application to close normally"
+                                            AutomationProperties.Name="{Binding DisplayName, StringFormat=Review closing {0}}"/>
                                 </Grid>
                                 <StackPanel Grid.Column="1" Margin="0,0,8,0" VerticalAlignment="Center">
                                 <TextBlock Text="{Binding DisplayName}"

@@ -21,17 +21,18 @@ internal static class UiReviewProgram
         {
             app.InitializeComponent();
             UiFixture.SetTextScale(1);
-            if (args.Contains("--check") || args.Contains("--validate-layouts"))
+            if (args.Contains("--check") || args.Contains("--validate-layouts") || args.Contains("--check-application-controls"))
             {
                 app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
                 var snapshotOption = Array.IndexOf(args, "--snapshots");
                 if (snapshotOption >= 0)
                 {
                     if (snapshotOption + 1 >= args.Length) throw new ArgumentException("--snapshots needs an output directory.");
-                    LayoutSnapshots.Capture(args[snapshotOption + 1]);
+                    if (args.Contains("--check-application-controls")) LayoutSnapshots.CaptureApplicationControls(args[snapshotOption + 1]);
+                    else LayoutSnapshots.Capture(args[snapshotOption + 1]);
                 }
                 File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "layout-validation.txt"), "RUNNING: hidden content and binding validation.");
-                var result = LayoutMatrix.Run();
+                var result = args.Contains("--check-application-controls") ? LayoutMatrix.RunApplicationControlsOnly() : LayoutMatrix.Run();
                 File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "layout-validation.txt"), result);
                 Console.WriteLine(result);
                 app.Shutdown();
@@ -61,6 +62,7 @@ public sealed class UiReviewHost : Window
         Add(screens, "Manage / remove", () => Open(new MaintenanceWindow()));
         Add(screens, "Recent activity", () => Open(new ActivityWindow()));
         Add(screens, "Privacy and support", () => Open(new ReportingPreferencesWindow()));
+        Add(screens, "Last sent reports", () => Open(ReportingHistoryFixture.Create()));
         Add(screens, "Problem report", () => Open(new ReportProblemWindow()));
         Add(screens, "Find installations", () => Open(new InstallationDiscoveryWindow()));
         Add(screens, "Manage EuroScope", () => Open(new EuroScopeInstallWindow()));
@@ -145,6 +147,7 @@ internal static partial class UiFixture
         {
             main.SetSyntheticRestart(RestartRequired);
             Find<ItemsControl>(window,"AppList")!.ItemsSource = Rows();
+            RefreshSyntheticBulkAvailability(main);
             main.ResetSyntheticDetails();
             Text(window,"LastCheckedText","Synthetic UI review • no checks or clients run");
             Find<FrameworkElement>(window,"DiscoveryPrompt")!.Visibility = Blank ? Visibility.Visible : Visibility.Collapsed;

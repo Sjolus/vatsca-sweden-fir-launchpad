@@ -46,6 +46,16 @@ test('DLL analytics use latest independent snapshots and count installations rat
   f.store.deleteSupport(B);assert.equal(f.store.usage().inventory.dll_inventory.rows.length,0);
 });
 
+test('DLL registration versions remain distinct from Windows file metadata in stored analytics',t=>{
+  const f=fixture(t),entry=dll(1,{product:'vatcan_bookings',version:'1.1.6-2022wb',file_version:'1.0.0.1',version_source:'registration'});
+  const snapshot=withDlls(inventory(f,A),[entry]);
+  assert.deepEqual(f.store.admitBatch('inventory',batch(snapshot)),{accepted:1,duplicates:0});
+  f.store.close();const reopened=f.open();
+  const row=reopened.usage().inventory.dll_inventory.rows[0];
+  assert.equal(row.version,entry.version);assert.equal(row.file_version,entry.file_version);assert.equal(row.version_source,'registration');
+  assert.deepEqual(reopened.admitBatch('inventory',batch(snapshot)),{accepted:0,duplicates:1});
+});
+
 test('DLL reporting retains immutable legacy retries and bounds grouped output without inventing absence',t=>{
   const f=fixture(t),legacy=inventory(f,A);
   assert.deepEqual(f.store.admitBatch('inventory',batch(legacy)),{accepted:1,duplicates:0});

@@ -38,13 +38,20 @@ public partial class MainWindow
             }).ToArray();
             var dataFolder = _settings.EuroscopeDataPath;
             var executableFolder = string.IsNullOrWhiteSpace(_settings.EuroscopeExePath) ? null : Path.GetDirectoryName(_settings.EuroscopeExePath);
+            var vatEfsFolder = _settings.VatEfsPath;
             // The comparison key stays in memory. Paths are never passed to the reporting transport.
-            var signature = capture.SupportId + "|" + capture.Generation + "|" + dataFolder + "|" + executableFolder + "|" +
+            var signature = capture.SupportId + "|" + capture.Generation + "|" + dataFolder + "|" + executableFolder + "|" + vatEfsFolder + "|" +
                 string.Join("|", observations.Select(item => $"{item.Component}:{item.Status}:{item.Version}"));
             if (signature == _lastInventorySignature && Stopwatch.GetElapsedTime(_lastInventoryCaptureTime) < TimeSpan.FromMinutes(10)) return;
-            var items = await Task.Run(() => ReportingInventoryCollector.Collect(observations, dataFolder, executableFolder));
+            var inventory = await Task.Run(() =>
+            {
+                var items = ReportingInventoryCollector.Collect(observations, dataFolder, executableFolder, vatEfsFolder);
+                var dlls = capture.IncludeDllInventory
+                    ? ReportingInventoryCollector.CollectDllInventory(dataFolder, executableFolder, vatEfsFolder) : null;
+                return (Items: items, Dlls: dlls);
+            });
             if (_windowClosed) return;
-            if (ReportingService.RecordInventory(capture, items))
+            if (ReportingService.RecordInventory(capture, inventory.Items, inventory.Dlls))
             { _lastInventorySignature = signature; _lastInventoryCaptureTime = Stopwatch.GetTimestamp(); }
         }
         catch (Exception)
@@ -97,7 +104,12 @@ public partial class MainWindow
         {
             if (CanOpenReporting()) ShowOwnedDialog(new ReportingPreferencesWindow { Owner = this });
         };
-        menu.Items.Add(report); menu.Items.Add(privacy); menu.IsOpen = true;
+        var history = new MenuItem { Header = "Last sent reports…" };
+        history.Click += (_, _) =>
+        {
+            if (CanOpenReporting()) ShowOwnedDialog(new ReportingHistoryWindow { Owner = this });
+        };
+        menu.Items.Add(report); menu.Items.Add(privacy); menu.Items.Add(history); menu.IsOpen = true;
     }
 
     private void ReportProblem_Click(object sender, RoutedEventArgs e)

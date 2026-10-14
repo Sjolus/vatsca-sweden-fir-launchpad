@@ -26,11 +26,16 @@
                 </CheckBox>
                 <TextBlock Margin="22,5,0,14" Foreground="{DynamicResource SecondaryText}" TextWrapping="Wrap"
                            Text="Launchpad sessions and version, features used, application launch actions, setup choices and display preferences. No ATC activity or time spent controlling."/>
-                <CheckBox x:Name="InventoryChoice" Foreground="{DynamicResource PrimaryText}">
+                <CheckBox x:Name="InventoryChoice" Foreground="{DynamicResource PrimaryText}" Checked="InventoryChoice_Changed" Unchecked="InventoryChoice_Changed">
                     <TextBlock Text="Share software and plugin versions" FontWeight="SemiBold" TextWrapping="Wrap"/>
                 </CheckBox>
-                <TextBlock Margin="22,5,0,14" Foreground="{DynamicResource SecondaryText}" TextWrapping="Wrap"
+                <TextBlock Margin="22,5,0,10" Foreground="{DynamicResource SecondaryText}" TextWrapping="Wrap"
                            Text="Versions of configured ATC applications, the Swedish GNG package and recognised EuroScope plugins, read during normal version checks. Unknown versions stay unknown. No file paths, profile contents or DLL contents are sent. This works independently of usage and errors."/>
+                <CheckBox x:Name="DetailedPluginsChoice" Margin="22,0,0,0" Foreground="{DynamicResource PrimaryText}">
+                    <TextBlock Text="Include details for all plugin DLLs" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                </CheckBox>
+                <TextBlock Margin="44,5,0,14" Foreground="{DynamicResource SecondaryText}" TextWrapping="Wrap"
+                           Text="Also shares a SHA-256 fingerprint for each DLL found in the configured plugin folders, including unrecognised DLLs, plus readable versions, recognised product labels, copy counts and whether copies are current or staged. Fingerprints can identify a particular build. No filenames, paths or file contents are sent. Requires version sharing above."/>
                 <CheckBox x:Name="ErrorsChoice" Foreground="{DynamicResource PrimaryText}">
                     <TextBlock Text="Send automatic error reports" FontWeight="SemiBold" TextWrapping="Wrap"/>
                 </CheckBox>
@@ -40,10 +45,11 @@
                 <Expander Header="What is sent?" Margin="0,0,0,16">
                     <StackPanel Margin="0,8,0,0">
                         <TextBlock TextWrapping="Wrap" Text="Reports include a random support ID, Launchpad version, selected application, action, outcome and time. Error reports use fixed technical categories. Names, CID, passwords, Hoppie codes, file paths, profiles and browser sign-in data are excluded."/>
-                        <TextBlock TextWrapping="Wrap" Margin="0,8,0,0" Text="Data is sent to launchpad.space.sjolus.org. The support ID links reports from this installation; it is not your VATSIM identity. Turning reporting off clears unsent reports for that category. Reports already received are kept according to the service's retention policy."/>
+                        <TextBlock TextWrapping="Wrap" Margin="0,8,0,0" Text="Data is sent to launchpad.space.sjolus.org. The support ID links reports from this installation; it is not your VATSIM identity. Turning reporting off clears unsent reports for that category. Turning DLL details off also discards unsent snapshots containing those details. Reports already received are kept according to the service's retention policy; local last-sent copies are kept until replaced or your support ID is changed."/>
                         <Button Content="Read reporting privacy details ↗" Click="Privacy_Click" HorizontalAlignment="Left" Margin="0,8,0,0"/>
                     </StackPanel>
                 </Expander>
+                <Button Content="View last sent reports…" Click="History_Click" HorizontalAlignment="Left" Margin="0,0,0,16"/>
                 <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1" Padding="12">
                     <StackPanel>
                         <TextBlock Text="Your support ID" FontWeight="SemiBold"/>

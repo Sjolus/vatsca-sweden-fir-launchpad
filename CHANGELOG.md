@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.4.0] — 2026-10-14
+
+- Restore visible Show and confirmed Close actions for running applications. Add reviewed Start all and Close all actions, with individual selection and normal application close prompts.
+- Show the latest confirmed usage, software inventory, error and manually submitted report in Help, with a readable summary, confirmation time and exact JSON.
+- Improve software and plugin version charts. Add an optional inventory of all DLLs in configured plugin folders, distinguish staged copies, and read supported plugins' EuroScope registration versions separately from their Windows file versions. Check the separately configured VatEFS plugin folder too.
+- Include today's usage and software-version observations in the maintainer dashboard, with the current day marked as partial.
+- Exempt signed-in dashboard requests from rate limits while retaining protection on public reporting and sign-in endpoints.
+- Add named backoffice users with passkey invitations and separate read permissions for each page and API. Owners can disable access or reset a lost passkey.
+
 ## [2.3.1] — 2026-10-14
 
 - Fix GNG update checks getting stuck on Checking after the latest version is found. Keep status notifications on the UI thread, including failures and portable Launchpad version checks.

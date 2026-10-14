@@ -10,11 +10,19 @@
     <ApplicationDefinition Include="../../App.xaml" Link="App.xaml" />
     <Page Include="../../MainWindow.xaml" Link="MainWindow.xaml" />
     <Page Include="../../ActivityWindow.xaml" Link="ActivityWindow.xaml" />
+    <Page Include="../../BulkApplicationActionWindow.xaml" Link="BulkApplicationActionWindow.xaml" />
+    <Compile Include="../../BulkApplicationActionWindow.xaml.cs" Link="BulkApplicationActionWindow.xaml.cs" />
+    <Compile Include="../../Models/ApplicationAction.cs" Link="ApplicationAction.cs" />
     <Compile Include="../../Models/ActivityEntry.cs" Link="ActivityEntry.cs" />
     <EmbeddedResource Include="../../MainWindow.xaml" LogicalName="UiReview.MainWindowSource.xaml" />
     <Page Include="../../SettingsWindow.xaml" Link="SettingsWindow.xaml" />
     <Page Include="../../ReportingPreferencesWindow.xaml" Link="ReportingPreferencesWindow.xaml" />
     <Page Include="../../ReportProblemWindow.xaml" Link="ReportProblemWindow.xaml" />
+    <Page Include="../../ReportingHistoryWindow.xaml" Link="ReportingHistoryWindow.xaml" />
+    <Compile Include="../../ReportingHistoryWindow.xaml.cs" Link="ReportingHistoryWindow.xaml.cs" />
+    <Compile Include="../../Models/ReportingModels.cs" Link="ReportingModels.cs" />
+    <Compile Include="../../Services/ReportingWire.cs" Link="ReportingWire.cs" />
+    <Compile Include="../../Services/ReportingHistoryPresentation.cs" Link="ReportingHistoryPresentation.cs" />
     <Page Include="../../AppConfigWindow.xaml" Link="AppConfigWindow.xaml" />
     <Page Include="../../MaintenanceWindow.xaml" Link="MaintenanceWindow.xaml" />
     <Page Include="../../GngCleanupWindow.xaml" Link="GngCleanupWindow.xaml" />

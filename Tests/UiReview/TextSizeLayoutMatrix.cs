@@ -58,6 +58,7 @@ internal static partial class LayoutMatrix
                             LayoutValidation.CheckWindowContent(window);
                             CheckTextPreference(window, scale);
                             CheckFooter(window);
+                            if (window is ReportingHistoryWindow reports) CheckReportingHistory(reports);
                             if (window is SettingsWindow settings) CheckSettingsExpansion(settings);
                             if (window is AppConfigWindow profile) CheckProfileScroll(profile, true);
                             if (window is ActivityWindow activity) CheckActivityLayout(activity);
@@ -142,14 +143,14 @@ internal static partial class LayoutMatrix
         foreach (var button in LayoutValidation.Descendants(list).OfType<Button>().Where(IsPresented))
             CheckButtonCaption(button);
 
-        foreach (string name in new[] { "PinButton", "DensityToggleButton", "ThemeToggleButton", "AppConfigButton", "SettingsButton" })
+        foreach (string name in new[] { "PinButton", "DensityToggleButton", "ThemeToggleButton", "AppConfigButton", "SettingsButton", "StartAllButton", "CloseAllButton" })
         {
             var button = Required<Button>(window, name);
             CheckControlBounds(button, content);
             CheckButtonCaption(button);
         }
         foreach (var title in LayoutValidation.Descendants(content).OfType<TextBlock>().Where(text =>
-            text.Text is "Sweden FIR Launchpad" or "Open" or "Application" or "Your version" or "Latest / supported" or "Status" or "Options"))
+            text.Text is "Sweden FIR Launchpad" or "Controls" or "Application" or "Your version" or "Latest / supported" or "Status" or "Options"))
             CheckUntrimmedLabel(title);
 
         var pin = Required<Button>(window, "PinButton");

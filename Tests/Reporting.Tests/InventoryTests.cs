@@ -237,10 +237,10 @@ internal static class InventoryTests
         {
             using var f = new Fixture(); string data = Path.Combine(f.Root, "synthetic-private-controller");
             string plugins = Path.Combine(data, "ESAA", "Plugins"); Directory.CreateDirectory(Path.Combine(plugins, "TopSky"));
-            File.Copy(typeof(InventoryTests).Assembly.Location, Path.Combine(plugins, "TopSky", "TopSky.dll"));
+            File.WriteAllBytes(Path.Combine(plugins, "TopSky", "TopSky.dll"), InventoryPeFixture.Create("1.2.3.4", "1.2.3.4"));
             File.WriteAllText(Path.Combine(plugins, "RDF.dll"), "synthetic non-PE plugin");
             Directory.CreateDirectory(Path.Combine(data, "Private"));
-            File.Copy(typeof(InventoryTests).Assembly.Location, Path.Combine(data, "Private", "VatEFS.dll"));
+            File.WriteAllBytes(Path.Combine(data, "Private", "VatEFS.dll"), InventoryPeFixture.Create("1.2.3.4", "1.2.3.4"));
             File.WriteAllText(Path.Combine(plugins, "unrelated.dll"), "not part of the catalogue");
             var items = ReportingInventoryCollector.Collect([], data, null);
             Assert(items.Single(i => i.Component == ReportingInventoryComponent.Topsky).Status == ReportingInventoryStatus.Known);
@@ -251,10 +251,137 @@ internal static class InventoryTests
             Assert(!json.Contains(data) && !json.Contains("private") && !json.Contains("non-PE"));
             return Task.CompletedTask;
         });
+        await Test("native plugin metadata preserves numeric resources and explicit prerelease versions", () =>
+        {
+            using var f = new Fixture(); string data = Path.Combine(f.Root, "data");
+            string plugins = Path.Combine(data, "ESAA", "Plugins"); Directory.CreateDirectory(plugins);
+            var cases = new[]
+            {
+                (Bytes: InventoryPeFixture.Create("  V1.2.3.0 \t", "1, 2, 3, 0"), Version: "1.2.3.0"),
+                (Bytes: InventoryPeFixture.Create(file: "0,\t0, 5, 0"), Version: "0.0.5.0"),
+                (Bytes: InventoryPeFixture.Create("v1.2.3-beta.4", "1.2.3.0", flags: 2), Version: "1.2.3-beta.4"),
+                (Bytes: InventoryPeFixture.Create("2.5 beta 15", "2.5.99.4", flags: 2), Version: "2.5-beta.15"),
+                (Bytes: InventoryPeFixture.Create("", "", productHigh: 0x10002, productLow: 0x30004), Version: "1.2.3.4"),
+                (Bytes: InventoryPeFixture.Create(fileHigh: 0, fileLow: 0x50000), Version: "0.0.5.0"),
+                (Bytes: InventoryPeFixture.Create("0.0.0.0", "1.4.3.0"), Version: "1.4.3.0"),
+                (Bytes: InventoryPeFixture.Create("1.4.3.0", "", productHigh: 0x10004, productLow: 0x30000), Version: "1.4.3.0"),
+                (Bytes: InventoryPeFixture.Create(file: "1.2.3", flags: 2), Version: "1.2.3"),
+                (Bytes: InventoryPeFixture.Create("1.2.3", flags: 8), Version: "1.2.3")
+            };
+            foreach (var item in cases)
+            {
+                File.WriteAllBytes(Path.Combine(plugins, "TopSky.dll"), item.Bytes);
+                var observed = ReportingInventoryCollector.Collect([], data, null).Single(i => i.Component == ReportingInventoryComponent.Topsky);
+                var metadata = System.Diagnostics.FileVersionInfo.GetVersionInfo(Path.Combine(plugins, "TopSky.dll"));
+                Assert(observed.Status == ReportingInventoryStatus.Known && observed.Version == item.Version,
+                    $"Synthetic native version expected {item.Version}, got {observed.Status}/{observed.Version}; product '{metadata.ProductVersion}', file '{metadata.FileVersion}'.");
+            }
+            // Broader DLL-resource syntax must not loosen the generic app/package wire normalization.
+            Assert(ReportingInventoryCollector.PublicVersion("  V1.2.3.0 ") is null);
+            Assert(ReportingInventoryCollector.PublicVersion("1, 2, 3, 0") is null);
+            return Task.CompletedTask;
+        });
+        await Test("native plugin metadata does not invent versions from text, zero placeholders or build flags", () =>
+        {
+            using var f = new Fixture(); string data = Path.Combine(f.Root, "data");
+            string plugins = Path.Combine(data, "ESAA", "Plugins"); Directory.CreateDirectory(plugins);
+            var images = new[]
+            {
+                InventoryPeFixture.Create("1.2.3 b 4", "1.2.3.0", productHigh: 0x10002, productLow: 0x30000),
+                InventoryPeFixture.Create("Version 1.2.3", "1.2.3.0"),
+                InventoryPeFixture.Create("1.2.3+synthetic-private", productHigh: 0x10002, productLow: 0x30000),
+                InventoryPeFixture.Create("1.2.3", "1.2.3-rc.4"),
+                InventoryPeFixture.Create(productHigh: 0x10002, productLow: 0x30000, flags: 2),
+                InventoryPeFixture.Create("0.0.0.0", "0, 0, 0, 0"),
+                InventoryPeFixture.Create("0.0.0.0", productHigh: 0x10002, productLow: 0x30000),
+                InventoryPeFixture.Create(),
+                InventoryPeFixture.Create("1.2.3", "synthetic-private-controller"),
+                InventoryPeFixture.Create("1.2.3\nsynthetic-private"),
+                InventoryPeFixture.Create("١.٢.٣"),
+                InventoryPeFixture.Create(new string(' ', 65) + "1.2.3")
+            };
+            foreach (var bytes in images)
+            {
+                File.WriteAllBytes(Path.Combine(plugins, "TopSky.dll"), bytes);
+                var items = ReportingInventoryCollector.Collect([], data, null);
+                var observed = items.Single(i => i.Component == ReportingInventoryComponent.Topsky);
+                Assert(observed.Status == ReportingInventoryStatus.Unknown && observed.Version is null);
+                Assert(!Encoding.UTF8.GetString(ReportingWire.Bytes(items)).Contains("synthetic-private"));
+            }
+            return Task.CompletedTask;
+        });
+        await Test("configured VatEFS DLL is authoritative and independent of EuroScope scan availability", () =>
+        {
+            using var f = new Fixture(); string data = Path.Combine(f.Root, "data"), configured = Path.Combine(f.Root, "configured-vatefs");
+            string plugins = Path.Combine(data, "ESAA", "Plugins"); Directory.CreateDirectory(plugins); Directory.CreateDirectory(configured);
+            File.WriteAllBytes(Path.Combine(plugins, "TopSky.dll"), InventoryPeFixture.Create("1.2.3.4"));
+            File.WriteAllBytes(Path.Combine(plugins, "VatEFS.dll"), InventoryPeFixture.Create("9.8.7.6"));
+            string dll = Path.Combine(configured, "VatEFS.dll");
+            File.WriteAllBytes(dll, InventoryPeFixture.Create("0.0.5.0"));
+            File.WriteAllBytes(Path.Combine(configured, "TopSky.dll"), InventoryPeFixture.Create("9.9.9.9"));
+            var items = ReportingInventoryCollector.Collect([], data, null, configured);
+            Assert(items.Single(i => i.Component == ReportingInventoryComponent.VatefsPlugin).Version == "0.0.5.0");
+            Assert(items.Single(i => i.Component == ReportingInventoryComponent.Topsky).Version == "1.2.3.4");
+            Assert(ReportingInventoryCollector.Collect([], data, null).Single(i => i.Component == ReportingInventoryComponent.VatefsPlugin).Version == "9.8.7.6");
+            var noEuroScope = ReportingInventoryCollector.Collect([], Path.Combine(f.Root, "missing-data"), null, configured);
+            Assert(noEuroScope.Single(i => i.Component == ReportingInventoryComponent.VatefsPlugin).Version == "0.0.5.0");
+            Assert(noEuroScope.Single(i => i.Component == ReportingInventoryComponent.Topsky).Status == ReportingInventoryStatus.Unavailable);
+            File.Delete(dll);
+            Assert(ReportingInventoryCollector.Collect([], data, null, configured).Single(i => i.Component == ReportingInventoryComponent.VatefsPlugin).Status == ReportingInventoryStatus.Absent);
+            var missingRoot = ReportingInventoryCollector.Collect([], data, null, Path.Combine(f.Root, "missing-vatefs"));
+            Assert(missingRoot.Single(i => i.Component == ReportingInventoryComponent.VatefsPlugin).Status == ReportingInventoryStatus.Unavailable);
+            Assert(missingRoot.Single(i => i.Component == ReportingInventoryComponent.Topsky).Version == "1.2.3.4");
+            string json = Encoding.UTF8.GetString(ReportingWire.Bytes(items)); Assert(!json.Contains(configured) && !json.Contains("configured-vatefs"));
+            return Task.CompletedTask;
+        });
+        await Test("configured VatEFS failures stay isolated and linked folders are never followed", () =>
+        {
+            using var f = new Fixture(); string data = Path.Combine(f.Root, "data");
+            string plugins = Path.Combine(data, "ESAA", "Plugins"); Directory.CreateDirectory(plugins);
+            File.WriteAllBytes(Path.Combine(plugins, "TopSky.dll"), InventoryPeFixture.Create("1.2.3.4"));
+            string dll = Path.Combine(plugins, "VatEFS.dll"); File.WriteAllBytes(dll, InventoryPeFixture.Create("0.0.5.0"));
+            using (var locked = new FileStream(dll, FileMode.Open, FileAccess.Read, FileShare.None))
+            {
+                var items = ReportingInventoryCollector.Collect([], data, null, plugins);
+                Assert(items.Single(i => i.Component == ReportingInventoryComponent.VatefsPlugin).Status == ReportingInventoryStatus.Unavailable);
+                Assert(items.Single(i => i.Component == ReportingInventoryComponent.Topsky).Version == "1.2.3.4");
+            }
+            string link = Path.Combine(f.Root, "linked-vatefs"); CreateJunction(link, plugins);
+            try
+            {
+                var items = ReportingInventoryCollector.Collect([], data, null, link);
+                Assert(items.Single(i => i.Component == ReportingInventoryComponent.VatefsPlugin).Status == ReportingInventoryStatus.Unavailable);
+                Assert(items.Single(i => i.Component == ReportingInventoryComponent.Topsky).Version == "1.2.3.4");
+            }
+            finally { Directory.Delete(link); }
+            File.WriteAllText(dll, "synthetic plugin without resource metadata");
+            Assert(ReportingInventoryCollector.Collect([], data, null, plugins).Single(i => i.Component == ReportingInventoryComponent.VatefsPlugin).Status == ReportingInventoryStatus.Unknown);
+            return Task.CompletedTask;
+        });
+        await Test("GNG staging copies do not obscure installed versions but other active conflicts remain unavailable", () =>
+        {
+            using var f = new Fixture(); string data = Path.Combine(f.Root, "data");
+            string plugins = Path.Combine(data, "ESAA", "Plugins"); Directory.CreateDirectory(plugins);
+            File.WriteAllBytes(Path.Combine(plugins, "TopSky.dll"), InventoryPeFixture.Create("2.5.99.4"));
+            foreach (var name in new[] { "Updated Plugin", "uPdAtEd PlUgInS" })
+            {
+                string staging = Path.Combine(plugins, name); Directory.CreateDirectory(staging);
+                File.WriteAllBytes(Path.Combine(staging, "TopSky.dll"), InventoryPeFixture.Create("2.5.99.1"));
+                File.WriteAllBytes(Path.Combine(staging, "RDFPlugin.dll"), InventoryPeFixture.Create("1.4.3.0"));
+                for (int i = 0; i < 257; i++) File.WriteAllText(Path.Combine(staging, $"staged-{i}.txt"), "");
+            }
+            var items = ReportingInventoryCollector.Collect([], data, null);
+            Assert(items.Single(i => i.Component == ReportingInventoryComponent.Topsky).Version == "2.5.99.4");
+            Assert(items.Single(i => i.Component == ReportingInventoryComponent.Rdf).Status == ReportingInventoryStatus.Absent);
+            string other = Path.Combine(plugins, "Updated Plugin Backup"); Directory.CreateDirectory(other);
+            File.WriteAllBytes(Path.Combine(other, "TopSky.dll"), InventoryPeFixture.Create("2.5.99.1"));
+            Assert(ReportingInventoryCollector.Collect([], data, null).Single(i => i.Component == ReportingInventoryComponent.Topsky).Status == ReportingInventoryStatus.Unavailable);
+            return Task.CompletedTask;
+        });
         await Test("collector rejects arbitrary roots and reports uncertain bounded scans as unavailable", () =>
         {
             using var f = new Fixture(); string arbitrary = Path.Combine(f.Root, "arbitrary"); Directory.CreateDirectory(arbitrary);
-            File.Copy(typeof(InventoryTests).Assembly.Location, Path.Combine(arbitrary, "TopSky.dll"));
+            File.WriteAllBytes(Path.Combine(arbitrary, "TopSky.dll"), InventoryPeFixture.Create("1.2.3.4", "1.2.3.4"));
             Assert(ReportingInventoryCollector.Collect([], arbitrary, null).Where(i => i.Component >= ReportingInventoryComponent.Topsky)
                 .All(i => i.Status == ReportingInventoryStatus.Unavailable));
             string plugins = Path.Combine(f.Root, "data", "ESAA", "Plugins"); Directory.CreateDirectory(plugins);
@@ -267,7 +394,7 @@ internal static class InventoryTests
         {
             using var f = new Fixture(); string target = Path.Combine(f.Root, "target");
             string plugins = Path.Combine(target, "ESAA", "Plugins"); Directory.CreateDirectory(plugins);
-            File.Copy(typeof(InventoryTests).Assembly.Location, Path.Combine(plugins, "TopSky.dll"));
+            File.WriteAllBytes(Path.Combine(plugins, "TopSky.dll"), InventoryPeFixture.Create("1.2.3.4", "1.2.3.4"));
             string link = Path.Combine(f.Root, "linked");
             CreateJunction(link, target);
             try
@@ -285,17 +412,18 @@ internal static class InventoryTests
             finally { Directory.Delete(nested); }
             return Task.CompletedTask;
         });
+        passed += DllScannerTests.Run();
         return passed;
 
         async Task Test(string name, Func<Task> body) { await body(); passed++; Console.WriteLine("PASS " + name); }
     }
     private static ReportingDocument Read(Fixture f)
     { var store = new ReportingStore(f.Root); Assert(store.Read(out var document)); return document!; }
-    private static void Assert(bool condition) { if (!condition) throw new Exception("Inventory reporting assertion failed."); }
+    private static void Assert(bool condition, string? message = null) { if (!condition) throw new Exception(message ?? "Inventory reporting assertion failed."); }
 
     // Directory junctions need no administrator/symlink privilege. Both paths are
     // synthetic fixture descendants and the junction itself is removed explicitly.
-    private static void CreateJunction(string link, string target)
+    internal static void CreateJunction(string link, string target)
     {
         byte[] substitute = Encoding.Unicode.GetBytes(@"\??\" + Path.GetFullPath(target));
         byte[] display = Encoding.Unicode.GetBytes(Path.GetFullPath(target));
