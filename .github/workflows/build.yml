@@ -92,6 +92,18 @@ jobs:
       - name: Test activity history
         run: dotnet run --project Tests/ActivityHistory.Tests/ActivityHistory.Tests.csproj -c Release
 
+      - name: Test reporting consent, identity and delivery
+        run: dotnet run --project Tests/Reporting.Tests/Reporting.Tests.csproj -c Release
+
+      - name: Verify desktop reporting payloads against the service schema
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force artifacts | Out-Null
+          dotnet run --no-build --project Tests/Reporting.Tests/Reporting.Tests.csproj -c Release -- --emit-wire | Set-Content -Encoding utf8 artifacts/reporting-wire.json
+          if ($LASTEXITCODE -ne 0) { throw 'Reporting fixture generation failed.' }
+          Get-Content -Raw artifacts/reporting-wire.json | node Tests/Reporting.Tests/VerifyWire.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Desktop and service reporting schemas disagree.' }
+
       - name: Test VatEFS installation detection
         run: dotnet run --project Tests/VatEfs.Tests/VatEfs.Tests.csproj -c Release
 

@@ -13,6 +13,8 @@
     <Compile Include="../../Models/ActivityEntry.cs" Link="ActivityEntry.cs" />
     <EmbeddedResource Include="../../MainWindow.xaml" LogicalName="UiReview.MainWindowSource.xaml" />
     <Page Include="../../SettingsWindow.xaml" Link="SettingsWindow.xaml" />
+    <Page Include="../../ReportingPreferencesWindow.xaml" Link="ReportingPreferencesWindow.xaml" />
+    <Page Include="../../ReportProblemWindow.xaml" Link="ReportProblemWindow.xaml" />
     <Page Include="../../AppConfigWindow.xaml" Link="AppConfigWindow.xaml" />
     <Page Include="../../MaintenanceWindow.xaml" Link="MaintenanceWindow.xaml" />
     <Page Include="../../GngCleanupWindow.xaml" Link="GngCleanupWindow.xaml" />

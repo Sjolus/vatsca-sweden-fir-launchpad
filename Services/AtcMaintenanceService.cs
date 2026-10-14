@@ -5,7 +5,7 @@ using VatscaUpdateChecker.Models;
 namespace VatscaUpdateChecker.Services;
 
 public sealed record AtcRemovalSelection(AtcRemovalTarget Target, bool RemoveApplication, bool RemoveData);
-public sealed record LaunchpadDataSelection(bool Settings, bool BrowserSessions, bool Credentials, bool Downloads, bool Backups);
+public sealed record LaunchpadDataSelection(bool Settings, bool BrowserSessions, bool Credentials, bool Downloads, bool Backups, bool Reporting = false);
 public sealed record AtcMaintenancePlan(
     IReadOnlyList<AtcRemovalSelection> Selections,
     RemovalFilePlan BackupFiles,
@@ -94,6 +94,7 @@ public sealed class AtcMaintenanceService
         if (local.Downloads) review.AppendLine("Launchpad: delete temporary client/GNG downloads and verification staging. Managed GNG package copies stay with their recovery backups.");
         if (local.Backups) review.AppendLine("Launchpad: delete existing software-update, GNG installation and cleanup recovery backups, including saved GNG package history. Review every listed path below.");
         if (local.Credentials) review.AppendLine("Credential Manager: delete VatscaLaunchpad/VATSIM and VatscaLaunchpad/Hoppie. These secrets are not exported; copies in external profiles remain unless their files are selected.");
+        if (local.Reporting) review.AppendLine("Launchpad: reset the support ID and reporting choices, and delete unsent reports. The next launch asks for reporting choices again. Already submitted reports remain on the server until their retention period ends. A recovery export retains a copy of the old ID and choices.");
 
         var backup = RemovalFileService.Preview(MinimizeRoots(backupRoots));
         var direct = RemovalFileService.Preview(MinimizeRoots(deleteRoots));
@@ -273,6 +274,7 @@ public sealed class AtcMaintenanceService
         var software = Path.Combine(_environment.LocalAppData, "VatscaUpdateChecker", "SoftwareUpdates");
         var gng = Path.Combine(_environment.LocalAppData, "VatscaUpdateChecker", "Gng");
         var roots = new List<string>();
+        if (selected.Reporting) roots.Add(Path.Combine(_environment.LocalAppData, "VatscaUpdateChecker", "Reporting"));
         if (selected.Settings)
         {
             roots.AddRange(new[] { "settings.json", "launchpad.log", "VATIRIS.pid", "VatEFS.pid", "VATIRIS.process.json", "VatEFS.process.json" }.Select(name => Path.Combine(roaming, name)));

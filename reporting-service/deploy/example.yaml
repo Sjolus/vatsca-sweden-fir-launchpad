@@ -1,0 +1,119 @@
+# Example only: replace the image, claim, operator Secret, namespace selectors
+# and TLS Secret. No PVC is created: a requested PVC size is not proof of an
+# enforced filesystem quota. See ../README.md before exposing intake.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: launchpad-reporting
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: {app: launchpad-reporting}
+  template:
+    metadata:
+      labels: {app: launchpad-reporting}
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 20
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: api
+          image: registry.invalid/launchpad-reporting:REPLACE_WITH_IMMUTABLE_IMAGE
+          imagePullPolicy: IfNotPresent
+          ports: [{name: http, containerPort: 3000}]
+          env:
+            - {name: PUBLIC_ORIGIN, value: 'https://launchpad.space.sjolus.org'}
+            - {name: DATA_PATH, value: /data/reporting.sqlite}
+            - name: PRIVACY_OPERATOR
+              valueFrom: {secretKeyRef: {name: launchpad-reporting-operator, key: operator}}
+            - name: PRIVACY_CONTACT
+              valueFrom: {secretKeyRef: {name: launchpad-reporting-operator, key: contact}}
+            # Set TRUSTED_PROXY_CIDRS only after verifying the actual final proxy
+            # addresses and that it appends its observed client IP to X-Forwarded-For.
+            # NTFY_ENDPOINT + NTFY_TOKEN are optional Secret references, omitted here.
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          resources:
+            requests: {cpu: 100m, memory: 128Mi, ephemeral-storage: 16Mi}
+            limits: {cpu: '1', memory: 384Mi, ephemeral-storage: 64Mi}
+          volumeMounts:
+            - {name: data, mountPath: /data}
+          readinessProbe:
+            httpGet: {path: /readyz, port: http}
+            periodSeconds: 15
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet: {path: /healthz, port: http}
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 3
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: REPLACE_WITH_EXISTING_QUOTA_ENFORCED_DATA_CLAIM
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: launchpad-reporting
+spec:
+  type: ClusterIP
+  selector: {app: launchpad-reporting}
+  ports: [{name: http, port: 3000, targetPort: http}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: launchpad-reporting
+spec:
+  podSelector:
+    matchLabels: {app: launchpad-reporting}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: REPLACE_WITH_INGRESS_NAMESPACE}
+      ports: [{protocol: TCP, port: 3000}]
+    - from:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: REPLACE_WITH_MONITORING_NAMESPACE}
+      ports: [{protocol: TCP, port: 3000}]
+  # Intake and passkey verification need no outbound network. Add a narrow DNS
+  # and private ntfy destination rule only if operator notifications are enabled.
+  egress: []
+---
+# The hosting ingress must also disable access logs/tracing for this router.
+# Use an ingress controller supporting route-level access-log suppression; a
+# generic Kubernetes Ingress does not establish the required logging policy.
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: launchpad-reporting
+spec:
+  entryPoints: [websecure]
+  routes:
+    - kind: Rule
+      match: >-
+        Host(`launchpad.space.sjolus.org`) &&
+        (Path(`/`) || PathRegexp(`^/privacy(/|/info)?$`)
+        || PathRegexp(`^/backoffice(/|/(app[.]js|usage[.]js|style[.]css|logo[.]png|passkey[.]js))?$`)
+        || PathRegexp(`^/auth/(session|register-options|register-verify|authenticate-options|authenticate-verify|logout)$`)
+        || PathRegexp(`^/api/v1/(usage/batches|inventory/batches|errors/batches|reports)$`)
+        || PathPrefix(`/api/admin/`))
+      observability:
+        accessLogs: false
+        tracing: false
+        metrics: false
+      services: [{name: launchpad-reporting, port: 3000}]
+  tls:
+    secretName: REPLACE_WITH_TLS_SECRET

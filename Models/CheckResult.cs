@@ -31,6 +31,9 @@ public class CheckResult : INotifyPropertyChanged
     public string UsageActionText => IsNotUsed ? "Use this application" : "I don't use this";
 
     public string AppName { get; init; } = string.Empty;
+    // Local metadata evidence for optional inventory, independent of UI labels.
+    // Null means unavailable; empty means present without readable version metadata.
+    public string? ObservedLocalVersion { get; set; }
     public string Description => ApplicationDescriptions.For(AppName);
     public string DisplayName => HasFontsCheck ? "Swedish GNG package" : AppName;
 

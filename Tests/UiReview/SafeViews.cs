@@ -4,6 +4,8 @@ namespace VatscaUpdateChecker;
 public partial class App : Application { }
 public partial class MainWindow : Window
 {
+    private void Help_Click(object sender, RoutedEventArgs e) { }
+    private void ReportProblem_Click(object sender, RoutedEventArgs e) { }
     private void Pin_Click(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "Pin_Click");
     private void Activity_Click(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "Activity_Click");
     private void DetailsResize_DragDelta(object sender, System.Windows.Controls.Primitives.DragDeltaEventArgs e) => ApplicationDetails.Height = Math.Clamp(ApplicationDetails.Height - e.VerticalChange, 100, 240);
@@ -58,6 +60,7 @@ public partial class MainWindow : Window
 }
 public partial class SettingsWindow : Window
 {
+    private void PrivacySupport_Click(object sender, RoutedEventArgs e) { }
     public SettingsWindow() { InitializeComponent(); UiFixture.Initialize(this); }
     private void Path_Changed(object sender, System.Windows.Controls.TextChangedEventArgs e) => UiFixture.PathChanged(this, sender);
     private void Save_Click(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "Save_Click");

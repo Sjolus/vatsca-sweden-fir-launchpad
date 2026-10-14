@@ -2,6 +2,8 @@ namespace VatscaUpdateChecker.Models;
 
 public enum SoftwareApp { Vacs, Vatis, TrackAudio, VatEfs }
 
+public sealed class SoftwareInstallBehaviorException(string message) : InvalidOperationException(message);
+
 public sealed record SoftwareRelease(SoftwareApp App, string Version, Uri DownloadUri,
     string FileName, string Sha256, long Size)
 {

@@ -61,7 +61,10 @@
                         <CheckBox x:Name="RemoveCredentials" Content="Delete saved credentials" Click="SelectionChanged"/>
                         <CheckBox x:Name="RemoveDownloads" Content="Clear cached downloads" Click="SelectionChanged"/>
                         <CheckBox x:Name="RemoveBackups" Content="Delete existing recovery backups" Click="SelectionChanged"/>
+                        <CheckBox x:Name="RemoveReporting" Content="Reset support ID and reporting" Click="SelectionChanged"/>
                     </WrapPanel>
+                    <TextBlock Text="Reporting choices and your support ID are kept unless you select their reset above. A reset also clears unsent reports; already submitted reports stay on the server until they expire."
+                               TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,4,0,4"/>
                     <TextBlock Text="Settings and recovery copies can contain passwords. Deleting saved credentials does not erase copies in unselected profiles or backups. Launchpad keeps shared runtimes and online accounts; vendor uninstallers may remove their own registered components and fonts."
                                TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,4,0,8"/>
                     <CheckBox x:Name="ExportBackup" Content="Export a recovery copy before removal" IsChecked="True" Click="SelectionChanged"/>

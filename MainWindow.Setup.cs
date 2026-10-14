@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Automation;
 using VatscaUpdateChecker.Services;
+using VatscaUpdateChecker.Models;
 
 namespace VatscaUpdateChecker;
 
@@ -11,7 +12,9 @@ public partial class MainWindow
     private async Task OpenSetupWizard()
     {
         if (!CanRunSoftwareAction() || !CanRunSelfUpdateAction() || !TryAcquireMaintenanceGuard(out var lease)) return;
-        bool removalRequested = false, finished = false, saved = true;
+        bool removalRequested = false, finished = false, saved = true, workflowFailed = false;
+        ReportingEvents.Start(ReportingApplication.Launchpad, ReportingOperation.Setup);
+        ReportingEvents.Feature(ReportingFeature.SetupGuide);
         var state = new Models.SetupWizardState(_settings);
         _softwareActionBusy = true;
         _processTimer.Stop();
@@ -65,18 +68,28 @@ public partial class MainWindow
         }
         catch (Exception ex)
         {
+            workflowFailed = true;
             _settings = state.Dismiss();
-            SettingsService.TrySave(_settings);
+            saved = SettingsService.TrySave(_settings);
+            ReportingEvents.RecordFailure(ex, ReportingApplication.Launchpad, ReportingOperation.Setup);
             LastCheckedText.Text = "Setup could not finish: " + ex.Message;
         }
         finally
         {
+            ReportingService.RecordUsage(ReportingEventName.OperationFinished, new ReportingDetails
+            { OperationId = ReportingEvents.CurrentOperationId(ReportingApplication.Launchpad, ReportingOperation.Setup),
+                Application = ReportingApplication.Launchpad, Operation = ReportingOperation.Setup,
+                Outcome = workflowFailed || !saved ? ReportingOutcome.Failed : finished ? ReportingOutcome.Completed : ReportingOutcome.Unknown,
+                DurationBucket = ReportingEvents.Finish(ReportingApplication.Launchpad, ReportingOperation.Setup) });
+            if (!saved) ReportingService.RecordError(ReportingErrorCode.SettingsSaveFailed,
+                new ReportingDetails { Application = ReportingApplication.Launchpad, Operation = ReportingOperation.Save });
             lease?.Dispose();
             _softwareActionBusy = false;
             if (!_windowClosed)
             {
                 _processTimer.Start();
                 UpdateSelfUpdateActionEnabled();
+                ReportPresentationPreferences();
             }
         }
         if (removalRequested && !_windowClosed) Maintenance_Click(this, new RoutedEventArgs());
@@ -135,6 +148,9 @@ public partial class MainWindow
         using var guard = lease;
         _settings.CompactLayout = !_settings.CompactLayout;
         ApplyDensity();
+        ReportingService.RecordUsage(ReportingEventName.PreferenceChanged, new ReportingDetails
+        { Application = ReportingApplication.Launchpad, Source = _settings.CompactLayout ? ReportingSource.Compact : ReportingSource.Expanded });
+        ReportPresentationPreferences();
         try { SettingsService.Save(_settings); }
         catch { LastCheckedText.Text = "Layout changed for this session, but the preference could not be saved."; }
     }

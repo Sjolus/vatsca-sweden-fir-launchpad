@@ -39,6 +39,13 @@ public partial class MainWindow
         var window = new ActivityWindow(_settings.EuroscopeDataPath, !_setupRestartRequired) { Owner = this };
         ShowOwnedDialog(window);
         RefreshActivityNotice();
+        if (window.ReportRequested is { } problem)
+        {
+            OpenProblemReport(ReportingApplicationFor(problem.ApplicationName), problem.Application == ActivityApplication.Gng
+                ? ReportingCategory.Gng : problem.Operation == ActivityOperation.Update ? ReportingCategory.Update
+                : problem.Operation == ActivityOperation.Install ? ReportingCategory.Installation : ReportingCategory.Other);
+            return;
+        }
         if (window.RecoveryRequested is not { } requested ||
             !ActivityHistoryService.SameDataFolder(requested.DataFolder, _settings.EuroscopeDataPath)) return;
         // Opening these windows never starts recovery. Their original review, process and

@@ -80,6 +80,12 @@ public partial class SettingsWindow : Window
             target.Text = dialog.FolderName;
     }
 
+    private void PrivacySupport_Click(object sender, RoutedEventArgs e)
+    {
+        if (_saving || _discovering || _closed) return;
+        new ReportingPreferencesWindow { Owner = this }.ShowDialog();
+    }
+
     private void BrowseExe_Click(object sender, RoutedEventArgs e)
     {
         var appName = (sender as FrameworkElement)?.Tag?.ToString() ?? "Application";
@@ -146,6 +152,9 @@ public partial class SettingsWindow : Window
                 return;
             }
             Settings = draft;
+            if (_original.TextScale != draft.TextScale)
+                ReportingService.RecordUsage(ReportingEventName.PreferenceChanged, new ReportingDetails
+                { Application = ReportingApplication.Launchpad, Source = draft.TextScale >= 1.5 ? ReportingSource.Largest : draft.TextScale >= 1.25 ? ReportingSource.Larger : ReportingSource.Standard });
             DialogResult = true;
         }
         finally

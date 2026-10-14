@@ -1,0 +1,46 @@
+# Apply separately from production/. Before syncing, pin targetRevision to the
+# reviewed commit and set spec.source.kustomize.images to the published digest.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: launchpad-reporting
+  namespace: argocd
+spec:
+  description: Launchpad reporting service
+  sourceRepos: ['https://github.com/Sjolus/vatsca-sweden-fir-launchpad.git']
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: launchpad-reporting
+  clusterResourceWhitelist:
+    - {group: '', kind: Namespace}
+    - {group: storage.k8s.io, kind: StorageClass}
+  namespaceResourceWhitelist:
+    - {group: '', kind: ResourceQuota}
+    - {group: '', kind: Service}
+    - {group: '', kind: PersistentVolumeClaim}
+    - {group: apps, kind: Deployment}
+    - {group: batch, kind: CronJob}
+    - {group: networking.k8s.io, kind: NetworkPolicy}
+    - {group: traefik.io, kind: IngressRoute}
+    - {group: traefik.io, kind: Middleware}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: launchpad-reporting
+  namespace: argocd
+spec:
+  project: launchpad-reporting
+  source:
+    repoURL: https://github.com/Sjolus/vatsca-sweden-fir-launchpad.git
+    targetRevision: main
+    path: reporting-service/deploy/enrollment
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: launchpad-reporting
+  # Manual sync is intentional. No image updater or shared app is modified.
+  syncPolicy:
+    syncOptions: [ServerSideApply=true]
+    retry:
+      limit: 3
+      backoff: {duration: 10s, factor: 2, maxDuration: 1m}

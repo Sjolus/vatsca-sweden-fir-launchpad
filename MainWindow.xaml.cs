@@ -67,8 +67,10 @@ public partial class MainWindow : Window
 
         _softwareUpdates = new SoftwareUpdateService(new SoftwareReleaseSource(_softwareHttp), new SoftwareInstaller(), _softwareHttp);
         _softwareUpdates.StateChanged += SoftwareUpdate_StateChanged;
+        _softwareUpdates.FailureObserved += ReportSoftwareFailure;
         _launchpadUpdates = new LaunchpadUpdateService();
         _launchpadUpdates.StateChanged += LaunchpadUpdate_StateChanged;
+        _launchpadUpdates.FailureObserved += ReportSelfUpdateFailure;
         ApplySelfUpdateState(_launchpadUpdates.State);
 
         ApplyLaunchPaths();
@@ -179,6 +181,8 @@ public partial class MainWindow : Window
     private async void Window_Loaded(object sender, RoutedEventArgs e)
     {
         RestorePresentationPlacement();
+        OfferReportingChoices();
+        ReportPresentationPreferences();
         if (_firstSetup && !_settings.SetupWizardCompleted && !_settings.SetupWizardDismissed)
             await OpenSetupWizard();
         if (_windowClosed) return;
@@ -215,13 +219,14 @@ public partial class MainWindow : Window
         SaveSessionSettings("Theme preference saved.");
     }
 
-    private async void Check_Click(object sender, RoutedEventArgs e) => await RunChecks();
+    private async void Check_Click(object sender, RoutedEventArgs e) => await RunChecks(explicitRequest: true);
 
-    private async Task RunChecks()
+    private async Task RunChecks(bool explicitRequest = false)
     {
         if (_isChecking || _windowClosed || _softwareActionBusy || _softwareUpdates.IsBusy) return;
         if (!TryAcquireMaintenanceGuard(out var lease)) return;
         using var guard = lease;
+        if (explicitRequest) ReportingEvents.Feature(ReportingFeature.CheckUpdates);
         _isChecking = true;
         UpdateSelfUpdateActionEnabled();
         CheckButton.IsEnabled = false;
@@ -250,6 +255,7 @@ public partial class MainWindow : Window
             Logger.Log("CHECK", $"Fonts: {fonts.State} ({string.Join("; ", fonts.Entries.Select(e => $"{e.FileName} installed={(e.InstalledVersion?.ToString("0.00") ?? (e.InstalledPath is null ? "missing" : "?"))} source={(e.SourceVersion?.ToString("0.00") ?? "?")} {(e.IsUpToDate ? "ok" : "needs-action")}"))})");
 
             LastCheckedText.Text = $"Last checked: {DateTime.Now:HH:mm:ss}";
+            await ReportCheckedInventoryAsync();
         }
         catch (OperationCanceledException) when (_windowClosed) { }
         catch (Exception ex)
@@ -452,7 +458,12 @@ public partial class MainWindow : Window
         finally
         {
             _openDialogCount--;
-            if (!_windowClosed) UpdateSelfUpdateActionEnabled();
+            if (!_windowClosed)
+            {
+                UpdateSelfUpdateActionEnabled();
+                _lastPresentationReport = null;
+                ReportPresentationPreferences();
+            }
         }
     }
 
@@ -461,7 +472,9 @@ public partial class MainWindow : Window
         _windowClosed = true;
         _processTimer.Stop();
         _launchpadUpdates.StateChanged -= LaunchpadUpdate_StateChanged;
+        _launchpadUpdates.FailureObserved -= ReportSelfUpdateFailure;
         _softwareUpdates.StateChanged -= SoftwareUpdate_StateChanged;
+        _softwareUpdates.FailureObserved -= ReportSoftwareFailure;
         _windowLifetime.Cancel();
         _windowLifetime.Dispose();
         _softwareHttp.Dispose();
@@ -493,7 +506,11 @@ public partial class MainWindow : Window
 
     private void SaveSessionSettings(string successMessage)
     {
-        LastCheckedText.Text = SettingsService.TrySave(_settings)
+        bool saved = SettingsService.TrySave(_settings);
+        ReportPresentationPreferences();
+        if (!saved) ReportingService.RecordError(ReportingErrorCode.SettingsSaveFailed,
+            new ReportingDetails { Application = ReportingApplication.Launchpad, Operation = ReportingOperation.Save });
+        LastCheckedText.Text = saved
             ? successMessage
             : "Your Launchpad choices are kept for this session, but could not be saved. Open Settings and try saving again. Completed profile or application changes have not been undone.";
     }
@@ -530,6 +547,8 @@ public partial class MainWindow : Window
                     });
                     if (proc != null)
                     {
+                        ReportingService.RecordUsage(ReportingEventName.ApplicationOpened,
+                            new ReportingDetails { Application = ReportingApplicationFor(result.AppName), Operation = ReportingOperation.Launch });
                         RememberBrowser(result.AppName, proc);
                         result.IsRunning = IsWebAppRunning(result.AppName);
                     }
@@ -548,6 +567,8 @@ public partial class MainWindow : Window
                     result.LaunchPath, _settings.EuroscopeDataPath, result.SelectedProfile?.FilePath);
                 GngUpdateService.RequireNoPendingUpdate(start.WorkingDirectory);
                 Process.Start(start);
+                ReportingService.RecordUsage(ReportingEventName.ApplicationOpened,
+                    new ReportingDetails { Application = ReportingApplication.Euroscope, Operation = ReportingOperation.Launch });
                 Logger.Log("LAUNCH", $"{result.AppName}: launched (profile={result.SelectedProfile?.FilePath ?? "none"}, working directory={start.WorkingDirectory})");
             }
             else
@@ -562,6 +583,8 @@ public partial class MainWindow : Window
                     UseShellExecute = false,
                 });
                 Logger.Log("LAUNCH", $"{result.AppName}: launched via explorer.exe ({result.LaunchPath})");
+                ReportingService.RecordUsage(ReportingEventName.ApplicationOpened,
+                    new ReportingDetails { Application = ReportingApplicationFor(result.AppName), Operation = ReportingOperation.Launch });
             }
         }
         catch (Exception ex)
@@ -634,6 +657,7 @@ public partial class MainWindow : Window
         if (!TryAcquireMaintenanceGuard(out var lease)) return;
         using var guard = lease;
         var result = FontService.Check(_settings.EuroscopeDataPath);
+        ReportingEvents.Feature(ReportingFeature.FontCheck, ReportingApplication.Gng);
         switch (result.State)
         {
             case FontsState.Unknown:

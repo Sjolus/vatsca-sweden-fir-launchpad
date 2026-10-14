@@ -12,6 +12,7 @@ public static class ActivityHistoryService
     private static readonly ActivityHistoryStore Store = new(Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "VatscaUpdateChecker", "Activity", "history.json"));
     public static event Action? Changed;
+    public static event Action<ActivityEntry>? Recorded;
     public static bool LastWriteFailed { get; private set; }
     public static ActivityHistorySnapshot Read() => Store.Read();
     public static void ResetCompleted()
@@ -24,11 +25,15 @@ public static class ActivityHistoryService
     public static void Record(ActivityApplication app, ActivityOperation operation, ActivityOutcome outcome,
         string? version = null, string? recoveryFolder = null, string? dataFolder = null, bool restartRequired = false, string? previousVersion = null)
     {
-        LastWriteFailed = !Store.Append(new(Guid.NewGuid(), DateTimeOffset.UtcNow, app, operation, outcome,
+        var entry = new ActivityEntry(Guid.NewGuid(), DateTimeOffset.UtcNow, app, operation, outcome,
             ActivityHistoryStore.ValidVersion(version) ? version : null,
             ActivityHistoryStore.IsLocalPath(recoveryFolder) ? recoveryFolder : null,
             ActivityHistoryStore.IsLocalPath(dataFolder) ? dataFolder : null, restartRequired,
-            ActivityHistoryStore.ValidVersion(previousVersion) ? previousVersion : null));
+            ActivityHistoryStore.ValidVersion(previousVersion) ? previousVersion : null);
+        LastWriteFailed = !Store.Append(entry);
+        if (Recorded is { } listeners)
+            foreach (Action<ActivityEntry> listener in listeners.GetInvocationList())
+                try { listener(entry); } catch { /* Optional observers cannot change an operation result. */ }
         NotifyChanged();
     }
 

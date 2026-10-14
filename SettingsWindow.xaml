@@ -74,6 +74,9 @@
                 </StackPanel>
             </Expander>
 
+            <Button Content="Privacy and support ID…" Click="PrivacySupport_Click" HorizontalAlignment="Left" Margin="0,0,0,5"/>
+            <TextBlock Text="Choose usage, software-version and error reporting, copy your support ID or generate a new one. Opens a separate window with its own Save choices button."
+                       TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,14"/>
             <Expander x:Name="ApplicationPaths" Header="Program files and data folders" IsExpanded="False" Foreground="{DynamicResource PrimaryText}">
             <StackPanel Margin="0,12,0,0">
             <TextBlock Text="Choose an installed program file (.exe), not a shortcut or downloaded installer. Folder fields ask for the application’s data instead. Launchpad checks each selection without starting it; leave anything you do not use blank. A suggested location is only a starting point. Save keeps your choices."

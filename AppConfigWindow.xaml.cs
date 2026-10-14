@@ -147,6 +147,7 @@ public partial class AppConfigWindow : Window
         {
             Owner = this,
         };
+        ReportingEvents.Feature(ReportingFeature.ControllerProfileReview);
         previewWindow.ShowDialog();
     }
 

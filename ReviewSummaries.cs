@@ -60,6 +60,7 @@ internal static class ReviewSummaries
         if (local.Credentials) localItems.Add("saved credentials");
         if (local.Downloads) localItems.Add("cached downloads");
         if (local.Backups) localItems.Add("existing recovery backups");
+        if (local.Reporting) localItems.Add("support ID, reporting choices and unsent reports");
         if (localItems.Count != 0) changes.Add("Delete Launchpad's " + string.Join(", ", localItems) + ".");
         kept.Add("Unselected applications and data stay in place. Online accounts stay active.");
         if (!removeLaunchpad) kept.Add("Launchpad stays installed.");

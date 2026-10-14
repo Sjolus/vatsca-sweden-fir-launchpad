@@ -22,6 +22,16 @@ packages/
 project.lock.json
 project.fragment.lock.json
 artifacts/
+node_modules/
+reporting-service/data/
+reporting-service/backups/
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+**/.env
+**/.env.*
+!**/.env.example
 
 ## User-specific files
 *.userprefs

@@ -30,8 +30,15 @@ public partial class App : Application
         }
         var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "unknown";
         Logger.Log("STARTUP", $"VATSCA Launchpad v{version} started");
+        InitializeReporting();
         MainWindow = new MainWindow();
         MainWindow.Show();
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        if (!_uninstallMode) ShutdownReporting();
+        base.OnExit(e);
     }
 
     public static void SetTheme(bool isDark)

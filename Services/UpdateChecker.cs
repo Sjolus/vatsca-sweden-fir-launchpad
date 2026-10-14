@@ -20,6 +20,7 @@ public static class UpdateChecker
     // -------------------------------------------------------------------------
     public static Task CheckEuroscope(CheckResult result, string exePath)
     {
+        result.ObservedLocalVersion = null;
         result.InstalledVersion = "—";
         result.LatestVersion = "v" + EuroScopePolicy.SupportedVersion;
         result.StatusMessage = string.Empty;
@@ -42,6 +43,7 @@ public static class UpdateChecker
             const string supportedVer = EuroScopePolicy.SupportedVersion;
 
             var fileInfo = FileVersionInfo.GetVersionInfo(exePath);
+            result.ObservedLocalVersion = fileInfo.ProductVersion ?? fileInfo.FileVersion ?? "";
             var localVer = fileInfo.ProductVersion ?? fileInfo.FileVersion ?? "0.0.0";
             result.InstalledVersion = $"v{localVer}";
             result.LatestVersion    = $"v{supportedVer}";
@@ -76,6 +78,7 @@ public static class UpdateChecker
     // -------------------------------------------------------------------------
     public static async Task CheckGng(CheckResult result, string euroscopeDataPath)
     {
+        result.ObservedLocalVersion = null;
         result.InstalledVersion = "—";
         result.LatestVersion = "—";
         result.StatusMessage = string.Empty;
@@ -108,6 +111,7 @@ public static class UpdateChecker
             }
 
             Array.Sort(sctFiles);
+            result.ObservedLocalVersion = "";
             var sctName = Path.GetFileNameWithoutExtension(sctFiles[^1]);
 
             // Filename: ESAA-Sweden_20260320164747-260301-0001.sct
@@ -125,6 +129,7 @@ public static class UpdateChecker
             int localRev   = int.Parse(match.Groups[2].Value); // 1
 
             result.InstalledVersion = FormatGngVersion(localAirac, localRev);
+            result.ObservedLocalVersion = result.InstalledVersion;
 
             // Scrape aero-nav.com — table is visible without login
             var html = await Http.GetStringAsync("https://files.aero-nav.com/ESAA").ConfigureAwait(false);

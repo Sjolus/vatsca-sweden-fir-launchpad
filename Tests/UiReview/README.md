@@ -3,7 +3,7 @@
 This fixture uses production XAML, themes and presentation models with synthetic settings
 and inert button handlers. It covers the main window, Settings, Controller profile,
 maintenance, discovery, recent activity, EuroScope management, fresh client setup, the setup wizard and
-GNG cleanup and GNG setup/update. Both GNG windows use inert file rows; installation,
+GNG cleanup, GNG setup/update, reporting choices and manual report previews/receipts. Reporting views use synthetic IDs and inert handlers, without linking storage or transport. Both GNG windows use inert file rows; installation,
 archive and restore cannot touch files. The production GNG browser host is a lazy
 `ContentControl` that remains empty here; WebView2 and download/runtime services are not linked.
 

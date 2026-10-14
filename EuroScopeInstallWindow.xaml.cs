@@ -91,6 +91,7 @@ public partial class EuroScopeInstallWindow : Window
         };
         _cancellation = new();
         SetBusy(true, "Preparing the supported EuroScope installer…");
+        ReportingEvents.Start(ReportingApplication.Euroscope, Enum.Parse<ReportingOperation>(activityOperation.ToString()));
         try
         {
             var progress = new Progress<EuroScopeInstallProgress>(p =>
@@ -121,6 +122,7 @@ public partial class EuroScopeInstallWindow : Window
         }
         catch (Exception ex)
         {
+            ReportingEvents.RecordFailure(ex, ReportingApplication.Euroscope, Enum.Parse<ReportingOperation>(activityOperation.ToString()));
             ActivityHistoryService.Record(ActivityApplication.EuroScope, activityOperation, ActivityOutcome.Stopped,
                 EuroScopePolicy.SupportedVersion, _service.LastBackupFolder, restartRequired: _service.RestartRequired, previousVersion: plan.InstalledVersion);
             StatusText.Text = "Stopped: " + ex.Message + BackupNotice();

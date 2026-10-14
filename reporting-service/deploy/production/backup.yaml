@@ -1,0 +1,103 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: launchpad-reporting-backup
+spec:
+  schedule: '20 3 * * *'
+  timeZone: Europe/Berlin
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 300
+      template:
+        metadata:
+          labels: {app: launchpad-reporting-backup}
+        spec:
+          automountServiceAccountToken: false
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            fsGroup: 10001
+            fsGroupChangePolicy: OnRootMismatch
+            seccompProfile: {type: RuntimeDefault}
+          affinity:
+            podAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - labelSelector:
+                    matchLabels: {app: launchpad-reporting}
+                  topologyKey: kubernetes.io/hostname
+          containers:
+            - name: backup
+              image: ghcr.io/sjolus/launchpad-reporting
+              command: [node, scripts/backup.mjs, --database, /data/reporting.sqlite, --directory, /backup/snapshots]
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: [ALL]}
+              resources:
+                requests: {cpu: 50m, memory: 64Mi, ephemeral-storage: 8Mi}
+                limits: {cpu: 500m, memory: 192Mi, ephemeral-storage: 32Mi}
+              volumeMounts:
+                - {name: data, mountPath: /data, readOnly: true}
+                - {name: backups, mountPath: /backup}
+          volumes:
+            - name: data
+              persistentVolumeClaim: {claimName: launchpad-reporting-data}
+            - name: backups
+              persistentVolumeClaim: {claimName: launchpad-reporting-backups}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: launchpad-reporting-backup-check
+spec:
+  schedule: '45 * * * *'
+  timeZone: Europe/Berlin
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 1800
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 300
+      template:
+        metadata:
+          labels: {app: launchpad-reporting-backup-check}
+        spec:
+          automountServiceAccountToken: false
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            fsGroup: 10001
+            fsGroupChangePolicy: OnRootMismatch
+            seccompProfile: {type: RuntimeDefault}
+          affinity:
+            podAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - labelSelector:
+                    matchLabels: {app: launchpad-reporting}
+                  topologyKey: kubernetes.io/hostname
+          containers:
+            - name: check
+              image: ghcr.io/sjolus/launchpad-reporting
+              command: [node, scripts/check-backups.mjs, --directory, /backup/snapshots]
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: [ALL]}
+              resources:
+                requests: {cpu: 25m, memory: 32Mi, ephemeral-storage: 8Mi}
+                limits: {cpu: 250m, memory: 96Mi, ephemeral-storage: 32Mi}
+              volumeMounts: [{name: backups, mountPath: /backup}]
+          volumes:
+            - name: backups
+              persistentVolumeClaim: {claimName: launchpad-reporting-backups}

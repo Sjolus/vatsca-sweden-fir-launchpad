@@ -1,0 +1,52 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: longhorn-launchpad-reporting
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+provisioner: driver.longhorn.io
+reclaimPolicy: Retain
+allowVolumeExpansion: false
+volumeBindingMode: Immediate
+parameters:
+  numberOfReplicas: '2'
+  fsType: ext4
+  staleReplicaTimeout: '30'
+  dataLocality: disabled
+  dataEngine: v1
+  disableRevisionCounter: 'true'
+  # An application-specific empty group prevents inheritance of NAS backups.
+  # Application snapshots have their own independently bounded volume below.
+  recurringJobSelector: '[{"name":"launchpad-reporting","isGroup":true}]'
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: launchpad-reporting-data
+  labels:
+    recurring-job.longhorn.io/source: enabled
+    recurring-job-group.longhorn.io/default: disabled
+    recurring-job-group.longhorn.io/launchpad-reporting: enabled
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: longhorn-launchpad-reporting
+  resources:
+    requests: {storage: 2Gi}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: launchpad-reporting-backups
+  labels:
+    recurring-job.longhorn.io/source: enabled
+    recurring-job-group.longhorn.io/default: disabled
+    recurring-job-group.longhorn.io/launchpad-reporting: enabled
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: longhorn-launchpad-reporting
+  resources:
+    requests: {storage: 3Gi}

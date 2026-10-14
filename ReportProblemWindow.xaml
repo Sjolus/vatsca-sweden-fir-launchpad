@@ -1,0 +1,47 @@
+<Window x:Class="VatscaUpdateChecker.ReportProblemWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Report a problem" Icon="Assets/app.ico" Width="650" Height="650" MinWidth="450" MinHeight="420"
+        WindowStartupLocation="CenterOwner" Background="{DynamicResource AppBg}" Foreground="{DynamicResource PrimaryText}"
+        FontSize="{DynamicResource TextSize12}">
+    <DockPanel Margin="20">
+        <StackPanel DockPanel.Dock="Top" Margin="0,0,0,14">
+            <TextBlock Text="Report a problem" FontSize="{DynamicResource TextSize22}" FontWeight="SemiBold"/>
+        </StackPanel>
+        <StackPanel DockPanel.Dock="Bottom" Margin="0,12,0,0">
+            <TextBlock x:Name="Status" TextWrapping="Wrap" Foreground="{DynamicResource ApplicationUpdateText}"
+                       AutomationProperties.LiveSetting="Polite" Margin="0,0,0,8"/>
+            <TextBox x:Name="ReferenceText" IsReadOnly="True" Visibility="Collapsed" Margin="0,0,0,8"
+                     FontFamily="Consolas" TextWrapping="Wrap" AutomationProperties.Name="Received report reference"/>
+            <WrapPanel HorizontalAlignment="Right">
+                <Button x:Name="CopyReferenceButton" Content="Copy reference" Click="CopyReference_Click" Visibility="Collapsed" Margin="0,0,8,5"/>
+                <Button x:Name="SaveReportButton" Content="Save locally…" Click="SaveLocal_Click" Margin="0,0,8,5"/>
+                <Button x:Name="SendButton" Content="Send report" Click="Send_Click" Margin="0,0,8,5"/>
+                <Button x:Name="CloseButton" Content="Close" IsCancel="True" MinWidth="70" Margin="0,0,0,5"/>
+            </WrapPanel>
+        </StackPanel>
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel>
+                <TextBlock Text="Send a private technical report to the Launchpad maintainer. Review the information below before sending."
+                           TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,14"/>
+                <TextBlock Text="Which application?" Margin="0,0,0,5"/>
+                <ComboBox x:Name="ApplicationChoice" SelectionChanged="Choice_Changed" DisplayMemberPath="Label"
+                          AutomationProperties.Name="Application affected" Margin="0,0,0,12"/>
+                <TextBlock Text="Where did the problem happen?" Margin="0,0,0,5"/>
+                <ComboBox x:Name="CategoryChoice" SelectionChanged="Choice_Changed" DisplayMemberPath="Label"
+                          AutomationProperties.Name="Problem category" Margin="0,0,0,12"/>
+                <CheckBox x:Name="IncludeContext" IsChecked="True" Checked="Context_Changed" Unchecked="Context_Changed" Foreground="{DynamicResource PrimaryText}">
+                    <TextBlock Text="Include recent technical steps from this session" TextWrapping="Wrap"/>
+                </CheckBox>
+                <TextBlock Text="Names, credentials, file paths and settings are excluded. No screenshots or files are attached."
+                           TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,6,0,12"/>
+                <TextBlock Text="Information that will be sent" FontWeight="SemiBold" Margin="0,0,0,5"/>
+                <TextBox x:Name="Preview" IsReadOnly="True" FontFamily="Consolas" FontSize="{DynamicResource TextSize11}"
+                         TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="205"
+                         AutomationProperties.Name="Exact report preview"/>
+                <TextBlock Text="This report uses your support ID even when background reporting is off. Share the reference with the maintainer if you want to discuss the problem; no contact information is requested here."
+                           TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,10,0,0"/>
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</Window>

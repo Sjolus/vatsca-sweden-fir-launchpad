@@ -117,6 +117,7 @@ public partial class MainWindow
         }
 
         var requestedUpdate = row.SoftwareUpdate?.CanUpdate == true;
+        if (requestedUpdate) ReportingEvents.Start(ReportingEvents.ForSoftware(app), ReportingOperation.Update);
         var previousVersion = row.SoftwareUpdate?.InstalledVersion;
         _softwareActionBusy = true;
         UpdateSelfUpdateActionEnabled();

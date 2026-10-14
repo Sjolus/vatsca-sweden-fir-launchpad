@@ -51,6 +51,7 @@ public sealed class LaunchpadUpdateService
 
     public LaunchpadUpdateState State { get; private set; }
     public event EventHandler<LaunchpadUpdateState>? StateChanged;
+    public event Action<Exception>? FailureObserved;
 
     public async Task<LaunchpadUpdateState> CheckAsync(CancellationToken cancellationToken = default)
     {
@@ -97,6 +98,7 @@ public sealed class LaunchpadUpdateService
         }
         catch (Exception ex)
         {
+            ObserveFailure(ex);
             return Publish(NewState(LaunchpadUpdateStatus.Error, ErrorMessage(ex, "check for updates")));
         }
         finally { _gate.Release(); }
@@ -137,6 +139,7 @@ public sealed class LaunchpadUpdateService
         }
         catch (Exception ex)
         {
+            ObserveFailure(ex);
             return Publish(NewState(LaunchpadUpdateStatus.Error, ErrorMessage(ex, "download the update"), _available?.TargetFullRelease));
         }
         finally { _gate.Release(); }
@@ -157,6 +160,7 @@ public sealed class LaunchpadUpdateService
         }
         catch (Exception ex)
         {
+            ObserveFailure(ex);
             _ready = null;
             Publish(NewState(LaunchpadUpdateStatus.Error, ErrorMessage(ex, "restart for the update")));
             throw new InvalidOperationException(State.Message, ex);
@@ -168,6 +172,13 @@ public sealed class LaunchpadUpdateService
     {
         _ready = asset;
         return Publish(NewState(LaunchpadUpdateStatus.Ready, "Update downloaded. Restart Launchpad when you are ready to install it.", asset, 100));
+    }
+
+    private void ObserveFailure(Exception exception)
+    {
+        if (FailureObserved is { } observers)
+            foreach (Action<Exception> observer in observers.GetInvocationList())
+                try { observer(exception); } catch { }
     }
 
     private LaunchpadUpdateState NewState(LaunchpadUpdateStatus status, string message, VelopackAsset? asset = null, int? percent = null) =>

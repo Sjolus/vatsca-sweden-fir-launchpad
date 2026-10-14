@@ -79,6 +79,7 @@
                 <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                     <Button x:Name="AppConfigButton" Content="Controller profile" Style="{StaticResource FlatButton}" Margin="0,0,8,0"
                             ToolTip="Your identity and optional EuroScope profile configuration" Click="AppConfig_Click"/>
+                    <Button Content="Help ▾" Style="{StaticResource FlatButton}" Margin="0,0,6,0" Click="Help_Click" ToolTip="Problem reports and privacy choices"/>
                     <Button x:Name="SettingsButton" Content="App settings" Style="{StaticResource FlatButton}" ToolTip="Launchpad preferences and application paths" Click="Settings_Click"/>
                 </StackPanel>
             </Grid>
@@ -138,6 +139,7 @@
                          Padding="0" Margin="0,0,14,0" FontSize="{DynamicResource TextSize12}"/>
                 <ScrollViewer Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                 <WrapPanel MaxWidth="296" HorizontalAlignment="Left" VerticalAlignment="Top">
+                    <Button Content="Report a problem…" Click="ReportProblem_Click" Style="{StaticResource DetailAction}" ToolTip="Review a private technical report for this application"/>
                     <Button Content="Running app…" Click="RunningActions_Click" Style="{StaticResource DetailAction}"
                             Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibility}}" IsEnabled="{Binding LaunchEnabled}"
                             ToolTip="Show, close normally, or explicitly force stop the verified running application"/>

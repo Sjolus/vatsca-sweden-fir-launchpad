@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources: [../production]
+# First deployment and offline recovery expose only privacy and owner access.
+# Switch the ArgoCD source path to production after the operator checks succeed.
+patches:
+  - target:
+      group: traefik.io
+      version: v1alpha1
+      kind: IngressRoute
+      name: launchpad-reporting
+    patch: |-
+      - op: replace
+        path: /spec/routes/0/match
+        value: >-
+          Host(`launchpad.space.sjolus.org`) &&
+          (Path(`/`) || PathRegexp(`^/privacy(/|/info)?$`)
+          || PathRegexp(`^/backoffice(/|/(app[.]js|usage[.]js|style[.]css|logo[.]png|passkey[.]js))?$`)
+          || PathRegexp(`^/auth/(session|register-options|register-verify|authenticate-options|authenticate-verify|logout)$`)
+          || PathPrefix(`/api/admin/`))
