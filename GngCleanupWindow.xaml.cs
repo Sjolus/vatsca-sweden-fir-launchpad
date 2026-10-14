@@ -100,6 +100,7 @@ public partial class GngCleanupWindow : Window
         try
         {
             _plan = await Task.Run(() => GngCleanupService.BuildPlan(root, oldZip, newZip, _selectedProfile, _protectedPaths));
+            ReportingEvents.Feature(ReportingFeature.GngCleanupReview, ReportingApplication.Gng);
             foreach (var candidate in _plan.Candidates) _rows.Add(new CleanupRow(candidate, UpdateSelection));
             var guidance = _plan.Warnings.Count > 0
                 ? string.Join(Environment.NewLine, _plan.Warnings)
@@ -144,6 +145,7 @@ public partial class GngCleanupWindow : Window
         var plan = _plan;
         SetBusy(true);
         StatusText.Text = "Rechecking files and moving the selected files to backup…";
+        ReportingEvents.Start(ReportingApplication.Gng, ReportingOperation.Cleanup);
         try
         {
             AttemptedChanges = true;
@@ -156,6 +158,7 @@ public partial class GngCleanupWindow : Window
         }
         catch (Exception ex)
         {
+            ReportingEvents.RecordFailure(ex, ReportingApplication.Gng, ReportingOperation.Cleanup);
             ActivityHistoryService.Record(ActivityApplication.Gng, ActivityOperation.Cleanup, ActivityOutcome.Stopped,
                 dataFolder: plan.Root);
             InvalidatePlan(); StatusText.Text = ex.Message;
@@ -181,6 +184,7 @@ public partial class GngCleanupWindow : Window
         var root = RootBox.Text;
         SetBusy(true);
         StatusText.Text = "Restoring backup files…";
+        ReportingEvents.Start(ReportingApplication.Gng, ReportingOperation.RestoreCleanup);
         try
         {
             AttemptedChanges = true;
@@ -193,6 +197,7 @@ public partial class GngCleanupWindow : Window
         }
         catch (Exception ex)
         {
+            ReportingEvents.RecordFailure(ex, ReportingApplication.Gng, ReportingOperation.RestoreCleanup);
             ActivityHistoryService.Record(ActivityApplication.Gng, ActivityOperation.RestoreCleanup, ActivityOutcome.Stopped,
                 recoveryFolder: folder, dataFolder: root);
             InvalidatePlan(); StatusText.Text = ex.Message;

@@ -15,7 +15,8 @@ internal static partial class LayoutMatrix
     [
         () => new MainWindow(), () => new SettingsWindow(), () => new AppConfigWindow(),
         () => new MaintenanceWindow(), () => new InstallationDiscoveryWindow(), () => new ActivityWindow(),
-        () => new EuroScopeInstallWindow(), () => new FreshSoftwareInstallWindow(), () => new FreshSoftwareInstallWindow(vatEfs: true), () => new GngCleanupWindow()
+        () => new EuroScopeInstallWindow(), () => new FreshSoftwareInstallWindow(), () => new FreshSoftwareInstallWindow(vatEfs: true), () => new GngCleanupWindow(),
+        () => new ReportingPreferencesWindow(), () => new ReportProblemWindow(), () => new ReportProblemWindow(received: true)
     ];
 
     public static string Run()
@@ -139,6 +140,8 @@ internal static partial class LayoutMatrix
         {
             MainWindow => new[] { "CheckButton", "SetupButton", "MaintenanceButton", "ActivityButton" },
             SettingsWindow => new[] { "SaveButton" },
+            ReportingPreferencesWindow => new[] { "SaveChoices", "DismissButton" },
+            ReportProblemWindow => new[] { "SendButton", "SaveReportButton", "CloseButton" },
             AppConfigWindow => new[] { "PreviewButton", "SaveProfileButton" },
             ProfilePreviewWindow => new[] { "ToggleCredentialsButton", "BackButton" },
             MaintenanceWindow => new[] { "ReviewButton", "ApplyButton", "CloseButton", "RefreshButton" },

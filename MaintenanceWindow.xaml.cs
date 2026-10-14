@@ -30,6 +30,7 @@ public partial class MaintenanceWindow : Window
     private bool _handoff;
     private bool _discoveryReady;
     private bool _applying;
+    private bool _reportingSuspended;
     public bool MadeChanges { get; private set; }
     public bool RestartRequired { get; private set; }
 
@@ -97,7 +98,7 @@ public partial class MaintenanceWindow : Window
     private void ClearDestructiveSelections()
     {
         foreach (var choice in _choices) { choice.RemoveApplication = false; choice.RemoveData = false; }
-        foreach (var check in new[] { RemoveLaunchpad, RemoveSettings, RemoveSessions, RemoveCredentials, RemoveDownloads, RemoveBackups }) check.IsChecked = false;
+        foreach (var check in new[] { RemoveLaunchpad, RemoveSettings, RemoveSessions, RemoveCredentials, RemoveDownloads, RemoveBackups, RemoveReporting }) check.IsChecked = false;
         TargetsList.Items.Refresh();
         InvalidateReview();
     }
@@ -144,15 +145,21 @@ public partial class MaintenanceWindow : Window
                 ExportBackup.IsChecked == true ? BackupPath.Text : null);
             var selected = _choices.Select(c => new AtcRemovalSelection(c.Target, c.RemoveApplication, c.RemoveData)).ToArray();
             var local = new LaunchpadDataSelection(RemoveSettings.IsChecked == true, RemoveSessions.IsChecked == true,
-                RemoveCredentials.IsChecked == true, RemoveDownloads.IsChecked == true, RemoveBackups.IsChecked == true);
-            if (!selected.Any(s => s.RemoveApplication || s.RemoveData) && !local.Settings && !local.BrowserSessions && !local.Credentials && !local.Downloads && !local.Backups && RemoveLaunchpad.IsChecked != true)
+                RemoveCredentials.IsChecked == true, RemoveDownloads.IsChecked == true, RemoveBackups.IsChecked == true, RemoveReporting.IsChecked == true);
+            if (!selected.Any(s => s.RemoveApplication || s.RemoveData) && !local.Settings && !local.BrowserSessions && !local.Credentials && !local.Downloads && !local.Backups && !local.Reporting && RemoveLaunchpad.IsChecked != true)
                 throw new InvalidOperationException("Select at least one application or data category.");
             string? backup = null;
-            var needsFileExport = selected.Any(s => s.RemoveApplication || s.RemoveData) || local.Settings || local.BrowserSessions || local.Downloads || local.Backups;
+            var needsFileExport = selected.Any(s => s.RemoveApplication || s.RemoveData) || local.Settings || local.BrowserSessions || local.Downloads || local.Backups || local.Reporting;
             if (ExportBackup.IsChecked == true && needsFileExport)
             {
                 if (string.IsNullOrWhiteSpace(BackupPath.Text)) throw new InvalidOperationException("Choose a recovery export folder, or turn off the recovery copy.");
                 backup = BackupPath.Text;
+            }
+            if (local.Reporting && !_reportingSuspended)
+            {
+                // Freeze the queue before taking the reviewed inventory. Uninstall startup never initializes reporting.
+                _reportingSuspended = Owner is MainWindow;
+                ReportingService.Shutdown();
             }
             _plan = await Task.Run(() => _service.Preview(selected, local, backup));
             if (RemoveLaunchpad.IsChecked == true)
@@ -162,7 +169,7 @@ public partial class MaintenanceWindow : Window
                 ReviewText.Text = !needsFileExport && !local.Credentials
                     ? "Uninstall Sweden FIR Launchpad only\n\n" +
                       "Launchpad will close, and its installation folder and shortcuts will be removed.\n\n" +
-                      "Kept: your configured ATC applications and their settings; Launchpad preferences, saved credentials, browser sessions, client downloads and recovery backups.\n\n" +
+                      "Kept: your configured ATC applications and their settings; Launchpad preferences, saved credentials, browser sessions, client downloads, recovery backups, support ID and reporting choices.\n\n" +
                       "No separate settings or data cleanup is selected. No recovery export will be created for this selection."
                     : "Uninstall Sweden FIR Launchpad\n\n" +
                       "Launchpad will be uninstalled last, after all selected work below succeeds.\n\n" + _plan.Review;
@@ -201,6 +208,7 @@ public partial class MaintenanceWindow : Window
         string? failureOutcome = null;
         _applying = true;
         SetBusy(true, "Verifying the reviewed files and preparing recovery…");
+        ReportingEvents.Start(ReportingApplication.Maintenance, ReportingOperation.Remove);
         try
         {
             RequireOtherLaunchpadsClosed();
@@ -227,6 +235,7 @@ public partial class MaintenanceWindow : Window
         catch (Exception ex)
         {
             RememberRecoveryExport();
+            ReportingEvents.RecordFailure(ex, ReportingApplication.Maintenance, ReportingOperation.Remove);
             RestartRequired |= _service.RestartRequired;
             if (!_service.ActivityHistoryReset)
                 ActivityHistoryService.Record(ActivityApplication.Maintenance, ActivityOperation.Remove,
@@ -292,6 +301,7 @@ public partial class MaintenanceWindow : Window
     protected override void OnClosed(EventArgs e)
     {
         _lease?.Dispose();
+        if (_reportingSuspended && !_handoff && Owner is MainWindow { IsLoaded: true }) ReportingService.Initialize();
         base.OnClosed(e);
     }
 }

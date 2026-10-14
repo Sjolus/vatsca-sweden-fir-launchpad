@@ -73,6 +73,7 @@
                 <TextBox x:Name="RecoveryPath" IsReadOnly="True" TextWrapping="Wrap" Margin="0,5,0,0"
                          Visibility="Collapsed" AutomationProperties.Name="Recovery folder"/>
                 <WrapPanel Margin="0,8,0,0">
+                    <Button Content="Report this problem…" Click="ReportProblem_Click" Margin="0,0,8,5"/>
                     <Button x:Name="OpenRecoveryButton" Content="Open recovery folder" Click="OpenRecovery_Click" Margin="0,0,8,5" Visibility="Collapsed"/>
                     <Button x:Name="GngRecoveryButton" Content="Review GNG recovery…" Click="GngRecovery_Click" Margin="0,0,0,5" Visibility="Collapsed"/>
                 </WrapPanel>

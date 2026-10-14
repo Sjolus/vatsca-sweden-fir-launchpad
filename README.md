@@ -87,12 +87,21 @@ Portable and standalone copies use the [release-page download](https://github.co
 
 ## Data and privacy
 
+The next release adds optional reporting with three independent choices: **usage statistics**, **software and plugin versions**, and **automatic error reports**. On first launch, the switches are selected initially, but nothing is sent until you choose **Save choices**. You can turn any off or choose **Not now**. **Help → Privacy and support ID…** lets you change those choices, copy your support ID, generate a new ID or clear unsent reports. Existing reporting preferences do not automatically enable the new version-sharing category.
+
+The random support ID stays the same across updates. Usage covers Launchpad sessions and version, feature use, application launch actions and display preferences; it does not measure time spent controlling or network activity. Optional inventory covers configured ATC application versions, GNG revision and recognised EuroScope plugins. Plugin presence does not establish that it is enabled or running, and missing version metadata stays unknown. Errors contain fixed technical categories and include application-version context only when version sharing is enabled.
+
+Reports exclude names, CID, credentials, file paths, profile contents and browser sign-ins. Plugin collection reads metadata without loading DLLs; neither DLL contents nor arbitrary filenames are uploaded. Changing the support ID clears queued reports and local context; already received reports remain under the old ID until they expire.
+
+**Help → Report a problem…** works independently of background reporting. Choose the application and problem category, review the exact information, then send or save it locally. There are no contact fields, free-text descriptions or attachments. Keep the returned reference if you want to discuss the report with the maintainer. Reporting uses `launchpad.space.sjolus.org`; see its [privacy details](https://launchpad.space.sjolus.org/privacy) for storage and retention once the service is available.
+
 | Location | Contents |
 | --- | --- |
 | `%LOCALAPPDATA%\SwedenFirLaunchpad` | Managed Launchpad installation |
 | `%APPDATA%\VatscaUpdateChecker` | Preferences, controller identity fields, logs and dedicated VatEFS/VATIRIS browser profiles |
 | `%LOCALAPPDATA%\VatscaUpdateChecker` | Downloaded packages, recovery backups and the dedicated AeroNav browser session |
 | Windows Credential Manager | Launchpad's saved VATSIM password and Hoppie code |
+| `%LOCALAPPDATA%\VatscaUpdateChecker\Reporting` | Reporting choices, random support ID and bounded unsent automatic reports |
 
 Profile sync writes the password and Hoppie code into the external tools' text files. Those files and recovery exports can contain plain-text credentials; keep them private. **Delete saved credentials** removes only Launchpad's two Credential Manager entries, not copies in profiles or backups. Credential Manager secrets are not exported.
 

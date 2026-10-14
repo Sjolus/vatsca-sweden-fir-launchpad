@@ -60,6 +60,8 @@ public sealed class UiReviewHost : Window
         Add(screens, "Controller profile", () => Open(new AppConfigWindow()));
         Add(screens, "Manage / remove", () => Open(new MaintenanceWindow()));
         Add(screens, "Recent activity", () => Open(new ActivityWindow()));
+        Add(screens, "Privacy and support", () => Open(new ReportingPreferencesWindow()));
+        Add(screens, "Problem report", () => Open(new ReportProblemWindow()));
         Add(screens, "Find installations", () => Open(new InstallationDiscoveryWindow()));
         Add(screens, "Manage EuroScope", () => Open(new EuroScopeInstallWindow()));
         Add(screens, "Set up vATIS", () => Open(new FreshSoftwareInstallWindow()));

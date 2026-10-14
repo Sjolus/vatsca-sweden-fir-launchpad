@@ -48,6 +48,8 @@ public partial class GngUpdateWindow : Window
     private string? _reviewReferencePath;
     private string? _cachedFullReferencePath;
     private string? _cachedFullReferenceVersion;
+    private ReportingSource _reportingPackageSource = ReportingSource.Import;
+    private string? _reportedPackagePath;
     private bool _usingSavedPackages;
     private bool _forceFreshCopies;
     private bool _busy;
@@ -148,6 +150,7 @@ public partial class GngUpdateWindow : Window
             if (saved is not null)
             {
                 _usingSavedPackages = true;
+                _reportingPackageSource = ReportingSource.Cache;
                 if (saved.PackagePath is { } primary && (_requestedPackageKind == GngPackageKind.Full || saved.FullPackagePath is not null))
                 {
                     await PreviewPackageAsync(primary, saved.FullPackagePath);
@@ -315,6 +318,8 @@ public partial class GngUpdateWindow : Window
                 _downloadRequest.CanReportNavigationFailure(_downloadRequest.Generation))
             {
                 Logger.Log("GNG", $"Package page failed: {args.WebErrorStatus}; HTTP {args.HttpStatusCode}; reference={_primaryPackagePath is not null}.");
+                ReportingService.RecordError(ReportingErrorCode.NetworkUnavailable,
+                    new ReportingDetails { Application = ReportingApplication.Gng, Operation = ReportingOperation.Download, Stage = ReportingStage.Prepare });
                 DisarmDownloadRequest();
                 ShowIssue("Package page could not load", _primaryPackagePath is null
                     ? $"AeroNav could not load ({args.WebErrorStatus}). Retry the download, or open it in your browser and import the ZIP."
@@ -335,6 +340,8 @@ public partial class GngUpdateWindow : Window
         core.ProcessFailed += (_, _) =>
         {
             if (_closed) return;
+            ReportingService.RecordError(ReportingErrorCode.BrowserProcessFailed,
+                new ReportingDetails { Application = ReportingApplication.Gng, Operation = ReportingOperation.Download });
             Dispatcher.BeginInvoke(new Action(() =>
             {
                 if (_closed) return;
@@ -622,6 +629,7 @@ public partial class GngUpdateWindow : Window
 
     private void DownloadStarting(WebView2 owner, CoreWebView2DownloadStartingEventArgs e)
     {
+        _reportingPackageSource = ReportingSource.Download;
         e.Handled = true;
         e.Cancel = true;
         if (!Idle || _recoveryRequired || !IsCurrentBrowser(owner) || BrowserPanel.Visibility != Visibility.Visible || _showingCompletion ||
@@ -873,10 +881,19 @@ public partial class GngUpdateWindow : Window
             StatusText.Text = (_usingSavedPackages ? "Saved packages reused. " : "") + "Review replacements carefully. Files changed by this installation are backed up. Nothing has been installed yet.";
             SetStage("Ready for your review");
             Logger.Log("GNG", "Installation preview prepared.");
+            if (!string.Equals(_reportedPackagePath, path, StringComparison.OrdinalIgnoreCase))
+            {
+                _reportedPackagePath = path;
+                ReportingEvents.Feature(ReportingFeature.GngPackageReview, ReportingApplication.Gng);
+                ReportingService.RecordUsage(ReportingEventName.GngPackageObtained, new ReportingDetails
+                { Application = ReportingApplication.Gng, Operation = ReportingOperation.Download, Source = _reportingPackageSource,
+                    Outcome = ReportingOutcome.Completed, PackageVersion = ReportingEvents.PublicVersion(plan.Version) });
+            }
         }
         catch (Exception ex)
         {
             Logger.Log("GNG", "Installation preview failed: " + ex.GetType().Name + ".");
+            ReportingEvents.RecordFailure(ex, ReportingApplication.Gng, ReportingOperation.Update);
             ShowIssue("Installation review needs attention", "The package could not be prepared. Your data folder is unchanged. " + ex.Message +
                 (_primaryPackagePath is null ? "" : " Your Update Only ZIP is saved. Retry reference, import a matching Full ZIP, or Start over to download both again."));
         }
@@ -898,6 +915,7 @@ public partial class GngUpdateWindow : Window
         if (!CanGetPackage || _plan is null || ConfirmInstall.IsChecked != true || _euroScopeBlockingReason is not null) return;
         var plan = _plan;
         SetBusy(true, "Rechecking the reviewed package and creating a recovery backup…", "Installing reviewed package");
+        ReportingEvents.Start(ReportingApplication.Gng, ReportingOperation.Install);
         ClosePopups();
         var progress = new Progress<string>(message => { if (_busy) StatusText.Text = message; });
         try
@@ -924,6 +942,7 @@ public partial class GngUpdateWindow : Window
             ConfirmInstall.IsChecked = false;
             StatusText.Text = "Installation stopped. Keep any recovery backup and review these details before retrying: " + ex.Message;
             ShowPendingRecovery("Installation stopped: " + ex.Message);
+            ReportingEvents.RecordFailure(ex, ReportingApplication.Gng, ReportingOperation.Install);
             ActivityHistoryService.Record(ActivityApplication.Gng, ActivityOperation.Install, ActivityOutcome.Stopped,
                 plan.Version, _pendingBackup, DataFolder);
         }
@@ -945,12 +964,14 @@ public partial class GngUpdateWindow : Window
         }
         catch (Exception ex) { StatusText.Text = "The recovery location could not be checked: " + ex.Message; return; }
         if (dialog.ShowDialog(this) != true) return;
+        ReportingEvents.Feature(ReportingFeature.GngRestoreReview, ReportingApplication.Gng);
         if (MessageBox.Show(this, $"Restore this GNG update backup?\n\nBackup:\n{dialog.FolderName}\n\nDestination:\n{DataFolder}\n\nClose EuroScope first. Files changed since installation will be kept for review. Only backups for this data folder can be restored.",
                 "Restore GNG installation", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) != MessageBoxResult.Yes) return;
         RefreshEuroScopeStatus();
         if (_euroScopeBlockingReason is not null) return;
         _primaryPackagePath = _referenceVersion = null;
         SetBusy(true, "Checking the backup and restoring files…", "Restoring backup");
+        ReportingEvents.Start(ReportingApplication.Gng, ReportingOperation.Restore);
         ClosePopups();
         var progress = new Progress<string>(message => { if (_busy) StatusText.Text = message; });
         try
@@ -977,6 +998,7 @@ public partial class GngUpdateWindow : Window
             ShowCompletion("Restore stopped", "Keep the backup and resolve this problem before trying recovery again. " + ex.Message, dialog.FolderName);
             StatusText.Text = "Restore did not complete. Review the recovery details above before using EuroScope.";
             ShowPendingRecovery("Restore stopped: " + ex.Message);
+            ReportingEvents.RecordFailure(ex, ReportingApplication.Gng, ReportingOperation.Restore);
             ActivityHistoryService.Record(ActivityApplication.Gng, ActivityOperation.Restore, ActivityOutcome.Stopped,
                 recoveryFolder: dialog.FolderName, dataFolder: DataFolder);
         }
@@ -1122,6 +1144,7 @@ public partial class GngUpdateWindow : Window
         var dialog = new OpenFileDialog { Title = _primaryPackagePath is null ? "Import an original ESAA GNG ZIP" : "Import the matching Swedish Full Package reference ZIP", Filter = "GNG ZIP packages (*.zip)|*.zip", CheckFileExists = true, Multiselect = false };
         if (dialog.ShowDialog(this) == true)
         {
+            _reportingPackageSource = ReportingSource.Import;
             _cachedFullReferencePath = _cachedFullReferenceVersion = null;
             if (_primaryPackagePath is null) _usingSavedPackages = false;
             if (_primaryPackagePath is null) await PreviewPackageAsync(dialog.FileName);

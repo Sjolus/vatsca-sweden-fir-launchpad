@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Add independent choices for usage statistics, software/plugin versions and automatic error reports, with a first-use prompt and a support ID that survives updates. Change the ID or clear unsent reports from Help.
+- Preview and send structured problem reports from Help, application details or Activity, with an option to save locally and a receipt after submission.
+- Add a private passkey-protected maintainer dashboard for usage trends, application launches, feature use and shared software/plugin versions. Reports, diagnostics and support lookup are separate, with bounded queues, request quotas, retention and storage limits.
+- Keep reporting data separate from ordinary preferences reset, with an explicit support-ID and reporting reset option.
+
 ## [2.2.0] — 2026-10-12
 
 - Connect application selection, GNG installation, controller-profile review and font checks in a resumable setup guide. Find and choose existing copies directly beside each application.

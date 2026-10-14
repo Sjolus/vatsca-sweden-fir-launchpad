@@ -7,6 +7,7 @@ namespace VatscaUpdateChecker;
 // Production XAML and display model only: no history store, shell actions or recovery services.
 public partial class ActivityWindow : Window
 {
+    private void ReportProblem_Click(object sender, RoutedEventArgs e) { }
     public ActivityWindow()
     {
         InitializeComponent();

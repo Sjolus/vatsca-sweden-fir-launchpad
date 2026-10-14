@@ -7,6 +7,22 @@ internal static class CoordinatorTests
     {
         var tests = new (string, Func<Task>)[]
         {
+            ("reporting reset is independent of preferences and preserves unrelated data", async () =>
+            {
+                foreach (var resetReporting in new[] { false, true })
+                {
+                    using var f = new Case();
+                    var reporting = f.File("local/VatscaUpdateChecker/Reporting/reporting.json", "SYNTHETIC-ID-CHOICES-QUEUE");
+                    var settings = f.File("roaming/VatscaUpdateChecker/settings.json", "SYNTHETIC-PREFERENCES");
+                    var browser = f.File("local/VatscaUpdateChecker/Gng/Browser/keep", "SYNTHETIC-SESSION");
+                    var plan = f.Service.Preview([], new(!resetReporting, false, false, false, false, resetReporting), f.Recovery);
+                    Assert(plan.DirectRemovalFiles.Files.Any(file => file.FullPath == reporting) == resetReporting);
+                    var export = await f.Service.ApplyAsync(plan, null, default);
+                    Assert(File.Exists(reporting) != resetReporting && File.Exists(settings) == resetReporting && File.Exists(browser));
+                    RemovalFileService.VerifyBackup(plan.BackupFiles, export!);
+                    if (resetReporting) Assert(plan.Review.Contains("Already submitted reports remain on the server"));
+                }
+            }),
             ("preview never mutates files or credentials", async () =>
             {
                 using var f = new Case(); var source = f.File("roaming/VatscaUpdateChecker/settings.json", "FAKE");

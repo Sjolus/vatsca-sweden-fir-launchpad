@@ -216,6 +216,9 @@ internal static class LayoutSnapshots
             foreach (var (name, factory) in new (string, Func<Window>)[]
             {
                 ("maintenance", () => new MaintenanceWindow()),
+                ("reporting-choices", () => new ReportingPreferencesWindow()),
+                ("report-problem", () => new ReportProblemWindow()),
+                ("report-received", () => new ReportProblemWindow(received: true)),
                 ("euroscope", () => new EuroScopeInstallWindow()),
                 ("fresh-install", () => new FreshSoftwareInstallWindow()),
             })

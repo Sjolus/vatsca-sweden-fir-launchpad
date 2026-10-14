@@ -16,6 +16,8 @@ public partial class SetupWizardWindow : Window
     private int _page;
     private int _pathCheckGeneration;
     private bool _closed;
+    private int _lastReportedPage = -1;
+    private bool _reportRouteChosen;
     private readonly ConfiguredPathValidationService _pathValidator = new();
     private FontsCheckResult? _fonts;
     private sealed record DiscoveredCopy(string Path, string Label);
@@ -33,6 +35,7 @@ public partial class SetupWizardWindow : Window
     {
         _state = state;
         _page = (int)state.Step;
+        _reportRouteChosen = _page > 0;
         Settings = state.Dismiss();
         InitializeComponent();
         Closed += (_, _) => { _closed = true; _pathCheckGeneration++; };
@@ -67,6 +70,9 @@ public partial class SetupWizardWindow : Window
         if (!_ready) return;
         _state.Route = ManualChoice.IsChecked == true ? SetupWizardRoute.Manual :
             FreshChoice.IsChecked == true ? SetupWizardRoute.Fresh : SetupWizardRoute.Existing;
+        _reportRouteChosen = true;
+        _lastReportedPage = -1;
+        ReportSetupStep();
         UpdateStepHeading();
     }
 
@@ -82,6 +88,7 @@ public partial class SetupWizardWindow : Window
     private void Next_Click(object sender, RoutedEventArgs e)
     {
         if (_childOpen) return;
+        if (_page == 0) _reportRouteChosen = true;
         if (_page == 5)
         {
             Settings = _state.Finish();
@@ -112,8 +119,26 @@ public partial class SetupWizardWindow : Window
         StepText.Text = $"Step {step} of {steps} · {title}";
     }
 
+    private void ReportSetupStep()
+    {
+        if (_lastReportedPage != _page)
+        {
+            _lastReportedPage = _page;
+            ReportingService.RecordUsage(ReportingEventName.SetupStep, new ReportingDetails
+            {
+                OperationId = ReportingEvents.CurrentOperationId(ReportingApplication.Launchpad, ReportingOperation.Setup),
+                Application = ReportingApplication.Launchpad, Operation = ReportingOperation.Setup,
+                Stage = _page switch { 0 => ReportingStage.Welcome, 1 => ReportingStage.Applications, 2 => ReportingStage.Gng,
+                    3 => ReportingStage.Profile, 4 => ReportingStage.Fonts, _ => ReportingStage.Finish },
+                Source = _page == 0 && !_reportRouteChosen ? null : _state.Route switch { SetupWizardRoute.Existing => ReportingSource.Existing,
+                    SetupWizardRoute.Fresh => ReportingSource.Fresh, _ => ReportingSource.Preferences }
+            });
+        }
+    }
+
     private void RenderPage()
     {
+        ReportSetupStep();
         var pages = new[] { WelcomePage, ApplicationsPage, GngPage, PreferencesPage, FontsPage, SummaryPage };
         for (int i = 0; i < pages.Length; i++) pages[i].Visibility = i == _page ? Visibility.Visible : Visibility.Collapsed;
         UpdateStepHeading();
@@ -308,7 +333,18 @@ public partial class SetupWizardWindow : Window
                 ConfiguredPathKind.VatEfsFolder => SetupWizardApplication.VatEfs,
                 _ => throw new InvalidOperationException("Unsupported application location.")
             }, path);
-            SaveCompletedAction("Location saved. Existing configuration and credentials were left in place.");
+            var adoptionSaved = SaveCompletedAction("Location saved. Existing configuration and credentials were left in place.");
+            ReportingEvents.Feature(ReportingFeature.Adopt);
+            ReportingService.RecordUsage(ReportingEventName.OperationFinished, new ReportingDetails
+            { Application = kind switch
+                {
+                    ConfiguredPathKind.EuroScopeExecutable => ReportingApplication.Euroscope,
+                    ConfiguredPathKind.EuroScopeDataFolder => ReportingApplication.Gng,
+                    ConfiguredPathKind.TrackAudioExecutable => ReportingApplication.Trackaudio,
+                    ConfiguredPathKind.VacsExecutable => ReportingApplication.Vacs,
+                    ConfiguredPathKind.VatisExecutable => ReportingApplication.Vatis,
+                    _ => ReportingApplication.Vatefs
+                }, Operation = ReportingOperation.Adopt, Outcome = adoptionSaved ? ReportingOutcome.Completed : ReportingOutcome.Failed, Source = ReportingSource.Existing });
             LoadPreferences();
             RefreshPaths();
         }
@@ -335,6 +371,7 @@ public partial class SetupWizardWindow : Window
     {
         if (_childOpen) return;
         _fonts = FontService.Check(_state.Draft.EuroscopeDataPath);
+        ReportingEvents.Feature(ReportingFeature.FontCheck, ReportingApplication.Gng);
         FontsStatus.Text = _fonts.State == FontsState.Unknown ? "GNG font files were not found. Go Back to choose or install GNG first." :
             string.Join(Environment.NewLine, _fonts.Entries.Select(f => f.FileName + " — " + (f.SourcePath == null ? "not supplied by this GNG folder" : f.IsUpToDate ? "installed; no update needed" : "missing or older than the GNG copy")));
         FontsInstallButton.IsEnabled = !_state.RestartRequired && _fonts.Entries.Any(f => !f.IsUpToDate && f.SourcePath != null);
@@ -437,16 +474,20 @@ public partial class SetupWizardWindow : Window
         catch (Exception ex) { StatusText.Text = "Application setup could not finish: " + ex.Message; }
     }
 
-    private void SaveCompletedAction(string message)
+    private bool SaveCompletedAction(string message)
     {
         try
         {
             SettingsService.Save(_state.Dismiss());
             StatusText.Text = message;
+            return true;
         }
         catch
         {
             StatusText.Text = "The action completed, but Launchpad could not save its choices. Finish setup to retry saving; completed installations and profile changes have not been undone.";
+            ReportingService.RecordError(ReportingErrorCode.SettingsSaveFailed,
+                new ReportingDetails { Application = ReportingApplication.Launchpad, Operation = ReportingOperation.Save });
+            return false;
         }
     }
 

@@ -11,6 +11,7 @@ public partial class ActivityWindow : Window
     private readonly string _gngDataFolder;
     private readonly bool _recoveryAllowed;
     public ActivityEntry? RecoveryRequested { get; private set; }
+    public ActivityEntry? ReportRequested { get; private set; }
 
     public ActivityWindow(string gngDataFolder, bool recoveryAllowed = true)
     {
@@ -59,6 +60,13 @@ public partial class ActivityWindow : Window
         { RecoveryGuidance.Text = "The recovery folder is no longer available."; return; }
         try { Process.Start(new ProcessStartInfo(entry.RecoveryFolder!) { UseShellExecute = true }); }
         catch { RecoveryGuidance.Text = "Windows could not open the recovery folder. You can copy its location above."; }
+    }
+
+    private void ReportProblem_Click(object sender, RoutedEventArgs e)
+    {
+        if (HistoryGrid.SelectedItem is not ActivityEntry entry) return;
+        ReportRequested = entry;
+        DialogResult = true;
     }
 
     private void GngRecovery_Click(object sender, RoutedEventArgs e)

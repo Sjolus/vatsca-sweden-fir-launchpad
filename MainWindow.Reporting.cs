@@ -1,0 +1,126 @@
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Diagnostics;
+using System.IO;
+using VatscaUpdateChecker.Models;
+using VatscaUpdateChecker.Services;
+
+namespace VatscaUpdateChecker;
+
+public partial class MainWindow
+{
+    private ReportingDetails? _lastPresentationReport;
+    private Guid _lastPresentationSupportId;
+    private string? _lastInventorySignature;
+    private long _lastInventoryCaptureTime;
+
+    // Reuse the normal version check; reporting never starts another network check.
+    private async Task ReportCheckedInventoryAsync()
+    {
+        var capture = ReportingService.BeginInventoryCapture();
+        if (capture is null || _windowClosed) return;
+        try
+        {
+            var components = new[] { ReportingInventoryComponent.Euroscope, ReportingInventoryComponent.Gng,
+                ReportingInventoryComponent.Trackaudio, ReportingInventoryComponent.Vacs, ReportingInventoryComponent.Vatis,
+                ReportingInventoryComponent.Vatefs };
+            var observations = components.Select((component, index) =>
+            {
+                var row = _results[index];
+                var raw = index < 2 ? row.ObservedLocalVersion : row.SoftwareUpdate?.InstalledVersion;
+                // A missing configuration or an unsuccessful inspection cannot establish absence.
+                if (index >= 2 && string.IsNullOrWhiteSpace(raw)) raw = null;
+                var version = ReportingEvents.PublicVersion(raw);
+                var status = version is not null ? ReportingInventoryStatus.Known :
+                    raw is not null ? ReportingInventoryStatus.Unknown : ReportingInventoryStatus.Unavailable;
+                return new ReportingAppObservation(component, status, version);
+            }).ToArray();
+            var dataFolder = _settings.EuroscopeDataPath;
+            var executableFolder = string.IsNullOrWhiteSpace(_settings.EuroscopeExePath) ? null : Path.GetDirectoryName(_settings.EuroscopeExePath);
+            // The comparison key stays in memory. Paths are never passed to the reporting transport.
+            var signature = capture.SupportId + "|" + capture.Generation + "|" + dataFolder + "|" + executableFolder + "|" +
+                string.Join("|", observations.Select(item => $"{item.Component}:{item.Status}:{item.Version}"));
+            if (signature == _lastInventorySignature && Stopwatch.GetElapsedTime(_lastInventoryCaptureTime) < TimeSpan.FromMinutes(10)) return;
+            var items = await Task.Run(() => ReportingInventoryCollector.Collect(observations, dataFolder, executableFolder));
+            if (_windowClosed) return;
+            if (ReportingService.RecordInventory(capture, items))
+            { _lastInventorySignature = signature; _lastInventoryCaptureTime = Stopwatch.GetTimestamp(); }
+        }
+        catch (Exception)
+        {
+            // Optional reporting must not affect checks or surface local paths through diagnostics.
+        }
+    }
+
+    private void ReportPresentationPreferences()
+    {
+        var state = ReportingService.State;
+        if (!state.Preferences.Confirmed || !state.Preferences.Usage) return;
+        var details = new ReportingDetails
+        {
+            Application = ReportingApplication.Launchpad,
+            CompactLayout = _settings.CompactLayout,
+            TextScale = _settings.TextScale >= 1.5 ? ReportingTextScale.Largest :
+                _settings.TextScale >= 1.25 ? ReportingTextScale.Larger : ReportingTextScale.Standard,
+            AlwaysOnTop = _settings.AlwaysOnTop,
+            Theme = _settings.IsDarkMode ? ReportingTheme.Dark : ReportingTheme.Light
+        };
+        if (_lastPresentationSupportId == state.SupportId && details == _lastPresentationReport) return;
+        if (ReportingService.RecordUsage(ReportingEventName.PreferencesSnapshot, details))
+        { _lastPresentationReport = details; _lastPresentationSupportId = state.SupportId; }
+    }
+
+    private void ReportSoftwareFailure(SoftwareApp application, Exception exception) => ReportingEvents.RecordFailure(exception,
+        Enum.TryParse<ReportingApplication>(application.ToString(), true, out var value) ? value : ReportingApplication.Launchpad,
+        ReportingOperation.Update);
+
+    private void ReportSelfUpdateFailure(Exception exception) => ReportingEvents.RecordFailure(exception, ReportingApplication.Launchpad, ReportingOperation.Update);
+
+    private bool CanOpenReporting() => !_windowClosed && !_isChecking && !_softwareActionBusy && !_softwareUpdates.IsBusy &&
+        !_selfUpdateActionBusy && _openDialogCount == 0 && IsEnabled;
+
+    private void OfferReportingChoices()
+    {
+        if (!ReportingService.State.Preferences.Confirmed && ReportingService.State.StorageAvailable)
+            ShowOwnedDialog(new ReportingPreferencesWindow(firstRun: true) { Owner = this });
+    }
+
+    private void Help_Click(object sender, RoutedEventArgs e)
+    {
+        if (!CanOpenReporting() || sender is not Button button) return;
+        var menu = new ContextMenu { PlacementTarget = button, Placement = PlacementMode.Bottom };
+        var report = new MenuItem { Header = "Report a problem…" };
+        report.Click += (_, _) => OpenProblemReport(ReportingApplication.Launchpad);
+        var privacy = new MenuItem { Header = "Privacy and support ID…" };
+        privacy.Click += (_, _) =>
+        {
+            if (CanOpenReporting()) ShowOwnedDialog(new ReportingPreferencesWindow { Owner = this });
+        };
+        menu.Items.Add(report); menu.Items.Add(privacy); menu.IsOpen = true;
+    }
+
+    private void ReportProblem_Click(object sender, RoutedEventArgs e)
+    {
+        var name = (sender as FrameworkElement)?.DataContext is CheckResult result ? result.AppName : "";
+        OpenProblemReport(ReportingApplicationFor(name));
+    }
+
+    private void OpenProblemReport(ReportingApplication application, ReportingCategory category = ReportingCategory.Other)
+    {
+        if (CanOpenReporting()) ShowOwnedDialog(new ReportProblemWindow(application, category) { Owner = this });
+    }
+
+    internal static ReportingApplication ReportingApplicationFor(string? name) => name switch
+    {
+        "EuroScope" => ReportingApplication.Euroscope,
+        "EuroScope (GNG Pack)" or "Swedish GNG" => ReportingApplication.Gng,
+        "TrackAudio" => ReportingApplication.Trackaudio,
+        "VACS" => ReportingApplication.Vacs,
+        "vATIS" => ReportingApplication.Vatis,
+        "VatEFS" => ReportingApplication.Vatefs,
+        "VATIRIS" => ReportingApplication.Vatiris,
+        "Selected applications and data" => ReportingApplication.Maintenance,
+        _ => ReportingApplication.Launchpad
+    };
+}

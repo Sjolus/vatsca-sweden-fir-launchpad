@@ -92,6 +92,7 @@ public partial class FreshSoftwareInstallWindow : Window
         if (_processBlockingReason != null) return;
         var plan = _plan; _cancellation = new();
         SetBusy(true, "Preparing the reviewed installation…");
+        ReportingEvents.Start(ReportingEvents.ForSoftware(_app), ReportingOperation.Install);
         try
         {
             var progress = new Progress<FreshSoftwareInstallProgress>(p =>
@@ -119,6 +120,7 @@ public partial class FreshSoftwareInstallWindow : Window
         }
         catch (Exception ex)
         {
+            ReportingEvents.RecordFailure(ex, ReportingEvents.ForSoftware(_app), ReportingOperation.Install);
             ActivityHistoryService.Record(ActivityHistoryService.ForSoftware(_app), ActivityOperation.Install,
                 ActivityOutcome.Stopped, plan.Release.Version, _service.LastBackupFolder, restartRequired: _service.RestartRequired);
             StatusText.Text = "Installation stopped: " + ex.Message + BackupNotice();

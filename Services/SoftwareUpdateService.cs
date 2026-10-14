@@ -56,6 +56,7 @@ public sealed class SoftwareUpdateService
     }
 
     public event Action<SoftwareUpdateState>? StateChanged;
+    public event Action<SoftwareApp, Exception>? FailureObserved;
     public bool IsBusy => _gate.CurrentCount == 0;
     public bool RestartRequired => _installer.RestartRequired;
     public bool CanCancel { get { lock (_sync) return _activeCancellation != null && !_installing; } }
@@ -179,7 +180,7 @@ public sealed class SoftwareUpdateService
                 if (!updated.CanUpdate || Compare(updated.Version, release.Version) != 0)
                     throw new InvalidDataException("The installed version could not be confirmed. The settings backup has been retained.");
                 if (_installer.IsRunning(updated))
-                    throw new InvalidOperationException("The installer unexpectedly started the application. Its process has been left untouched.");
+                    throw new SoftwareInstallBehaviorException("The installer unexpectedly started the application. Its process has been left untouched.");
                 return SetState(GetState(app) with { Phase = SoftwareUpdatePhase.Completed,
                     Message = "Update installed. The application remains closed." + (RestartRequired ? " Restart Windows before further changes." : ""), Installation = updated, ProgressPercent = null });
             }
@@ -335,14 +336,20 @@ public sealed class SoftwareUpdateService
 
     private void UpdateMessage(SoftwareApp app, string message) => SetState(GetState(app) with { Message = message });
 
-    private SoftwareUpdateState Fail(SoftwareApp app, Exception ex) => SetState(GetState(app) with
+    private SoftwareUpdateState Fail(SoftwareApp app, Exception ex)
     {
-        Phase = SoftwareUpdatePhase.Error,
-        Message = ex.Message + (RestartRequired ? " Restart Windows before further changes." : " Check again before retrying.")
-            + (GetState(app).BackupFolder is { } backup ? " Settings backup: " + backup : ""),
-        Release = null,
-        ProgressPercent = null
-    });
+        if (FailureObserved is { } observers)
+            foreach (Action<SoftwareApp, Exception> observer in observers.GetInvocationList())
+                try { observer(app, ex); } catch { }
+        return SetState(GetState(app) with
+        {
+            Phase = SoftwareUpdatePhase.Error,
+            Message = ex.Message + (RestartRequired ? " Restart Windows before further changes." : " Check again before retrying.")
+                + (GetState(app).BackupFolder is { } backup ? " Settings backup: " + backup : ""),
+            Release = null,
+            ProgressPercent = null
+        });
+    }
 
     private SoftwareUpdateState SetState(SoftwareUpdateState state)
     {

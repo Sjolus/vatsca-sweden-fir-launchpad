@@ -44,12 +44,15 @@ Removing Launchpad deletes its managed installation, bundled .NET, self-update p
 | Saved credentials | Launchpad's VATSIM password and Hoppie code in Windows Credential Manager. Credentials are not exported. |
 | Cached downloads | Known software installer, update and prerequisite downloads in `%LOCALAPPDATA%\VatscaUpdateChecker`, including `Gng\Downloads`. GNG installation history and its retained ZIPs stay. The review lists the exact folders. |
 | Existing recovery backups | `SoftwareUpdates\Backups`, `SoftwareUpdates\VatEfsRecovery`, `Gng\Installations` (history, original ZIPs and installation backups) and `CleanupBackups` under the same Local AppData folder. |
+| Support ID and reporting | `%LOCALAPPDATA%\VatscaUpdateChecker\Reporting`: support ID, reporting choices and unsent reports. Separate from preferences and logs. |
 
 Unselected data remains available for a reinstall. Downloads saved through your normal browser, standalone copies, signing certificates and external recovery exports remain. Deleting GNG recovery history removes Launchpad's ability to restore those installations or automatically supply their original ZIPs for cleanup. Velopack logs and temporary maintenance helpers may also remain for normal temporary-file cleanup.
 
 Deleting saved credentials does not remove copies already written to ATC profiles or recovery backups.
 
 Deleting Activity history removes its list of outcomes and recovery links, not the backups themselves. **Existing recovery backups** is a separate destructive choice.
+
+**Reset support ID and reporting** makes Launchpad ask for reporting choices on its next launch. Already submitted reports remain on the service until their retention period ends. A recovery export includes the old reporting data; restoring it restores the old ID and choices too. To change only the ID or clear unsent reports while keeping your choices, use **Help → Privacy and support ID…** instead.
 
 ## If removal fails
 
