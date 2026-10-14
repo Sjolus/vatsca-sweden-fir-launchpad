@@ -76,7 +76,12 @@ public static class UpdateChecker
     // -------------------------------------------------------------------------
     // EuroScope / GNG Pack
     // -------------------------------------------------------------------------
-    public static async Task CheckGng(CheckResult result, string euroscopeDataPath)
+    public static Task CheckGng(CheckResult result, string euroscopeDataPath) =>
+        CheckGng(result, euroscopeDataPath,
+            () => Http.GetStringAsync("https://files.aero-nav.com/ESAA"), GngUpdateService.RequireNoPendingUpdate);
+
+    internal static async Task CheckGng(CheckResult result, string euroscopeDataPath,
+        Func<Task<string>> fetchPackagePage, Action<string> requireNoPendingUpdate)
     {
         result.ObservedLocalVersion = null;
         result.InstalledVersion = "—";
@@ -99,7 +104,7 @@ public static class UpdateChecker
             }
 
             // A new sector filename alone cannot establish a completed installation.
-            GngUpdateService.RequireNoPendingUpdate(euroscopeDataPath);
+            requireNoPendingUpdate(euroscopeDataPath);
 
             // Find the most recent ESAA-Sweden_*.sct file (filename contains timestamp so alpha sort = time sort)
             var sctFiles = Directory.GetFiles(euroscopeDataPath, "ESAA-Sweden_*.sct");
@@ -132,7 +137,8 @@ public static class UpdateChecker
             result.ObservedLocalVersion = result.InstalledVersion;
 
             // Scrape aero-nav.com — table is visible without login
-            var html = await Http.GetStringAsync("https://files.aero-nav.com/ESAA").ConfigureAwait(false);
+            // This result is UI-bound; its property observers must run on the caller's context.
+            var html = await fetchPackagePage();
 
             // Row: <td>ES</td><td>ESAA Update_Only</td><td>2603 / 01</td><td>1</td>
             var rowMatch = Regex.Match(html, @"ESAA Update_Only</td><td>([^<]+)</td><td>(\d+)</td>");
@@ -178,7 +184,11 @@ public static class UpdateChecker
     // -------------------------------------------------------------------------
     // GitHub-hosted applications
     // -------------------------------------------------------------------------
-    public static async Task CheckGitHub(CheckResult result, string exePath, string githubRepo, bool skipPreRelease = false)
+    public static Task CheckGitHub(CheckResult result, string exePath, string githubRepo, bool skipPreRelease = false) =>
+        CheckGitHub(result, exePath, githubRepo, () => FetchLatestTag(githubRepo, skipPreRelease));
+
+    internal static async Task CheckGitHub(CheckResult result, string exePath, string githubRepo,
+        Func<Task<string?>> fetchLatestTag)
     {
         result.InstalledVersion = "—";
         result.LatestVersion = "—";
@@ -205,7 +215,8 @@ public static class UpdateChecker
             result.InstalledVersion = localSemVer is not null ? $"v{localSemVer}" : rawLocal;
 
             // Try /releases/latest first; some repos only have pre-releases so fall back to /releases
-            var tagName   = await FetchLatestTag(githubRepo, skipPreRelease).ConfigureAwait(false);
+            // Keep both success and failure notifications on the caller's UI context.
+            var tagName   = await fetchLatestTag();
             var remoteUrl = $"https://github.com/{githubRepo}/releases/latest";
 
             if (tagName is null)
