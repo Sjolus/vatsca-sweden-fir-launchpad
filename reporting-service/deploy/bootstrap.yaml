@@ -34,7 +34,7 @@ spec:
   source:
     repoURL: https://github.com/Sjolus/vatsca-sweden-fir-launchpad.git
     targetRevision: main
-    path: reporting-service/deploy/production
+    path: reporting-service/deploy/enrollment
   destination:
     server: https://kubernetes.default.svc
     namespace: launchpad-reporting

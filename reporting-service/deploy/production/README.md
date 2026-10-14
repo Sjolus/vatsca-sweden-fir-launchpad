@@ -30,9 +30,12 @@ content and client addresses.
 
 The HTTPS router suppresses access logs, tracing and metrics for allowed and
 unknown paths. Health, readiness and metrics stay off the public route. The shared
-HTTP redirect and certificate store remain unchanged. Public intake is initially
-excluded so only privacy information and passkey enrollment are available. Open
-the four exact intake paths after storage, backup, routing and enrollment checks.
+HTTP redirect and certificate store remain unchanged. The bootstrap starts with
+the sibling `enrollment` overlay, which excludes public intake. After storage,
+backup, routing and enrollment checks, change the ArgoCD source path to
+`reporting-service/deploy/production` and sync the reviewed revision. Production
+opens only the four exact intake paths. Return to the enrollment overlay before
+an offline restore or other maintenance that requires intake to remain closed.
 
 No trusted proxy ranges are assumed: forwarded addresses are ignored and the
 service's conservative source limit is shared by proxy traffic. Add a narrowly

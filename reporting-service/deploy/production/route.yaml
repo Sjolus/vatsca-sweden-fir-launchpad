@@ -19,11 +19,12 @@ spec:
         (Path(`/`) || PathRegexp(`^/privacy(/|/info)?$`)
         || PathRegexp(`^/backoffice(/|/(app[.]js|usage[.]js|style[.]css|logo[.]png|passkey[.]js))?$`)
         || PathRegexp(`^/auth/(session|register-options|register-verify|authenticate-options|authenticate-verify|logout)$`)
+        || PathRegexp(`^/api/v1/(usage/batches|inventory/batches|errors/batches|reports)$`)
         || PathPrefix(`/api/admin/`))
       observability: {accessLogs: false, tracing: false, metrics: false}
       services: [{name: launchpad-reporting, port: 3000}]
     # Cover unknown paths too so requests cannot fall into shared access logs.
-    # Intake is deliberately blocked until owner enrollment and validation.
+    # Internal probes and unrecognised paths always remain unavailable publicly.
     - kind: Rule
       priority: 10
       match: Host(`launchpad.space.sjolus.org`)
