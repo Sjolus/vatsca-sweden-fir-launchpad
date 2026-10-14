@@ -22,6 +22,22 @@ test('detailed DLL inventory is optional, bounded and canonical without changing
   assert.equal(validateEvent(detailed([dll({file_version:'0.0.0.0'})]),'inventory',CLOCK).dll_inventory.entries[0].file_version,'0.0.0.0');
 });
 
+test('DLL registration labels preserve public vendor suffixes without widening application or file versions',()=>{
+  const entry=dll({product:'vatcan_bookings',version:'1.1.6-2022wb',file_version:'1.0.0.1',version_source:'registration'});
+  assert.deepEqual(validateEvent(detailed([entry]),'inventory',CLOCK).dll_inventory.entries[0],entry);
+  assert.equal(validateEvent(detailed([{...entry,product:'arrival_load_balancer',version:'0.2.11T'}]),'inventory',CLOCK).dll_inventory.entries[0].version,'0.2.11T');
+  assert.equal(validateEvent(detailed([dll({version:'2.6-beta.4',version_source:'registration'})]),'inventory',CLOCK).dll_inventory.entries[0].version_source,'registration');
+  for(const version of ['1.1.6-person','1.1.6-2022private','1.1.6-2022wb+private','1.1.6-2022wb\n','1.1.6-2022wb ','1.1.6-2022WB','0.2.11T-private','0.2.11t','0.2.11T\n'])
+    assert.throws(()=>validateEvent(detailed([{...entry,version}]),'inventory',CLOCK),{code:'invalid_request'});
+  assert.throws(()=>validateEvent(detailed([{...entry,file_version:entry.version}]),'inventory',CLOCK),{code:'invalid_request'});
+  assert.throws(()=>validateEvent(detailed([dll({version_source:'registration'})]),'inventory',CLOCK),{code:'invalid_request'});
+  assert.throws(()=>validateEvent(event({package_version:entry.version}),'usage',CLOCK),{code:'invalid_request'});
+  assert.throws(()=>validateEvent(event({package_version:'0.2.11T'}),'usage',CLOCK),{code:'invalid_request'});
+  assert.throws(()=>validateEvent(detailed([{...entry,file_version:'0.2.11T'}]),'inventory',CLOCK),{code:'invalid_request'});
+  const legacy=inventory();legacy.items[0].version=entry.version;legacy.items[0].status='known';
+  assert.throws(()=>validateEvent(legacy,'inventory',CLOCK),{code:'invalid_request'});
+});
+
 test('DLL inventory rejects private fields, ambiguous sources, invalid hashes and inflated bounds',()=>{
   for(const change of [
     {filename:'private.dll'},{path:'C:\\Synthetic\\private.dll'},{product_name:'private product'},{product:'custom'},

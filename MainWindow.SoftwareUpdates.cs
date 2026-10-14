@@ -71,7 +71,9 @@ public partial class MainWindow
         UpdateSelfUpdateActionEnabled();
     }
 
-    private bool CanRunSoftwareAction() => !_setupRestartRequired && !_windowClosed && !_isChecking && !_softwareActionBusy &&
+    private bool CanRunSoftwareAction() => !_setupRestartRequired && CanControlRunningApplication();
+
+    private bool CanControlRunningApplication() => !_windowClosed && !_isChecking && !_softwareActionBusy &&
         !_softwareUpdates.IsBusy && !_selfUpdateActionBusy && _openDialogCount == 0 && IsEnabled &&
         !System.Windows.Interop.ComponentDispatcher.IsThreadModal && OwnedWindows.Count == 0 &&
         _launchpadUpdates.State.Status is not (LaunchpadUpdateStatus.Checking or LaunchpadUpdateStatus.Downloading);
@@ -88,6 +90,7 @@ public partial class MainWindow
         MaintenanceButton.IsEnabled = CanRunSoftwareAction() && CanRunSelfUpdateAction();
         SetupButton.IsEnabled = CanRunSoftwareAction() && CanRunSelfUpdateAction();
         ActivityButton.IsEnabled = !_windowClosed && !busy && !_selfUpdateActionBusy && _openDialogCount == 0 && IsEnabled;
+        RefreshBulkActionAvailability();
     }
 
     private async void SoftwareUpdate_Click(object sender, RoutedEventArgs e)

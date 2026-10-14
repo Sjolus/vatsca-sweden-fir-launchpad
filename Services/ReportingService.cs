@@ -12,6 +12,7 @@ public static class ReportingService
     private static ReportingClient? _client;
     private static HttpClient? _http;
     public static ReportingState State => _client?.State ?? new(Guid.Empty, new(), false, 0);
+    public static ReportingHistoryState History => _client?.History ?? new(false, Guid.Empty, new(), Array.Empty<ReportingDelivery>(), 0, 0, 0);
 
     // Called only after Velopack/helper dispatch, on a normal application launch.
     public static void Initialize(string? launchpadVersion = null)
@@ -36,8 +37,10 @@ public static class ReportingService
 
     public static bool TrySavePreferences(bool usage, bool errors) => _client?.TrySavePreferences(usage, errors) == true;
     public static bool TrySavePreferences(bool usage, bool inventory, bool errors) => _client?.TrySavePreferences(usage, inventory, errors) == true;
+    public static bool TrySavePreferences(bool usage, bool inventory, bool errors, bool detailedPlugins) => _client?.TrySavePreferences(usage, inventory, errors, detailedPlugins) == true;
     public static ReportingInventoryCapture? BeginInventoryCapture() => _client?.BeginInventoryCapture();
-    public static bool RecordInventory(ReportingInventoryCapture capture, IReadOnlyList<ReportingInventoryEntry> items) => _client?.RecordInventory(capture, items) == true;
+    public static bool RecordInventory(ReportingInventoryCapture capture, IReadOnlyList<ReportingInventoryEntry> items, ReportingDllInventory? dllInventory = null) =>
+        _client?.RecordInventory(capture, items, dllInventory) == true;
     public static bool TryRegenerateId() => _client?.TryRegenerateId() == true;
     public static bool ClearPending() => _client?.ClearPending() == true;
     public static bool RecordUsage(ReportingEventName name, ReportingDetails? details = null) => _client?.RecordUsage(name, details) == true;

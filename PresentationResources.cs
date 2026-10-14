@@ -12,8 +12,10 @@ internal static class PresentationResources
             resources["TextSize" + size] = size * scale;
         resources["CompactRowHeight"] = 36 + (scale - 1) * 32;
         resources["ExpandedRowHeight"] = Math.Round(56 + (scale - 1) * 42);
-        resources["LaunchColumnWidth"] = new GridLength(82 + (scale - 1) * 36);
+        resources["LaunchColumnWidth"] = new GridLength(118 + (scale - 1) * 48);
         resources["OptionsColumnWidth"] = new GridLength(84 + (scale - 1) * 24);
+        // Match the six column minima so the rightmost actions remain scrollable.
+        resources["ApplicationTableMinWidth"] = 724 + (scale - 1) * 72;
         resources[SystemFonts.MessageFontSizeKey] = 12 * scale;
     }
 }

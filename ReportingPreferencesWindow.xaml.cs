@@ -16,12 +16,14 @@ public partial class ReportingPreferencesWindow : Window
         var preferences = ReportingService.State.Preferences;
         UsageChoice.IsChecked = !preferences.Confirmed || preferences.Usage;
         InventoryChoice.IsChecked = !preferences.Confirmed || preferences.Inventory;
+        DetailedPluginsChoice.IsChecked = preferences.DetailedPlugins || (firstRun && !preferences.Confirmed);
+        DetailedPluginsChoice.IsEnabled = InventoryChoice.IsChecked == true;
         ErrorsChoice.IsChecked = !preferences.Confirmed || preferences.Errors;
         Heading.Text = firstRun ? "Help improve Launchpad" : "Privacy and support";
         DismissButton.Content = firstRun ? "Not now" : "Cancel";
         ChoiceExplanation.Text = preferences.Confirmed
-            ? "Each switch is independent. Save choices applies all three. Changing your support ID or clearing unsent reports takes effect immediately."
-            : "Nothing is sent until you save your choices. Each switch is independent. Uncheck any category to decline, or choose Not now to decide on a later launch.";
+            ? "Usage, versions and errors are separate choices. DLL details require version sharing. Save choices applies these switches. Changing your support ID or clearing unsent reports takes effect immediately."
+            : "Nothing is sent until you save your choices. Uncheck any category or DLL details to decline, or choose Not now to decide on a later launch. DLL details require version sharing.";
         RefreshIdentity();
     }
 
@@ -39,9 +41,15 @@ public partial class ReportingPreferencesWindow : Window
 
     private void Save_Click(object sender, RoutedEventArgs e)
     {
-        if (!ReportingService.TrySavePreferences(UsageChoice.IsChecked == true, InventoryChoice.IsChecked == true, ErrorsChoice.IsChecked == true))
+        if (!ReportingService.TrySavePreferences(UsageChoice.IsChecked == true, InventoryChoice.IsChecked == true, ErrorsChoice.IsChecked == true,
+            InventoryChoice.IsChecked == true && DetailedPluginsChoice.IsChecked == true))
         { Status.Text = "These choices could not be saved. Reporting remains off. Please try again."; return; }
         DialogResult = true;
+    }
+
+    private void InventoryChoice_Changed(object sender, RoutedEventArgs e)
+    {
+        if (DetailedPluginsChoice is not null) DetailedPluginsChoice.IsEnabled = InventoryChoice.IsChecked == true;
     }
 
     private void CopyId_Click(object sender, RoutedEventArgs e)
@@ -57,7 +65,7 @@ public partial class ReportingPreferencesWindow : Window
         if (!settingsHoldsGuard && !MaintenanceLock.TryAcquire(out lease))
         { Status.Text = "Another Launchpad operation is running. Wait for it to finish before changing your support ID."; return; }
         using var guard = lease;
-        if (MessageBox.Show(this, "Future reports will use a new support ID. Unsent reports and local report context will be cleared. " +
+        if (MessageBox.Show(this, "Future reports will use a new support ID. Unsent reports, local report context and saved copies of last sent reports will be cleared. " +
             "Reports already received remain under your old ID until they expire; they will not be linked to your new ID. Your reporting choices stay the same.",
             "Generate a new support ID?", MessageBoxButton.OKCancel, MessageBoxImage.Question, MessageBoxResult.Cancel) != MessageBoxResult.OK) return;
         Status.Text = ReportingService.TryRegenerateId() ? "A new support ID has been created." : "The ID could not be changed. Please try again.";
@@ -75,4 +83,6 @@ public partial class ReportingPreferencesWindow : Window
         try { Process.Start(new ProcessStartInfo("https://launchpad.space.sjolus.org/privacy") { UseShellExecute = true }); }
         catch { Status.Text = "The browser could not open. Privacy details are at launchpad.space.sjolus.org/privacy."; }
     }
+
+    private void History_Click(object sender, RoutedEventArgs e) => new ReportingHistoryWindow { Owner = this }.ShowDialog();
 }

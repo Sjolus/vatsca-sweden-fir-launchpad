@@ -227,15 +227,63 @@ try
             True(!row.RowExplanation.Contains("Details"));
         }
     });
-    Run("running applications offer Show rather than immediate termination", () =>
+    Run("running applications replace launch with paired Show and Close controls", () =>
     {
         var row = Software(SoftwareApp.TrackAudio, SoftwareUpdatePhase.Current);
         Equal("Launch", row.LaunchActionText);
         row.IsRunning = true;
         Equal("Show", row.LaunchActionText);
-        True(row.LaunchTooltip.Contains("Show") && row.LaunchTooltip.Contains("separate action"));
+        True(row.LaunchTooltip.Contains("Show") && row.ShowRunningActions && !row.ShowSimpleLaunch && !row.ShowSplitLaunch);
+        row.ApplicationActionsAllowed = false;
+        True(!row.LaunchEnabled && row.ShowRunningActions);
+        row.ApplicationActionsAllowed = true;
+        row.IsRunning = false;
+        True(!row.ShowRunningActions && row.ShowSimpleLaunch && row.LaunchEnabled);
         var web = new CheckResult { AppName = "VATIRIS", IsWebApp = true };
         Equal("Open", web.LaunchActionText);
+    });
+    Run("restart-required permits running controls but blocks every new application start", () =>
+    {
+        var rows = Enum.GetValues<SoftwareApp>().Select(app => Software(app, SoftwareUpdatePhase.Completed)).ToList();
+        rows.Add(new CheckResult { AppName = "EuroScope", HasEuroScopeManagement = true, LaunchPath = fakeExe });
+        rows.Add(new CheckResult { AppName = "VATIRIS", IsWebApp = true, LaunchPath = "https://example.invalid/" });
+        foreach (var row in rows)
+        {
+            row.ApplicationActionsAllowed = true;
+            row.ApplicationStartsAllowed = false;
+            row.SoftwareActionsAllowed = false;
+            True(!row.LaunchEnabled && !row.ShowRunningActions);
+            var notices = new List<string?>();
+            row.PropertyChanged += (_, args) => notices.Add(args.PropertyName);
+            row.IsRunning = true;
+            True(row.LaunchEnabled && row.ShowRunningActions && !row.ShowSimpleLaunch && !row.ShowSplitLaunch);
+            True(notices.Contains(nameof(CheckResult.LaunchEnabled)));
+            notices.Clear();
+            row.IsRunning = false;
+            True(!row.LaunchEnabled && !row.ShowRunningActions);
+            True(notices.Contains(nameof(CheckResult.LaunchEnabled)));
+            row.ApplicationStartsAllowed = true;
+            row.SoftwareActionsAllowed = true;
+            True(row.LaunchEnabled);
+        }
+    });
+    Run("active work blocks running controls even while restart is required", () =>
+    {
+        var row = Software(SoftwareApp.TrackAudio, SoftwareUpdatePhase.Completed);
+        row.IsRunning = true;
+        row.ApplicationStartsAllowed = false;
+        row.SoftwareActionsAllowed = false;
+        True(row.LaunchEnabled);
+        row.ApplicationActionsAllowed = false;
+        True(!row.LaunchEnabled && row.ShowRunningActions);
+        row.ApplicationActionsAllowed = true;
+        foreach (var phase in new[] { SoftwareUpdatePhase.Checking, SoftwareUpdatePhase.Downloading, SoftwareUpdatePhase.Installing })
+        {
+            row.SoftwareUpdate = row.SoftwareUpdate! with { Phase = phase };
+            True(!row.LaunchEnabled && row.ShowRunningActions);
+        }
+        row.SoftwareUpdate = row.SoftwareUpdate! with { Phase = SoftwareUpdatePhase.Completed };
+        True(row.LaunchEnabled);
     });
     Run("not-used applications retain paths and are neutral without hiding active operations", () =>
     {
@@ -257,7 +305,7 @@ try
         row.LaunchPath = "http://localhost:17770";
         row.IsLocalUrlReachable = false;
         row.IsRunning = true;
-        True(row.ShowSimpleLaunch);
+        True(row.ShowRunningActions && !row.ShowSimpleLaunch);
         Equal("Show", row.LaunchActionText);
     });
     Run("selected launch profile does not claim to change a running EuroScope session", () =>
@@ -268,6 +316,7 @@ try
         Equal("Launch profile: Sweden", row.SelectedProfileCaption);
         row.IsRunning = true;
         Equal("Next launch: Sweden", row.SelectedProfileCaption);
+        True(row.ShowRunningActions && !row.ShowSplitLaunch);
         row.SelectedProfile = new("Observer", null);
         Equal("Next launch: Observer", row.SelectedProfileCaption);
         Equal("Show", row.LaunchActionText);

@@ -2,9 +2,7 @@
 
 A Windows desktop app for [VATSIM Scandinavia](https://vatsca.org) controllers. Check versions, launch configured ATC tools, manage supported installations and apply your controller details to EuroScope profiles.
 
-**Launchpad 2.3.0** adds optional usage, software-version and error reporting, plus problem reports you can preview before sending. A persistent support ID helps the maintainer find your reports without collecting your name or CID.
-
-**2.3.1** fixes GNG update checks getting stuck on Checking and the same problem when a portable Launchpad copy checks its own version.
+**Launchpad 2.4.0** restores visible Show and Close controls, adds reviewed Start all and Close all actions, and lets you inspect your last sent reports. Optional detailed DLL reporting includes plugin versions and separates current copies from staged files.
 
 ![Launchpad's compact application list with TrackAudio selected and its update status shown below](Assets/screenshot.png)
 
@@ -34,7 +32,8 @@ The final page links to relevant VATSCA guides for EuroScope/GNG, TrackAudio and
 ## Everyday use
 
 - **Check for Updates** checks versions. Downloads, installations and application launches require a separate action.
-- Use **Launch** to start a configured tool and **Show** to bring its running window forward. **Details… → Running app…** offers **Close normally** and a separately confirmed **Force stop…**. The EuroScope row shows the selected launch profile.
+- Use **Launch** to start a configured tool. Running rows offer **Show** immediately and **Close…** with confirmation. **Start all…** and **Close all…** let you review and select applications first. Starting skips tools already running or marked Not used; closing sends normal requests so applications can ask you to save or disconnect. The EuroScope row shows the selected launch profile.
+- **Details… → Running app… → Force stop…** remains a separate, confirmed action for an unresponsive application.
 - Choose **Details…** beside an application for its explanation, update, setup and configuration actions. The panel names the selected application; long messages can be scrolled and copied.
 - **Compact** keeps equal-height rows with details below. **Expanded** adds a short explanation to every row. Text size is a separate setting, and the details panel can be resized or expanded for longer messages.
 - **Pin** keeps Launchpad on top. Its window size, position, monitor and maximized state are remembered.
@@ -93,7 +92,13 @@ Reporting has three independent choices: **usage statistics**, **software and pl
 
 The random support ID stays the same across updates. Usage covers Launchpad sessions and version, feature use, application launch actions and display preferences; it does not measure time spent controlling or network activity. Optional inventory covers configured ATC application versions, GNG revision and recognised EuroScope plugins. Plugin presence does not establish that it is enabled or running, and missing version metadata stays unknown. Errors contain fixed technical categories and include application-version context only when version sharing is enabled.
 
-Reports exclude names, CID, credentials, file paths, profile contents and browser sign-ins. Plugin collection reads metadata without loading DLLs; neither DLL contents nor arbitrary filenames are uploaded. Changing the support ID clears queued reports and local context; already received reports remain under the old ID until they expire.
+Reports exclude names, CID, credentials, file paths, profile contents and browser sign-ins. Plugin collection reads metadata without loading DLLs; neither DLL contents nor arbitrary filenames are uploaded. Changing the support ID clears queued reports, saved sent copies and local context; already received reports remain under the old ID until they expire.
+
+**Detailed DLL inventory** is an additional choice under software inventory. It includes every DLL found within the bounded scan of your configured plugin folders, including unrecognized DLLs. It shares recognized product names, versions, file fingerprints and copy counts; filenames, paths and file contents stay on your PC. Existing reporting choices do not enable this extra option. It is selected initially on the first consent prompt, but nothing is sent until **Save choices**. Current and staged copies are shown separately, and incomplete scans are marked.
+
+Where supported, Launchpad reads the version a DLL is built to register with EuroScope. Otherwise it uses the DLL's version metadata or a recognised embedded release label. The Windows file version is shown separately; it can differ from the plugin version and from the GNG or installer release. Files without a readable version remain **Version unknown**. Unidentified DLLs still appear by fingerprint. **Not detected** means a known plugin was not found in the checked locations; **Unavailable** means those locations could not be reliably inspected. VatEFS uses its configured plugin folder when one is selected. This inspection does not run the DLL or establish that EuroScope has loaded it.
+
+**Help → Last sent reports…** shows the most recent confirmed send for each reporting type, including manually submitted problem reports. Read the contents in plain language or expand the exact JSON. Confirmation times and records awaiting confirmation are shown separately. These local copies start with this feature; earlier sends are not available here. Launchpad keeps one copy per type within its bounded reporting storage. Turning sharing off retains those past copies; generating a new support ID removes them. Refresh reads local storage without sending anything.
 
 **Help → Report a problem…** works independently of background reporting. Choose the application and problem category, review the exact information, then send or save it locally. There are no contact fields, free-text descriptions or attachments. Keep the returned reference if you want to discuss the report with the maintainer. Reporting uses `launchpad.space.sjolus.org`; see its [privacy details](https://launchpad.space.sjolus.org/privacy) for storage and retention.
 
@@ -103,7 +108,7 @@ Reports exclude names, CID, credentials, file paths, profile contents and browse
 | `%APPDATA%\VatscaUpdateChecker` | Preferences, controller identity fields, logs and dedicated VatEFS/VATIRIS browser profiles |
 | `%LOCALAPPDATA%\VatscaUpdateChecker` | Downloaded packages, recovery backups and the dedicated AeroNav browser session |
 | Windows Credential Manager | Launchpad's saved VATSIM password and Hoppie code |
-| `%LOCALAPPDATA%\VatscaUpdateChecker\Reporting` | Reporting choices, random support ID and bounded unsent automatic reports |
+| `%LOCALAPPDATA%\VatscaUpdateChecker\Reporting` | Reporting choices, random support ID, bounded pending automatic reports and the latest confirmed copy of each report type |
 
 Profile sync writes the password and Hoppie code into the external tools' text files. Those files and recovery exports can contain plain-text credentials; keep them private. **Delete saved credentials** removes only Launchpad's two Credential Manager entries, not copies in profiles or backups. Credential Manager secrets are not exported.
 

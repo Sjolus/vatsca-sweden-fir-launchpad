@@ -151,6 +151,7 @@ public partial class MainWindow : Window
             }
             result.IsRunning = ApplicationProcessControl.Find(result.LaunchPath).Count > 0;
         }
+        RefreshBulkActionAvailability();
     }
 
     private static void UpdateLocalUrlReachability(CheckResult result, IPEndPoint[] listeners)
@@ -517,7 +518,7 @@ public partial class MainWindow : Window
 
     private void Launch_Click(object sender, RoutedEventArgs e)
     {
-        if (!TryAcquireMaintenanceGuard(out var lease)) return;
+        if (!CanRunSoftwareAction() || !TryAcquireMaintenanceGuard(out var lease)) return;
         using var guard = lease;
         if (sender is not FrameworkElement { DataContext: CheckResult result }) return;
         if (!result.LaunchEnabled || result.HasSoftwareUpdate && (_softwareActionBusy || _softwareUpdates.IsBusy)) return;
@@ -529,67 +530,21 @@ public partial class MainWindow : Window
                 Process.Start("explorer.exe", result.LaunchPath);
                 Logger.Log("LAUNCH", $"{result.AppName}: opened folder {result.LaunchPath}");
             }
-            else if (result.IsWebApp)
-            {
-                if (result.IsRunning)
-                {
-                    ShowRunningApplication(result);
-                }
-                else
-                {
-                    const string edgePath = @"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe";
-                    var profileDir = Path.Combine(AppDataDir, $"{result.AppName}Profile");
-                    var proc = Process.Start(new ProcessStartInfo
-                    {
-                        FileName        = edgePath,
-                        Arguments       = $"--app={result.LaunchPath} --user-data-dir=\"{profileDir}\"",
-                        UseShellExecute = false,
-                    });
-                    if (proc != null)
-                    {
-                        ReportingService.RecordUsage(ReportingEventName.ApplicationOpened,
-                            new ReportingDetails { Application = ReportingApplicationFor(result.AppName), Operation = ReportingOperation.Launch });
-                        RememberBrowser(result.AppName, proc);
-                        result.IsRunning = IsWebAppRunning(result.AppName);
-                    }
-                    Logger.Log("LAUNCH", $"{result.AppName}: launched as web app (pid={proc?.Id}, url={result.LaunchPath})");
-                }
-            }
-            else if (result.IsRunning)
+            else if (RunningCopies(result).Count > 0)
             {
                 ShowRunningApplication(result);
             }
-            else if (result.HasEuroScopeManagement)
-            {
-                // EuroScope resolves relative resources against its shortcut's Start in folder.
-                // Set it explicitly for both a selected profile and the no-profile launch.
-                var start = EuroScopeLaunchService.CreateStartInfo(
-                    result.LaunchPath, _settings.EuroscopeDataPath, result.SelectedProfile?.FilePath);
-                GngUpdateService.RequireNoPendingUpdate(start.WorkingDirectory);
-                Process.Start(start);
-                ReportingService.RecordUsage(ReportingEventName.ApplicationOpened,
-                    new ReportingDetails { Application = ReportingApplication.Euroscope, Operation = ReportingOperation.Launch });
-                Logger.Log("LAUNCH", $"{result.AppName}: launched (profile={result.SelectedProfile?.FilePath ?? "none"}, working directory={start.WorkingDirectory})");
-            }
             else
             {
-                // Launch via explorer.exe so the process starts outside our job object context,
-                // exactly as a double-click would. Required for Electron apps (TrackAudio) whose
-                // Chromium renderer/GPU child processes break under inherited job restrictions.
-                Process.Start(new ProcessStartInfo
-                {
-                    FileName        = "explorer.exe",
-                    Arguments       = $"\"{result.LaunchPath}\"",
-                    UseShellExecute = false,
-                });
-                Logger.Log("LAUNCH", $"{result.AppName}: launched via explorer.exe ({result.LaunchPath})");
-                ReportingService.RecordUsage(ReportingEventName.ApplicationOpened,
-                    new ReportingDetails { Application = ReportingApplicationFor(result.AppName), Operation = ReportingOperation.Launch });
+                if (!StartApplicationCore(ApplicationTarget(result)))
+                    throw new InvalidOperationException("The application did not accept the start request.");
+                result.StatusMessage = "Start requested.";
             }
+            UpdateRunningStates();
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Could not launch {result.AppName}:\n\n{ex.Message}",
+            MessageBox.Show(this, $"Could not launch {result.AppName}:\n\n{ex.Message}",
                 "Launch failed", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }

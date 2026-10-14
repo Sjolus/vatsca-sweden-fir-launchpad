@@ -12,16 +12,21 @@ public partial class ReportingPreferencesWindow : Window
         UiFixture.Initialize(this);
         Heading.Text = UiFixture.Blank ? "Help improve Launchpad" : "Privacy and support";
         UsageChoice.IsChecked = InventoryChoice.IsChecked = ErrorsChoice.IsChecked = UiFixture.Blank;
+        DetailedPluginsChoice.IsChecked = UiFixture.Blank;
+        DetailedPluginsChoice.IsEnabled = InventoryChoice.IsChecked == true;
         SupportIdText.Text = "90b0d09c-3ef9-4d13-8838-ddbe38e25c24";
-        ChoiceExplanation.Text = "Nothing is sent until you save your choices. Each switch is independent. Uncheck any category to decline, or choose Not now to decide on a later launch.";
+        ChoiceExplanation.Text = "Nothing is sent until you save your choices. Uncheck any category or DLL details to decline, or choose Not now to decide on a later launch. DLL details require version sharing.";
         PendingText.Text = "20 unsent automatic reports. Clearing them keeps your ID and reporting choices.";
         Status.Text = UiFixture.Blank ? "" : "Reporting data could not be saved. Reporting remains off; Launchpad can still be used.";
     }
     private void Save_Click(object sender, RoutedEventArgs e) { }
+    private void InventoryChoice_Changed(object sender, RoutedEventArgs e)
+    { if (DetailedPluginsChoice is not null) DetailedPluginsChoice.IsEnabled = InventoryChoice.IsChecked == true; }
     private void CopyId_Click(object sender, RoutedEventArgs e) { }
     private void ResetId_Click(object sender, RoutedEventArgs e) { }
     private void ClearPending_Click(object sender, RoutedEventArgs e) { }
     private void Privacy_Click(object sender, RoutedEventArgs e) { }
+    private void History_Click(object sender, RoutedEventArgs e) { }
 }
 
 public partial class ReportProblemWindow : Window

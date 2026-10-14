@@ -80,8 +80,7 @@ public partial class ReportProblemWindow : Window
             var result = await ReportingService.SendReportAsync(_draft, _lifetime.Token);
             if (_closed) return;
             _sent = result.Succeeded; _reference = result.Reference;
-            Status.Text = result.Succeeded ? "Report received. Reference: " + result.Reference
-                : result.Message + " You can retry or save this report locally.";
+            Status.Text = result.Succeeded ? result.Message + " Reference: " + result.Reference : result.Message;
             CopyReferenceButton.Visibility = result.Succeeded ? Visibility.Visible : Visibility.Collapsed;
             ReferenceText.Text = result.Reference ?? "";
             ReferenceText.Visibility = result.Succeeded ? Visibility.Visible : Visibility.Collapsed;

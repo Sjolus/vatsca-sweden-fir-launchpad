@@ -179,6 +179,8 @@ test('all-DLL view shows fingerprints, both version sources and locations withou
   assert.ok(inventory.children.indexOf(panel)<inventory.children.indexOf(legacy),'all DLLs precede the legacy component summary');
   data.inventory.dll_inventory.rows[0].version_source='resource';
   assert.match(render.renderInventory(data).text,/Windows version resource/);
+  Object.assign(data.inventory.dll_inventory.rows[0],{product:'vatcan_bookings',version:'1.1.6-2022wb',file_version:'1.0.0.1',version_source:'registration'});
+  assert.match(render.renderInventory(data).text,/VATCAN Bookings.*1\.1\.6-2022wb EuroScope plugin registration File version: 1\.0\.0\.1/);
   assertFiniteChart(inventory);
 });
 

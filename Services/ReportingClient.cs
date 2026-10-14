@@ -4,7 +4,6 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using VatscaUpdateChecker.Models;
 
 namespace VatscaUpdateChecker.Services;
@@ -56,20 +55,50 @@ internal sealed class ReportingClient : IDisposable
         }
     }
 
+    internal ReportingHistoryState History
+    {
+        get
+        {
+            Observe();
+            lock (_gate)
+            {
+                if (_disposed || !_storageAvailable || _preferenceWriteFailed || _observed is null)
+                    return new(false, Guid.Empty, new(), Array.Empty<ReportingDelivery>(), 0, 0, 0);
+                var pending = Live(_observed.Pending).ToArray();
+                return new(true, _observed.SupportId, _observed.Preferences,
+                    Array.AsReadOnly((_observed.LastSent ?? []).OrderBy(receipt => receipt.Stream).ToArray()),
+                    pending.Count(entry => ReportingHistoryValidation.Stream(entry.EventName) == ReportingStream.Usage),
+                    pending.Count(entry => ReportingHistoryValidation.Stream(entry.EventName) == ReportingStream.Inventory),
+                    pending.Count(entry => ReportingHistoryValidation.Stream(entry.EventName) == ReportingStream.Errors));
+            }
+        }
+    }
+
     internal bool TrySavePreferences(bool usage, bool errors) => TrySavePreferences(usage, State.Preferences.Inventory, errors);
 
-    internal bool TrySavePreferences(bool usage, bool inventory, bool errors)
+    internal bool TrySavePreferences(bool usage, bool inventory, bool errors) => SavePreferences(usage, inventory, errors, null);
+
+    internal bool TrySavePreferences(bool usage, bool inventory, bool errors, bool detailedPlugins) => SavePreferences(usage, inventory, errors, detailedPlugins);
+
+    private bool SavePreferences(bool usage, bool inventory, bool errors, bool? detailedPlugins)
     {
         CancelRequests();
-        bool saved = _store.Change(document => document with
+        bool saved = _store.Change(document =>
         {
-            Generation = Guid.NewGuid(), Preferences = new(true, usage, errors, inventory),
-            Pending = document.Pending.Where(entry => ReportingWire.Allowed(new(true, usage, errors, inventory), entry.EventName))
-                .Where(entry => inventory || !ReportingWire.HasVersions(entry)).ToList(),
-            UsageNotBefore = usage ? document.UsageNotBefore : null,
-            ErrorsNotBefore = errors ? document.ErrorsNotBefore : null,
-            UsageAttempts = usage ? document.UsageAttempts : 0, ErrorAttempts = errors ? document.ErrorAttempts : 0,
-            InventoryNotBefore = inventory ? document.InventoryNotBefore : null, InventoryAttempts = inventory ? document.InventoryAttempts : 0
+            var preferences = new ReportingPreferences(true, usage, errors, inventory,
+                inventory && (detailedPlugins ?? document.Preferences.DetailedPlugins));
+            return document with
+            {
+                Generation = Guid.NewGuid(), Preferences = preferences,
+                Pending = document.Pending.Where(entry => ReportingWire.Allowed(preferences, entry.EventName))
+                    .Where(entry => inventory || !ReportingWire.HasVersions(entry))
+                    // An event may already have reached the server. Drop the whole event rather than changing its payload under the same ID.
+                    .Where(entry => preferences.DetailedPlugins || entry.DllInventory is null).ToList(),
+                UsageNotBefore = usage ? document.UsageNotBefore : null,
+                ErrorsNotBefore = errors ? document.ErrorsNotBefore : null,
+                UsageAttempts = usage ? document.UsageAttempts : 0, ErrorAttempts = errors ? document.ErrorAttempts : 0,
+                InventoryNotBefore = inventory ? document.InventoryNotBefore : null, InventoryAttempts = inventory ? document.InventoryAttempts : 0
+            };
         }, out var current);
         lock (_gate) _preferenceWriteFailed = !saved;
         AcceptObservation(saved, current);
@@ -82,7 +111,7 @@ internal sealed class ReportingClient : IDisposable
         CancelRequests();
         bool saved = _store.Change(document => document with
         {
-            SupportId = Guid.NewGuid(), Generation = Guid.NewGuid(), Pending = [],
+            SupportId = Guid.NewGuid(), Generation = Guid.NewGuid(), Pending = [], LastSent = [],
             UsageNotBefore = null, ErrorsNotBefore = null, UsageAttempts = 0, ErrorAttempts = 0, InventoryNotBefore = null, InventoryAttempts = 0
         }, out var current);
         if (!saved) { lock (_gate) _preferenceWriteFailed = true; }
@@ -113,13 +142,21 @@ internal sealed class ReportingClient : IDisposable
         if (!Observe()) return null;
         lock (_gate) return !_disposed && !_fatal && !_preferenceWriteFailed && _observed is not null &&
             ReportingWire.Allowed(_observed.Preferences, ReportingEventName.InventorySnapshot)
-            ? new(_observed.SupportId, _observed.Generation, _now()) : null;
+            ? new(_observed.SupportId, _observed.Generation, _now(), _observed.Preferences.DetailedPlugins) : null;
     }
 
-    internal bool RecordInventory(ReportingInventoryCapture capture, IReadOnlyList<ReportingInventoryEntry> items)
+    internal bool RecordInventory(ReportingInventoryCapture capture, IReadOnlyList<ReportingInventoryEntry> items, ReportingDllInventory? dllInventory = null)
     {
-        if (capture is null || items is null || !ReportingWire.ValidInventory(items)) return false;
-        return Record(ReportingEventName.InventorySnapshot, new(), capture, items.OrderBy(item => item.Component).ToArray());
+        if (capture is null || items is not { Count: 10 } || (dllInventory is not null && !capture.IncludeDllInventory)) return false;
+        var snapshot = items.ToArray();
+        if (dllInventory is not null)
+        {
+            if (dllInventory.Entries is not { Count: <= ReportingWire.MaximumDllEntries }) return false;
+            dllInventory = dllInventory with { Entries = Array.AsReadOnly(dllInventory.Entries.ToArray()) };
+            if (!ReportingWire.ValidDllInventory(dllInventory)) return false;
+        }
+        if (!ReportingWire.ValidInventory(snapshot)) return false;
+        return Record(ReportingEventName.InventorySnapshot, new(), capture, snapshot.OrderBy(item => item.Component).ToArray(), dllInventory);
     }
 
     internal bool RecordError(ReportingErrorCode code, ReportingDetails? details = null, bool fatal = false)
@@ -130,7 +167,7 @@ internal sealed class ReportingClient : IDisposable
     }
 
     private bool Record(ReportingEventName name, ReportingDetails details, ReportingInventoryCapture? capture = null,
-        IReadOnlyList<ReportingInventoryEntry>? items = null)
+        IReadOnlyList<ReportingInventoryEntry>? items = null, ReportingDllInventory? dllInventory = null)
     {
         if (!Enum.IsDefined(name) || !ReportingWire.ValidDetails(details) ||
             (!ReportingWire.IsError(name) && details.ErrorCode is not null)) return false;
@@ -144,12 +181,13 @@ internal sealed class ReportingClient : IDisposable
             generation = _observed.Generation;
             if (capture is not null && (capture.Generation != generation || capture.SupportId != _observed.SupportId ||
                 capture.StartedAt < _now().AddMinutes(-5) || capture.StartedAt > _now().AddSeconds(5))) return false;
+            if (dllInventory is not null && (!_observed.Preferences.Inventory || !_observed.Preferences.DetailedPlugins)) return false;
             if (!_observed.Preferences.Inventory) details = details with { PackageVersion = null, PreviousVersion = null };
             entry = new(Guid.NewGuid(), _observed.SupportId, _session, capture?.StartedAt ?? _now(), _version, name,
                 details.OperationId, details.Application, details.Operation, details.Outcome, details.Stage,
                 details.ErrorCode, details.DurationBucket, details.PackageVersion, details.PreviousVersion,
                 details.Source, details.RestartRequired, details.RecoveryAvailable, details.Feature, details.CompactLayout,
-                details.TextScale, details.AlwaysOnTop, details.Theme, items);
+                details.TextScale, details.AlwaysOnTop, details.Theme, items, dllInventory);
             if (!ReportingWire.ValidEvent(entry, _now())) return false;
             // Session-only context is available for a separately reviewed manual report.
             if (!ReportingWire.IsInventory(name)) _context.Enqueue(entry);
@@ -159,15 +197,11 @@ internal sealed class ReportingClient : IDisposable
         bool queued = false;
         bool saved = _store.Change(document =>
         {
-            if (document.Generation != generation || document.SupportId != entry.SupportId || !ReportingWire.Allowed(document.Preferences, name)) return document;
+            if (document.Generation != generation || document.SupportId != entry.SupportId || !ReportingWire.Allowed(document.Preferences, name) ||
+                (entry.DllInventory is not null && !document.Preferences.DetailedPlugins)) return document;
             var pending = Live(document.Pending).Append(entry).ToList();
-            var next = document with { Pending = pending };
-            while (pending.Count > 4096 || ReportingWire.Bytes(next).Length > ReportingStore.MaximumBytes)
-            {
-                int index = pending.FindIndex(item => !ReportingWire.IsError(item.EventName));
-                pending.RemoveAt(index >= 0 ? index : 0);
-            }
-            queued = pending.Any(item => item.EventId == entry.EventId);
+            var next = ReportingStore.FitQueue(document with { Pending = pending });
+            queued = next.Pending.Any(item => item.EventId == entry.EventId);
             return next;
         }, out var current);
         AcceptObservation(saved, current);
@@ -212,6 +246,8 @@ internal sealed class ReportingClient : IDisposable
         ArgumentNullException.ThrowIfNull(report);
         if (!Observe() || State.SupportId != report.SupportId)
             return new(false, null, "The support ID changed or reporting storage is unavailable. Prepare and review a new report.");
+        if (!ReportingHistoryValidation.Valid(new ReportingDelivery(ReportingStream.ManualReport, _now(), report.Json, "LP_VALIDATION"), report.SupportId))
+            return new(false, null, "This report is not valid. Prepare a new report.");
         ReportingReport? document;
         try { document = JsonSerializer.Deserialize<ReportingReport>(report.Json, ReportingWire.Json); }
         catch (JsonException) { return new(false, null, "This report is not valid. Prepare a new report."); }
@@ -234,11 +270,18 @@ internal sealed class ReportingClient : IDisposable
         // between checking its token and creating the linked HTTP cancellation.
         if (!await _sendGate.WaitAsync(0).ConfigureAwait(false))
             return new(false, null, "Another report is being sent. Try again shortly.");
+        Guid generation = Guid.Empty;
         try
         {
             if (!Observe() || State.SupportId != report.SupportId)
                 return new(false, null, "The support ID changed. Prepare and review a new report.");
-            using var linked = CreateRequestCancellation(cancellationToken, supportId: report.SupportId, requireInventory: hasVersions);
+            lock (_gate)
+            {
+                if (_disposed || _observed?.SupportId != report.SupportId)
+                    return new(false, null, "Reporting changed before the report could be sent.");
+                generation = _observed.Generation;
+            }
+            using var linked = CreateRequestCancellation(cancellationToken, generation: generation, supportId: report.SupportId, requireInventory: hasVersions);
             using var response = await PostAsync("reports", bytes, linked.Token).ConfigureAwait(false);
             if (response.StatusCode == HttpStatusCode.Created)
             {
@@ -246,8 +289,15 @@ internal sealed class ReportingClient : IDisposable
                 using var json = JsonDocument.Parse(body);
                 if (json.RootElement.ValueKind == JsonValueKind.Object && json.RootElement.EnumerateObject().Count() == 1 &&
                     json.RootElement.TryGetProperty("reference", out var reference) && reference.ValueKind == JsonValueKind.String &&
-                    reference.GetString() is { } value && Regex.IsMatch(value, @"\A[A-Za-z0-9_-]{8,100}\z"))
-                    return new(true, value, "Your report was received.");
+                    reference.GetString() is { } value && ReportingHistoryValidation.ValidReference(value))
+                {
+                    var receipt = new ReportingDelivery(ReportingStream.ManualReport, _now(), report.Json, value);
+                    var saved = CompleteManual(generation, report.SupportId, receipt, linked.Token);
+                    if (saved == ReceiptResult.Stale)
+                        return new(false, null, "The report was received, but reporting choices or the support ID changed before its local receipt could be saved.");
+                    return new(true, value, saved == ReceiptResult.Saved ? "Your report was received." :
+                        "Your report was received, but its local receipt could not be saved.");
+                }
                 return new(false, null, "The server did not confirm receipt. Retry this same report to avoid duplicates.");
             }
             return new(false, null, response.StatusCode switch
@@ -258,7 +308,12 @@ internal sealed class ReportingClient : IDisposable
             });
         }
         catch (Exception error) when (IsTransportError(error))
-        { return new(false, null, "Receipt could not be confirmed. The report may have arrived; retry this same report to avoid duplicates."); }
+        {
+            lock (_gate)
+                if (_disposed || (generation != Guid.Empty && (_observed?.Generation != generation || _observed?.SupportId != report.SupportId)))
+                    return new(false, null, "Reporting choices or the support ID changed. This attempt did not save a local receipt.");
+            return new(false, null, "Receipt could not be confirmed. The report may have arrived; retry this same report to avoid duplicates.");
+        }
         finally { _sendGate.Release(); }
     }
 
@@ -369,11 +424,12 @@ internal sealed class ReportingClient : IDisposable
                     acknowledged = json.RootElement.ValueKind == JsonValueKind.Object && json.RootElement.EnumerateObject().Count() == 2 &&
                         json.RootElement.TryGetProperty("accepted", out var accepted) && accepted.TryGetInt32(out int count) && count >= 0 &&
                         json.RootElement.TryGetProperty("duplicates", out var duplicates) && duplicates.TryGetInt32(out int duplicateCount) && duplicateCount >= 0 &&
-                        count + duplicateCount == batch.Length;
+                        (long)count + duplicateCount == batch.Length;
                 }
                 bool permanent = response.StatusCode is HttpStatusCode.BadRequest or HttpStatusCode.RequestEntityTooLarge or
                     HttpStatusCode.Conflict or HttpStatusCode.NotFound or HttpStatusCode.Gone or HttpStatusCode.UnprocessableEntity;
-                if (acknowledged || permanent) CompleteBatch(document.Generation, batch, stream);
+                if (acknowledged || permanent) CompleteBatch(document.Generation, document.SupportId, batch, stream,
+                    acknowledged ? bytes : null, linked.Token);
                 else ScheduleRetry(document.Generation, stream, response.Headers.RetryAfter,
                     response.StatusCode is HttpStatusCode.TooManyRequests or HttpStatusCode.ServiceUnavailable);
             }
@@ -384,21 +440,56 @@ internal sealed class ReportingClient : IDisposable
         finally { _sendGate.Release(); }
     }
 
-    private void CompleteBatch(Guid generation, ReportingEvent[] batch, string stream)
+    private void CompleteBatch(Guid generation, Guid supportId, ReportingEvent[] batch, string stream, byte[]? acknowledgedBytes, CancellationToken token)
     {
         var ids = batch.Select(entry => entry.EventId).ToHashSet();
-        bool saved = _store.Change(document => document.Generation != generation ? document : document with
+        var receipt = acknowledgedBytes is null ? null : new ReportingDelivery(ReportingHistoryValidation.Stream(batch[0].EventName),
+            _now(), Encoding.UTF8.GetString(acknowledgedBytes));
+        lock (_gate)
         {
-            Pending = Live(document.Pending).Where(entry => !ids.Contains(entry.EventId)).ToList(),
-            ErrorsNotBefore = stream == "errors" ? null : document.ErrorsNotBefore,
-            UsageNotBefore = stream == "usage" ? null : document.UsageNotBefore,
-            InventoryNotBefore = stream == "inventory" ? null : document.InventoryNotBefore,
-            ErrorAttempts = stream == "errors" ? 0 : document.ErrorAttempts,
-            UsageAttempts = stream == "usage" ? 0 : document.UsageAttempts,
-            InventoryAttempts = stream == "inventory" ? 0 : document.InventoryAttempts
-        }, out var current);
-        AcceptObservation(saved, current);
+            if (!CurrentAttempt(generation, supportId, token) || !_storageAvailable || _preferenceWriteFailed) return;
+            bool saved = _store.Change(document => document.Generation != generation || document.SupportId != supportId || token.IsCancellationRequested ? document : document with
+            {
+                Pending = Live(document.Pending).Where(entry => !ids.Contains(entry.EventId)).ToList(),
+                LastSent = receipt is null ? document.LastSent : WithReceipt(document, receipt),
+                ErrorsNotBefore = stream == "errors" ? null : document.ErrorsNotBefore,
+                UsageNotBefore = stream == "usage" ? null : document.UsageNotBefore,
+                InventoryNotBefore = stream == "inventory" ? null : document.InventoryNotBefore,
+                ErrorAttempts = stream == "errors" ? 0 : document.ErrorAttempts,
+                UsageAttempts = stream == "usage" ? 0 : document.UsageAttempts,
+                InventoryAttempts = stream == "inventory" ? 0 : document.InventoryAttempts
+            }, out var current);
+            AcceptObservation(saved, current);
+        }
     }
+
+    private enum ReceiptResult { Saved, Unavailable, Stale }
+
+    private ReceiptResult CompleteManual(Guid generation, Guid supportId, ReportingDelivery receipt, CancellationToken token)
+    {
+        lock (_gate)
+        {
+            if (!CurrentAttempt(generation, supportId, token)) return ReceiptResult.Stale;
+            if (!_storageAvailable || _preferenceWriteFailed) return ReceiptResult.Unavailable;
+            bool applied = false;
+            bool saved = _store.Change(document =>
+            {
+                if (document.Generation != generation || document.SupportId != supportId || token.IsCancellationRequested) return document;
+                applied = true;
+                return document with { LastSent = WithReceipt(document, receipt) };
+            }, out var current);
+            AcceptObservation(saved, current);
+            return !saved ? ReceiptResult.Unavailable : applied ? ReceiptResult.Saved : ReceiptResult.Stale;
+        }
+    }
+
+    // Caller holds _gate through the bounded local write, so a reset cannot race
+    // between the final completion check and committing its local receipt.
+    private bool CurrentAttempt(Guid generation, Guid supportId, CancellationToken token) =>
+        !_disposed && !token.IsCancellationRequested && _observed?.Generation == generation && _observed.SupportId == supportId;
+
+    private static List<ReportingDelivery> WithReceipt(ReportingDocument document, ReportingDelivery receipt) =>
+        (document.LastSent ?? []).Where(previous => previous.Stream != receipt.Stream).Append(receipt).OrderBy(item => item.Stream).ToList();
 
     private void ScheduleRetry(Guid generation, string stream, RetryConditionHeaderValue? retryAfter, bool shared = false)
     {

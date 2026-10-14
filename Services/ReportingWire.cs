@@ -9,6 +9,8 @@ internal static class ReportingWire
 {
     internal const int MaximumRequestBytes = 64 * 1024;
     internal const int MaximumReportBytes = 16 * 1024;
+    internal const int MaximumDllInventoryBytes = 6 * 1024;
+    internal const int MaximumDllEntries = 64;
     internal static readonly JsonSerializerOptions Json = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
@@ -26,6 +28,11 @@ internal static class ReportingWire
     }
     internal static bool Version(string? value) => value is not null && value.Length <= 40 &&
         Regex.IsMatch(value, @"\A[0-9]{1,6}(?:\.[0-9]{1,6}){1,3}(?:-(?:alpha|beta|rc|preview|dev)(?:\.[0-9]{1,6}){0,2})?\z", RegexOptions.CultureInvariant);
+
+    // Public registration formats: VATCAN's 1.1.6-2022wb and ALB's 0.2.11T.
+    // Keep this DLL-only: application versions and arbitrary build labels remain restricted.
+    internal static bool DllVersion(string? value) => Version(value) || value is not null && value.Length <= 40 &&
+        Regex.IsMatch(value, @"\A[0-9]{1,6}(?:\.[0-9]{1,6}){1,3}(?:-(?:19|20)[0-9]{2}wb|T)\z", RegexOptions.CultureInvariant);
 
     internal static string NormalizeAppVersion(string value)
     {
@@ -62,6 +69,19 @@ internal static class ReportingWire
         items.Select(i => i?.Component).Distinct().Count() == 10 && items.All(i => i is not null && Enum.IsDefined(i.Component) &&
             Enum.IsDefined(i.Status) && i.Source == InventorySource(i.Component) &&
             (i.Status == ReportingInventoryStatus.Known ? Version(i.Version) : i.Version is null));
+    internal static bool ValidDllInventory(ReportingDllInventory? inventory) => inventory is not null &&
+        Enum.IsDefined(inventory.Status) && inventory.UnreadableFiles is >= 0 and <= 4096 &&
+        inventory.Entries is { Count: <= MaximumDllEntries } &&
+        (inventory.Status != ReportingDllInventoryStatus.Complete || inventory.UnreadableFiles == 0) &&
+        (inventory.Status != ReportingDllInventoryStatus.Unavailable || inventory.Entries.Count == 0) &&
+        inventory.Entries.All(entry => entry is not null && entry.Sha256 is { Length: 64 } &&
+            Regex.IsMatch(entry.Sha256, @"\A[a-f0-9]{64}\z", RegexOptions.CultureInvariant) &&
+            Enum.IsDefined(entry.Product) && Enum.IsDefined(entry.Role) && Enum.IsDefined(entry.VersionSource) &&
+            entry.Copies is >= 1 and <= 4096 &&
+            (entry.VersionSource == ReportingDllVersionSource.Unknown ? entry.Version is null : DllVersion(entry.Version)) &&
+            (entry.FileVersion is null || Version(entry.FileVersion))) &&
+        inventory.Entries.Select(entry => (entry.Sha256, entry.Role)).Distinct().Count() == inventory.Entries.Count &&
+        Bytes(inventory).Length <= MaximumDllInventoryBytes;
     internal static bool ValidEvent(ReportingEvent entry, DateTime utcNow, bool checkAge = true) =>
         IsUuid(entry.EventId) && IsUuid(entry.SupportId) && IsUuid(entry.SessionId) && Version(entry.LaunchpadVersion) &&
         Enum.IsDefined(entry.EventName) && entry.OccurredAt.Kind == DateTimeKind.Utc &&
@@ -75,9 +95,10 @@ internal static class ReportingWire
         (entry.EventName == ReportingEventName.FeatureUsed ? entry.Feature is not null : entry.Feature is null) &&
         (entry.EventName == ReportingEventName.PreferencesSnapshot ? (entry.CompactLayout is not null && entry.TextScale is not null && entry.AlwaysOnTop is not null)
             : entry.CompactLayout is null && entry.TextScale is null && entry.AlwaysOnTop is null && entry.Theme is null) &&
-        (IsInventory(entry.EventName) ? ValidInventory(entry.Items) && entry.OperationId is null && entry.Application is null && entry.Operation is null &&
+        (IsInventory(entry.EventName) ? ValidInventory(entry.Items) && (entry.DllInventory is null || ValidDllInventory(entry.DllInventory)) &&
+            entry.OperationId is null && entry.Application is null && entry.Operation is null &&
             entry.Outcome is null && entry.Stage is null && entry.ErrorCode is null && entry.DurationBucket is null && entry.PackageVersion is null &&
             entry.PreviousVersion is null && entry.Source is null && entry.RestartRequired is null && entry.RecoveryAvailable is null && entry.Feature is null &&
-            entry.CompactLayout is null && entry.TextScale is null && entry.AlwaysOnTop is null && entry.Theme is null : entry.Items is null) &&
+            entry.CompactLayout is null && entry.TextScale is null && entry.AlwaysOnTop is null && entry.Theme is null : entry.Items is null && entry.DllInventory is null) &&
         Bytes(entry).Length <= (IsError(entry.EventName) || IsInventory(entry.EventName) ? 8 * 1024 : 2 * 1024);
 }

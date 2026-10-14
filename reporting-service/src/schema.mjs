@@ -5,6 +5,8 @@ export class IntakeError extends Error {
 }
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export const VERSION = /^[0-9]{1,6}(?:\.[0-9]{1,6}){1,3}(?:-(?:alpha|beta|rc|preview|dev)(?:\.[0-9]{1,6}){0,2})?$/;
+// Public VATCAN/ALB registration formats, not general free-form build suffixes.
+const DLL_VENDOR_VERSION = /^[0-9]{1,6}(?:\.[0-9]{1,6}){1,3}(?:-(?:19|20)[0-9]{2}wb|T)$/;
 export const FEATURES = Object.freeze(['check_updates','controller_profile_review','gng_package_review','gng_cleanup_review','gng_restore_review','setup_guide','install_or_update','adopt','font_check']);
 export const INVENTORY = Object.freeze({euroscope:'configured_app',gng:'package_metadata',trackaudio:'configured_app',vacs:'configured_app',vatis:'configured_app',vatefs:'registered_msi',topsky:'plugin_file',rdf:'plugin_file',vatefs_plugin:'plugin_file',afv_euroscope_bridge:'plugin_file'});
 export const INVENTORY_STATUSES = Object.freeze(['known','unknown','absent','unavailable']);
@@ -30,6 +32,7 @@ function keys(value, required, optional = []) {
 }
 export function uuid(value) { valid(typeof value === 'string' && UUID.test(value)); return value.toLowerCase(); }
 function version(value) { valid(typeof value === 'string' && value.length <= 40 && VERSION.test(value)); return value; }
+function dllVersion(value) { valid(typeof value === 'string' && value.length <= 40 && (VERSION.test(value) || DLL_VENDOR_VERSION.test(value))); return value; }
 function enumeration(key,value) { valid(typeof value === 'string' && ENUMS[key].includes(value)); return value; }
 function timestamp(value,now,allowExpired = false) {
   valid(typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,7})?Z$/.test(value));
@@ -92,11 +95,11 @@ function validateDllInventory(value) {
     valid(typeof entry.sha256==='string' && /^[0-9a-f]{64}$/.test(entry.sha256));
     valid(DLL_PRODUCTS.includes(entry.product) && ['current','staged'].includes(entry.role));
     valid(Number.isInteger(entry.copies) && entry.copies>=1 && entry.copies<=4096);
-    valid(['unknown','resource','embedded'].includes(entry.version_source));
+    valid(['unknown','resource','embedded','registration'].includes(entry.version_source));
     valid(entry.version_source==='unknown'?!own(entry,'version'):own(entry,'version'));
     const identity=entry.sha256+entry.role;valid(!identities.has(identity));identities.add(identity);
     return {sha256:entry.sha256,product:entry.product,role:entry.role,copies:entry.copies,
-      ...(own(entry,'version')?{version:version(entry.version)}:{}),...(own(entry,'file_version')?{file_version:version(entry.file_version)}:{}),version_source:entry.version_source};
+      ...(own(entry,'version')?{version:dllVersion(entry.version)}:{}),...(own(entry,'file_version')?{file_version:version(entry.file_version)}:{}),version_source:entry.version_source};
   });
   return {status:value.status,entries,unreadable_files:value.unreadable_files};
 }

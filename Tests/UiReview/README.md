@@ -3,7 +3,7 @@
 This fixture uses production XAML, themes and presentation models with synthetic settings
 and inert button handlers. It covers the main window, Settings, Controller profile,
 maintenance, discovery, recent activity, EuroScope management, fresh client setup, the setup wizard and
-GNG cleanup, GNG setup/update, reporting choices and manual report previews/receipts. Reporting views use synthetic IDs and inert handlers, without linking storage or transport. Both GNG windows use inert file rows; installation,
+GNG cleanup, GNG setup/update, reporting choices, last-sent summaries and manual report previews/receipts. Reporting views use synthetic IDs and inert handlers, without linking storage or transport. Both GNG windows use inert file rows; installation,
 archive and restore cannot touch files. The production GNG browser host is a lazy
 `ContentControl` that remains empty here; WebView2 and download/runtime services are not linked.
 
@@ -20,6 +20,12 @@ The check measures content without showing windows and returns a nonzero exit co
 layout or binding failures. Results go to `layout-validation.txt` and errors to
 `fixture-errors.log` beside the built executable. `--validate-layouts` is an alias for
 `--check` and is used in CI.
+
+`--check-application-controls` runs the focused main-window matrix, including
+stopped, running, mixed, busy, restart-required and browser-without-backend states. Add `--snapshots`
+with an ignored output directory to render those controls without showing windows.
+All process actions remain inert; normal-close confirmation and process identity
+belong to the application-control service tests.
 
 Add `--snapshots artifacts/ui-review` to render the measured application and workflow layouts
 as PNGs. Cleanup and GNG fresh/existing start, sign-in waiting, package/reference download progress, preparation between downloads, cancellation, review,
@@ -38,6 +44,8 @@ configured/missing paths, wizard steps and scaled content. Text-size cases use t
 Assertions cover:
 
 - Equal row heights, readable action captions and the selected application's details panel.
+- Separate Show/Close controls and reviewed bulk actions remain readable at each
+  text size, with keyboard access, operation gating and no controls for folders or Launchpad itself.
 - Text-size changes retain density and selected EuroScope profile; header controls and
   More/Less space remain reachable at minimum size in both layouts.
 - Recent activity has a reachable Close action, scrollable details, selectable recovery
