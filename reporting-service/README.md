@@ -28,7 +28,7 @@ The Dockerfile accepts a `NODE_IMAGE` build argument. Resolve the Node 24 base i
 
 ## Intake and private access
 
-Public intake has three JSON POST endpoints:
+Public intake has four JSON POST endpoints:
 
 | Path | Accepted data | Acknowledgement |
 | --- | --- | --- |

@@ -1,8 +1,9 @@
 # Changelog
 
-## Unreleased
+## [2.3.0] — 2026-10-14
 
 - Add independent choices for usage statistics, software/plugin versions and automatic error reports, with a first-use prompt and a support ID that survives updates. Change the ID or clear unsent reports from Help.
+- Ask existing and new users to choose before sending anything. Saving all reporting choices off is remembered; Not now leaves the choice for a later launch.
 - Preview and send structured problem reports from Help, application details or Activity, with an option to save locally and a receipt after submission.
 - Add a private passkey-protected maintainer dashboard for usage trends, application launches, feature use and shared software/plugin versions. Reports, diagnostics and support lookup are separate, with bounded queues, request quotas, retention and storage limits.
 - Keep reporting data separate from ordinary preferences reset, with an explicit support-ID and reporting reset option.
