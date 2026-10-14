@@ -1,7 +1,47 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { validateBatch,validateReport,validateEvent } from '../src/schema.mjs';
+import { validateBatch,validateReport,validateEvent,DLL_PRODUCTS } from '../src/schema.mjs';
 import { event,report,batch,inventory,CLOCK,SUPPORT } from './intake-helpers.mjs';
+
+const dll=(overrides={})=>({sha256:'a'.repeat(64),product:'unknown',role:'current',copies:1,version_source:'unknown',...overrides});
+const detailed=(entries=[dll()],overrides={})=>inventory({dll_inventory:{status:'complete',entries,unreadable_files:0,...overrides}});
+
+test('detailed DLL inventory is optional, bounded and canonical without changing legacy payloads',()=>{
+  const old=inventory(),legacy=validateEvent(old,'inventory',CLOCK);
+  assert.equal(Object.hasOwn(legacy,'dll_inventory'),false);
+  assert.deepEqual(Object.keys(legacy),['event_id','support_id','session_id','occurred_at','launchpad_version','event_name','items']);
+  const entries=DLL_PRODUCTS.map((product,index)=>dll({sha256:index.toString(16).padStart(64,'0'),product,role:index%2?'staged':'current',copies:index+1,
+    ...(index%3===0?{}:index%3===1?{version:'3.0.0-beta.19',version_source:'embedded',file_version:'0.0.0.0'}:{version:'1.2.3.4',version_source:'resource'})}));
+  const result=validateEvent(detailed(entries),'inventory',CLOCK).dll_inventory;
+  assert.deepEqual(result,{status:'complete',entries,unreadable_files:0});
+  assert.deepEqual(Object.keys(result),['status','entries','unreadable_files']);
+  assert.deepEqual(Object.keys(result.entries[1]),['sha256','product','role','copies','version','file_version','version_source']);
+  assert.equal(validateEvent(detailed([dll(),dll({role:'staged'})]),'inventory',CLOCK).dll_inventory.entries.length,2,'same fingerprint may occur in both locations');
+  assert.equal(validateEvent(detailed([],{status:'partial'}),'inventory',CLOCK).dll_inventory.status,'partial','bounds can truncate without unreadable files');
+  assert.equal(validateEvent(detailed([],{status:'unavailable',unreadable_files:1}),'inventory',CLOCK).dll_inventory.status,'unavailable');
+  assert.equal(validateEvent(detailed([dll({file_version:'0.0.0.0'})]),'inventory',CLOCK).dll_inventory.entries[0].file_version,'0.0.0.0');
+});
+
+test('DLL inventory rejects private fields, ambiguous sources, invalid hashes and inflated bounds',()=>{
+  for(const change of [
+    {filename:'private.dll'},{path:'C:\\Synthetic\\private.dll'},{product_name:'private product'},{product:'custom'},
+    {sha256:'A'.repeat(64)},{sha256:'a'.repeat(63)},{sha256:'g'.repeat(64)},{role:'loaded'},
+    {copies:0},{copies:4097},{copies:1.5},{copies:'1'},
+    {version:'1.2.3'},{file_version:'1.2.3+private'},{version_source:'native'},
+    {version_source:'resource'},{version_source:'embedded'},{version_source:'embedded',version:'My private build'},
+  ])assert.throws(()=>validateEvent(detailed([dll(change)]),'inventory',CLOCK),{code:'invalid_request'});
+  for(const change of [{status:'not_shared'},{unreadable_files:-1},{unreadable_files:4097},{unreadable_files:1.5},{unreadable_files:1},
+    {status:'unavailable'},{entries:[dll(),dll()]},{filename:'private.dll'},{entries:null}])
+    assert.throws(()=>validateEvent(detailed(undefined,change),'inventory',CLOCK),{code:'invalid_request'});
+  const entries=Array.from({length:64},(_,index)=>dll({sha256:index.toString(16).padStart(64,'0')}));
+  assert.ok(Buffer.byteLength(JSON.stringify({status:'complete',entries,unreadable_files:0}))>6144);
+  assert.throws(()=>validateEvent(detailed(entries),'inventory',CLOCK),{code:'invalid_request'},'byte limit applies before count limit');
+  assert.throws(()=>validateEvent(detailed([...entries,dll()]),'inventory',CLOCK),{code:'invalid_request'});
+  const extra=detailed();extra.dll_inventory.entries[0].secret='synthetic';
+  assert.throws(()=>validateEvent(extra,'inventory',CLOCK));
+  for(const stream of ['usage','errors','context'])assert.throws(()=>validateEvent(detailed(),stream,CLOCK));
+  assert.throws(()=>validateReport(report({context:[detailed()]}),CLOCK));
+});
 
 test('strict schema rejects identifying fields, arbitrary diagnostics and wrong stream before storage',()=>{
   for(const key of ['name','email','cid','password','hoppie','path','stack','message','url','exception','headers']) {

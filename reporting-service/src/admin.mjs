@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { resolve, dirname } from 'node:path';
 import { createRequire } from 'node:module';
-import { createAuth, cookieValue, sessionCookie, SESSION_COOKIE, FLOW_COOKIE } from './auth.mjs';
+import { createAuth, cookieValue, sessionCookie, SESSION_COOKIE, FLOW_COOKIE, ACCESS_CONFLICT_MESSAGE } from './auth.mjs';
 import { VERSION } from './schema.mjs';
 import { readJson } from './intake.mjs';
 
@@ -10,11 +10,20 @@ const publicDirectory = fileURLToPath(new URL('../public/', import.meta.url));
 const require = createRequire(import.meta.url);
 const uuid = value => /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 const statuses = ['new', 'investigating', 'fixed', 'closed'];
-const adminReadPaths = new Set(['/api/admin/overview', '/api/admin/usage', '/api/admin/health', '/api/admin/errors', '/api/admin/reports']);
+const adminReadPaths = new Set(['/api/admin/overview', '/api/admin/usage', '/api/admin/inventory', '/api/admin/health', '/api/admin/errors', '/api/admin/reports', '/api/admin/users']);
+const userPath = /^\/api\/admin\/users\/([0-9a-f-]{36})$/;
+const invitationPath = /^\/api\/admin\/users\/([0-9a-f-]{36})\/invite$/;
 const reportPath = /^\/api\/admin\/reports\/([A-Za-z0-9-]{1,80})$/;
 const reportStatusPath = /^\/api\/admin\/reports\/([A-Za-z0-9-]{1,80})\/status$/;
 const supportPath = /^\/api\/admin\/support\/([^/]+)$/;
 const supportDeletePath = /^\/api\/admin\/support\/([^/]+)\/delete$/;
+const accountMessages = new Map([
+  ['Invalid username.', 'Use a username of 3–32 letters, numbers, underscores or hyphens, starting with a letter. “maintainer” is reserved.'],
+  ['Username already exists.', 'That username is already in use. Choose another name.'],
+  ['The account limit has been reached.', 'The backoffice currently supports 25 additional accounts.'],
+  ['Account unavailable.', 'This account is no longer available. Refresh the user list.'],
+  ['Explicit passkey reset is required.', 'This user already has a passkey. Use Reset passkey to replace it.'],
+]);
 const headers = {
   'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'no-referrer', 'X-Frame-Options': 'DENY', 'X-Robots-Tag': 'noindex, nofollow',
@@ -79,7 +88,8 @@ export function createAdminHandler({ store, config, now = () => Date.now() }) {
     const token = cookieValue(req.headers.cookie, SESSION_COOKIE);
     try {
       if (path === '/auth/session' && req.method === 'GET') {
-        reply(res, 200, { signed_in: !!auth.current(token) }); return true;
+        const identity = auth.identity(token);
+        reply(res, 200, { signed_in: !!identity, authenticated: !!identity, ...(identity || {}) }); return true;
       }
       if (path.startsWith('/auth/')) {
         if (req.method !== 'POST') { reply(res, 405, { error: 'Use POST.' }, { Allow: 'POST' }); return true; }
@@ -98,21 +108,37 @@ export function createAdminHandler({ store, config, now = () => Date.now() }) {
         } else {
           onlyKeys(body, ['response']);
           const session = await auth.finish(kind, cookieValue(req.headers.cookie, FLOW_COOKIE), body.response);
-          audit(kind === 'register' ? 'owner_enrolled' : 'signed_in');
+          audit(kind === 'register' ? (auth.identity(session)?.owner ? 'owner_enrolled' : 'user_enrolled') : 'signed_in');
           reply(res, 200, { ok: true }, { 'Set-Cookie': [sessionCookie(SESSION_COOKIE, session, 3600), sessionCookie(FLOW_COOKIE, '', 0)] });
         }
         return true;
       }
-      if (!auth.current(token)) { reply(res, 401, { error: 'Sign in with your maintainer passkey.' }); return true; }
+      const identity = auth.identity(token);
+      if (!identity) { reply(res, 401, { error: 'Sign in with your passkey.' }); return true; }
       if (req.method === 'GET') {
+        // Every private read has an explicit scope. The browser is not an
+        // authorization boundary, and unknown routes never inherit a scope.
+        const permission = path === '/api/admin/overview' || path === '/api/admin/users' ? 'owner'
+          : path === '/api/admin/usage' ? 'usage' : path === '/api/admin/inventory' ? 'inventory'
+          : path === '/api/admin/health' ? 'health' : path === '/api/admin/errors' ? 'errors'
+          : path === '/api/admin/reports' || reportPath.test(path) ? 'reports'
+          : supportPath.test(path) ? 'support' : null;
+        if (permission && !identity.owner && (permission === 'owner' || !identity.permissions.includes(permission))) {
+          reply(res, 403, { error: 'Your account does not have access to this page.' }); return true;
+        }
+        if (path === '/api/admin/users') {
+          if (url.search) throw new Error('Unexpected filters');
+          reply(res, 200, { users: auth.listUsers() }); return true;
+        }
         const application = url.searchParams.get('application') || undefined;
         const launchpad_version = url.searchParams.get('launchpad_version') || undefined;
         const days = url.searchParams.has('days') ? Number(url.searchParams.get('days')) : undefined;
         if ((application && !['launchpad','euroscope','gng','trackaudio','vacs','vatis','vatefs','vatiris','maintenance'].includes(application)) || (launchpad_version && (launchpad_version.length > 40 || !VERSION.test(launchpad_version))) || (days !== undefined && ![7,30].includes(days))) throw new Error('Invalid filters');
         if (path === '/api/admin/overview') { reply(res, 200, store.overview({ application, launchpad_version, days })); return true; }
-        if (path === '/api/admin/usage') {
+        if (path === '/api/admin/usage' || path === '/api/admin/inventory') {
           if ([...url.searchParams.keys()].some(key => !['application', 'launchpad_version', 'days'].includes(key)) || [...url.searchParams.keys()].some(key => url.searchParams.getAll(key).length !== 1)) throw new Error('Invalid filters');
-          reply(res, 200, store.usage({ application, launchpad_version, days: days ?? 7 })); return true;
+          const { inventory, ...usage } = store.usage({ application, launchpad_version, days: days ?? 7 });
+          reply(res, 200, path.endsWith('/inventory') ? { window: usage.window, filters: usage.filters, inventory } : usage); return true;
         }
         if (path === '/api/admin/health') { reply(res, 200, store.health()); return true; }
         if (path === '/api/admin/errors') { audit('errors_viewed'); reply(res, 200, store.groupedErrors({ limit: 50, application, launchpad_version, days })); return true; }
@@ -132,8 +158,39 @@ export function createAdminHandler({ store, config, now = () => Date.now() }) {
         const report = reportPath.exec(path);
         if (report) { const found = store.getReport(report[1]); if (found) audit('report_viewed', report[1]); reply(res, found ? 200 : 404, found ?? { error: 'Report not found.' }); return true; }
       } else if (req.method === 'POST') {
+        if (!identity.owner) { reply(res, 403, { error: 'Only the owner can change backoffice data or access.' }); return true; }
         if (!sameOrigin(req, config.origin)) { reply(res, 403, { error: 'Use the Launchpad backoffice for changes.' }); return true; }
         const body = await json(req);
+        // Reading a streamed body yields. Recheck after it in case the owner
+        // credential/session was revoked while the request was arriving.
+        if (!auth.identity(token)?.owner) { reply(res, 401, { error: 'Sign in again to continue.' }); return true; }
+        const user = userPath.exec(path), invitation = invitationPath.exec(path);
+        if (path === '/api/admin/users' || path === '/api/admin/users/access' || user || invitation) {
+          if (url.search || (user && !uuid(user[1])) || (invitation && !uuid(invitation[1]))) throw new Error('Invalid user request');
+          if (!auth.recent(token)) { reply(res, 403, { error: 'Verify your passkey again before changing user access.', code: 'reauthentication_required' }); return true; }
+          if (path === '/api/admin/users/access') {
+            onlyKeys(body, ['users']);
+            const users = auth.updateUsers(body.users);
+            audit('users_access_changed');
+            reply(res, 200, { users }); return true;
+          }
+          if (path === '/api/admin/users') {
+            onlyKeys(body, ['username', 'permissions']);
+            const result = auth.createUser(body);
+            audit('user_created', result.user.id);
+            reply(res, 201, { user: result.user, invitation_url: `${config.origin}/backoffice/#invite=${result.invitation}`, expires_at: result.expires_at }); return true;
+          }
+          if (invitation) {
+            onlyKeys(body, ['reset']); if (typeof body.reset !== 'boolean') throw new Error('Confirm passkey replacement');
+            const result = auth.inviteUser(invitation[1], { reset: body.reset });
+            audit(body.reset ? 'user_passkey_reset' : 'user_invited', result.user.id);
+            reply(res, 200, { user: result.user, invitation_url: `${config.origin}/backoffice/#invite=${result.invitation}`, expires_at: result.expires_at }); return true;
+          }
+          onlyKeys(body, ['permissions', 'enabled']);
+          const changed = auth.updateUser(user[1], body);
+          audit('user_access_changed', changed.id);
+          reply(res, 200, { user: changed }); return true;
+        }
         const report = reportStatusPath.exec(path);
         if (report) {
           onlyKeys(body, ['status']); if (!statuses.includes(body.status)) throw new Error('Invalid status');
@@ -154,9 +211,12 @@ export function createAdminHandler({ store, config, now = () => Date.now() }) {
       }
       reply(res, 404, { error: 'Not found.' });
     } catch (error) {
-      const status = [413, 429, 503].includes(error.status) ? error.status : String(error.code ?? '').startsWith('ERR_SQLITE') ? 503 : 400;
+      const conflict = path === '/api/admin/users/access' && error.code === 'access_conflict';
+      const status = conflict ? 409 : [413, 429, 503].includes(error.status) ? error.status : String(error.code ?? '').startsWith('ERR_SQLITE') ? 503 : 400;
       const retry = status === 429 && Number.isFinite(error.retryAfter) ? { 'Retry-After': String(Math.min(3600, Math.max(1, Math.ceil(error.retryAfter)))) } : {};
-      const message = status === 429 ? 'Too many requests. Wait before trying again.' : status === 503 ? 'The service is temporarily unavailable.' : path.startsWith('/auth/') ? 'Sign-in could not be completed. Try again; enrollment codes expire after ten minutes.' : 'This request could not be completed. Check the selection and try again.';
+      const accountMessage = status === 400 && (path === '/api/admin/users' || userPath.test(path) || invitationPath.test(path)) && auth.identity(token)?.owner
+        ? accountMessages.get(error.message) : undefined;
+      const message = conflict ? ACCESS_CONFLICT_MESSAGE : status === 429 ? 'Too many requests. Wait before trying again.' : status === 503 ? 'The service is temporarily unavailable.' : path.startsWith('/auth/') ? 'Sign-in could not be completed. Try again; enrollment codes expire after ten minutes.' : accountMessage ?? 'This request could not be completed. Check the selection and try again.';
       reply(res, status, { error: message }, { ...retry, ...([413, 429].includes(status) ? { Connection: 'close' } : {}), ...(path.startsWith('/auth/') ? { 'Set-Cookie': sessionCookie(FLOW_COOKIE, '', 0) } : {}) });
     }
     return true;
@@ -167,6 +227,7 @@ export function createAdminHandler({ store, config, now = () => Date.now() }) {
       ['/', '/privacy/info', '/backoffice/passkey.js', '/auth/session'].includes(path) ||
       adminReadPaths.has(path) || reportPath.test(path) || (support && uuid(support[1])));
     const knownChange = req.method === 'POST' && (path === '/auth/logout' ||
+      path === '/api/admin/users' || path === '/api/admin/users/access' || userPath.test(path) || invitationPath.test(path) ||
       reportStatusPath.test(path) || (support && uuid(support[1])));
     // Validate the stored passkey session before bypassing public admission limits.
     // Intake and sign-in ceremonies stay limited even when a session cookie is sent.

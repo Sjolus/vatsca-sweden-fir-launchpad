@@ -24,6 +24,13 @@ export function prepareRestore({path,deletions,now=Date.now,limits,freeSpace}={}
       // explicit owner enrollment again instead of reviving the old credential.
       for(const table of ['auth_sessions','auth_challenges','admin_audit'])if(has(table))store.db.exec(`DELETE FROM ${table}`);
       if(has('auth_owner'))store.db.prepare("UPDATE auth_owner SET user_handle=?,credential_id=NULL,public_key=NULL,counter=0,transports='[]',epoch=?,enrollment_hash=NULL,enrollment_expires=NULL").run(randomUUID(),randomUUID());
+      // Retain account names/scopes for review, but never revive an old passkey,
+      // invitation or access grant from a backup. The owner must enable and
+      // invite each account again after checking its access.
+      if(has('auth_users')) {
+        const reset=store.db.prepare("UPDATE auth_users SET enabled=0,user_handle=?,credential_id=NULL,public_key=NULL,counter=0,transports='[]',epoch=?,invitation_hash=NULL,invitation_expires=NULL WHERE id=?");
+        for(const row of store.db.prepare('SELECT id FROM auth_users').all())reset.run(randomUUID(),randomUUID(),row.id);
+      }
       // The restored snapshot cannot establish continuous observation through
       // the lost interval, even if older session rows are still available.
       store.db.prepare('UPDATE analytics_state SET coverage_start=? WHERE singleton=1').run(now());

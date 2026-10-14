@@ -15,6 +15,67 @@ function inventory(f,id=A,overrides={},version='2.3.0') {
 }
 function at(f,date){f.advance(Date.parse(date)-f.now());}
 const add=(f,...rows)=>f.store.admitBatch('usage',batch(...rows));
+const dll=(index=1,overrides={})=>({sha256:index.toString(16).padStart(64,'0'),product:'unknown',role:'current',copies:1,version_source:'unknown',...overrides});
+const withDlls=(row,entries=[],overrides={})=>({...row,dll_inventory:{status:'complete',entries,unreadable_files:0,...overrides}});
+
+test('DLL analytics use latest independent snapshots and count installations rather than file copies',t=>{
+  const f=fixture(t),D=randomUUID(),E=randomUUID();
+  const known=dll(1,{product:'topsky',version:'3.0.0-beta.19',file_version:'0.0.0.0',version_source:'embedded',copies:3});
+  const first=withDlls(inventory(f,A),[known,{...known,role:'staged',copies:1},dll(2)]);
+  assert.deepEqual(f.store.admitBatch('inventory',batch(first,first)),{accepted:1,duplicates:1});
+  f.store.admitBatch('inventory',batch(withDlls(inventory(f,B),[{...known,copies:2},dll(3,{product:'vatefs',file_version:'0.1.2.0'})],{status:'partial',unreadable_files:2}),
+    inventory(f,C),withDlls(inventory(f,D),[],{status:'unavailable',unreadable_files:1}),withDlls(inventory(f,E),[])));
+  const result=f.store.usage(),details=result.inventory.dll_inventory;
+  assert.equal(result.cohort.active_installations,0);assert.equal(result.inventory.snapshot_installations,5);
+  assert.deepEqual([details.complete_installations,details.partial_installations,details.unavailable_installations,details.not_shared_installations],[2,1,1,1]);
+  assert.equal(details.shared_installations,4);assert.equal(details.unreadable_files,3);
+  assert.equal(details.current_installations,2);assert.equal(details.staged_installations,1);
+  const row=details.rows.find(row=>row.product==='topsky' && row.role==='current');
+  assert.equal(row.installations,2);assert.equal(row.copies,5);assert.equal(row.version,'3.0.0-beta.19');assert.equal(row.file_version,'0.0.0.0');
+  assert.equal(details.rows.find(row=>row.role==='staged').installations,1);
+  assert.equal(details.total_groups,4);assert.equal(details.omitted_groups,0);
+  assert.ok(!JSON.stringify(result).includes(A));assert.ok(!JSON.stringify(result).includes(B));
+  const selected=f.store.usage({application:'vatefs'}).inventory;
+  assert.equal(selected.snapshot_installations,5);assert.equal(selected.dll_inventory.shared_installations,4);
+  assert.equal(selected.dll_inventory.product_filter,'vatefs');assert.equal(selected.dll_inventory.rows.length,1);
+  assert.equal(Object.hasOwn(f.store.usage({application:'trackaudio'}).inventory,'dll_inventory'),false);
+  f.advance(1);f.store.admitBatch('inventory',batch(inventory(f,A)));
+  const newer=f.store.usage().inventory.dll_inventory;
+  assert.equal(newer.not_shared_installations,2);assert.equal(newer.staged_installations,0,'newer legacy snapshot does not carry forward older DLLs');
+  assert.equal(newer.rows.find(row=>row.product==='topsky').installations,1);
+  f.store.deleteSupport(B);assert.equal(f.store.usage().inventory.dll_inventory.rows.length,0);
+});
+
+test('DLL reporting retains immutable legacy retries and bounds grouped output without inventing absence',t=>{
+  const f=fixture(t),legacy=inventory(f,A);
+  assert.deepEqual(f.store.admitBatch('inventory',batch(legacy)),{accepted:1,duplicates:0});
+  assert.deepEqual(f.store.admitBatch('inventory',batch({...legacy,items:[...legacy.items].reverse()})),{accepted:0,duplicates:1});
+  assert.throws(()=>f.store.admitBatch('inventory',batch(withDlls(legacy))),{code:'identifier_conflict'});
+  for(let installation=0;installation<5;installation++) {
+    const entries=Array.from({length:24},(_,i)=>dll(installation*24+i+1));
+    f.store.admitBatch('inventory',batch(withDlls(inventory(f,randomUUID()),entries,{status:'partial'})));
+  }
+  const details=f.store.usage().inventory.dll_inventory;
+  assert.equal(details.partial_installations,5);assert.equal(details.not_shared_installations,1);assert.equal(details.complete_installations,0);
+  assert.equal(details.total_groups,120);assert.equal(details.rows.length,100);assert.equal(details.omitted_groups,20);
+  assert.equal(details.current_installations,5);assert.equal(details.unreadable_files,0);
+  assert.equal(details.rows.every(row=>row.version===null && row.file_version===null),true,'unknown versions remain unknown');
+  assert.ok(Buffer.byteLength(JSON.stringify(details))<40000,'bounded rows prevent an unbounded dashboard response');
+  f.store.close();const reopened=f.open();
+  assert.deepEqual(reopened.admitBatch('inventory',batch(legacy)),{accepted:0,duplicates:1});
+  assert.equal(reopened.usage().inventory.dll_inventory.not_shared_installations,1);
+});
+
+test('DLL scans obey release, future and retention boundaries even without housekeeping',t=>{
+  const f=fixture(t,{initialClock:CLOCK-10*DAY,limits:{eventTtlDays:8}});
+  f.store.admitBatch('inventory',batch(withDlls(inventory(f,A),[dll()])));
+  f.advance(10*DAY);
+  f.store.admitBatch('inventory',batch(withDlls(inventory(f,B,{},'2.2.0'),[dll(2)]),
+    withDlls({...inventory(f,C),occurred_at:new Date(f.now()+1).toISOString()},[dll(3)])));
+  assert.equal(f.store.usage({days:30}).inventory.dll_inventory.rows.length,1);
+  assert.equal(f.store.usage({days:30,launchpad_version:'2.3.0'}).inventory.dll_inventory.shared_installations,0);
+  f.advance(1);assert.equal(f.store.usage({days:30}).inventory.dll_inventory.rows.length,2);
+});
 
 test('usage includes today in distinct active cohorts and latest independent inventory snapshots',t=>{
   const f=fixture(t,{initialClock:Date.parse('2026-10-01T00:00:00Z')}),attempt=randomUUID();

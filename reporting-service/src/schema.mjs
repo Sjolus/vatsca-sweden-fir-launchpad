@@ -8,6 +8,7 @@ export const VERSION = /^[0-9]{1,6}(?:\.[0-9]{1,6}){1,3}(?:-(?:alpha|beta|rc|pre
 export const FEATURES = Object.freeze(['check_updates','controller_profile_review','gng_package_review','gng_cleanup_review','gng_restore_review','setup_guide','install_or_update','adopt','font_check']);
 export const INVENTORY = Object.freeze({euroscope:'configured_app',gng:'package_metadata',trackaudio:'configured_app',vacs:'configured_app',vatis:'configured_app',vatefs:'registered_msi',topsky:'plugin_file',rdf:'plugin_file',vatefs_plugin:'plugin_file',afv_euroscope_bridge:'plugin_file'});
 export const INVENTORY_STATUSES = Object.freeze(['known','unknown','absent','unavailable']);
+export const DLL_PRODUCTS = Object.freeze(['unknown','topsky','rdf','vatefs','afv_euroscope_bridge','arrival_load_balancer','cdm','ground_radar','maestro','vatiris','vch','vatcan_bookings']);
 export const ENUMS = Object.freeze({
   application: ['launchpad','euroscope','gng','trackaudio','vacs','vatis','vatefs','vatiris','maintenance'],
   operation: ['install','update','repair','replace','remove','cleanup','restore','restore_cleanup','prerequisite','setup','adopt','check','save','download','launch'],
@@ -64,7 +65,7 @@ export function validateEvent(value, stream, now = Date.now(),allowExpired = fal
   return result;
 }
 function validateInventory(value,now) {
-  keys(value,[...REQUIRED,'items']);
+  keys(value,[...REQUIRED,'items'],['dll_inventory']);
   valid(value.event_name==='inventory_snapshot' && Array.isArray(value.items) && value.items.length===Object.keys(INVENTORY).length);
   const items=new Map();
   for(const item of value.items) {
@@ -75,7 +76,29 @@ function validateInventory(value,now) {
   }
   valid(Buffer.byteLength(JSON.stringify(value))<=8192);
   return {event_id:uuid(value.event_id),support_id:uuid(value.support_id),session_id:uuid(value.session_id),occurred_at:timestamp(value.occurred_at,now),
-    launchpad_version:version(value.launchpad_version),event_name:'inventory_snapshot',items:Object.keys(INVENTORY).map(key=>items.get(key))};
+    launchpad_version:version(value.launchpad_version),event_name:'inventory_snapshot',items:Object.keys(INVENTORY).map(key=>items.get(key)),
+    ...(own(value,'dll_inventory')?{dll_inventory:validateDllInventory(value.dll_inventory)}:{})};
+}
+function validateDllInventory(value) {
+  keys(value,['status','entries','unreadable_files']);
+  valid(['complete','partial','unavailable'].includes(value.status) && Array.isArray(value.entries) && value.entries.length<=64);
+  valid(Number.isInteger(value.unreadable_files) && value.unreadable_files>=0 && value.unreadable_files<=4096);
+  valid(value.status!=='complete' || value.unreadable_files===0);
+  valid(value.status!=='unavailable' || value.entries.length===0);
+  valid(Buffer.byteLength(JSON.stringify(value))<=6144);
+  const identities=new Set();
+  const entries=value.entries.map(entry=>{
+    keys(entry,['sha256','product','role','copies','version_source'],['version','file_version']);
+    valid(typeof entry.sha256==='string' && /^[0-9a-f]{64}$/.test(entry.sha256));
+    valid(DLL_PRODUCTS.includes(entry.product) && ['current','staged'].includes(entry.role));
+    valid(Number.isInteger(entry.copies) && entry.copies>=1 && entry.copies<=4096);
+    valid(['unknown','resource','embedded'].includes(entry.version_source));
+    valid(entry.version_source==='unknown'?!own(entry,'version'):own(entry,'version'));
+    const identity=entry.sha256+entry.role;valid(!identities.has(identity));identities.add(identity);
+    return {sha256:entry.sha256,product:entry.product,role:entry.role,copies:entry.copies,
+      ...(own(entry,'version')?{version:version(entry.version)}:{}),...(own(entry,'file_version')?{file_version:version(entry.file_version)}:{}),version_source:entry.version_source};
+  });
+  return {status:value.status,entries,unreadable_files:value.unreadable_files};
 }
 export function validateBatch(value,stream,now = Date.now()) {
   keys(value,['schema_version','events']);

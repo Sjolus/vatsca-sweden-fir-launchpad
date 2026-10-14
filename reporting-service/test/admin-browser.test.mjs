@@ -20,9 +20,9 @@ test('late private responses cannot repopulate the backoffice after logout', asy
       ? Promise.resolve({ ok: true, json: async () => ({ signed_in: false }) }) : pendingReport,
     setTimeout: () => 1, clearTimeout() {}, URLSearchParams,
   });
-  runInContext(readFileSync(new URL('../public/app.js', import.meta.url), 'utf8'), context);
+  runInContext(readFileSync(new URL('../public/app.js', import.meta.url), 'utf8').replace(/boot\(\);\s*$/, ''), context);
   await new Promise(resolve => setImmediate(resolve));
-  context.showWorkspace();
+  context.showWorkspace({authenticated:true,username:'maintainer',owner:true,permissions:[]});
   const opening = context.openReport({ reference: 'LP-synthetic' });
   context.showLogin();
   resolveReport({ ok: true, json: async () => ({ reference: 'LP-synthetic', payload: { support_id: 'synthetic-private-value' } }) });
