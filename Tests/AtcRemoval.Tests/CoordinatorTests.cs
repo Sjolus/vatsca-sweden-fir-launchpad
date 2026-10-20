@@ -257,6 +257,115 @@ internal static class CoordinatorTests
                 await Reject(() => Task.FromResult(service.Preview([new(f.Find(AtcRemovalApp.Gng), true, true)], None, null)));
                 Assert(File.Exists(plugin) && f.RunCount == 0);
             }),
+            ("unrelated resets protect configured SAAMAN DLLs and managed profiles including missing aliases", async () =>
+            {
+                foreach (bool profile in new[] { false, true })
+                {
+                    using var f = new Case();
+                    var retained = f.File("roaming/VatscaUpdateChecker/VATIRISProfile/settings", "FAKE-KEEP");
+                    SyntheticNative.Junction(f.PathOf("saaman-alias"), f.PathOf("roaming/VatscaUpdateChecker/VATIRISProfile"));
+                    if (profile) { f.Settings.SaamanProfilePath = f.PathOf("saaman-alias/missing/ESAA APP ACC.prf"); f.Settings.SaamanProfileManaged = true; }
+                    else f.Settings.SaamanDllPath = f.PathOf("saaman-alias/missing/SAAMAN.dll");
+                    await Reject(() => Task.FromResult(f.Service.Preview([], new(false, true, true, false, false), null)));
+                    Assert(File.Exists(retained) && f.DeletedCredentials.Count == 0);
+                }
+            }),
+            ("complete GNG removal includes its configured SAAMAN files only with a recovery export", async () =>
+            {
+                using var f = new Case();
+                var dll = f.File("gng/ESAA/Plugins/SAAMAN.dll", "SYNTHETIC DLL");
+                var profile = f.File("gng/ESAA APP ACC.prf", "SYNTHETIC PROFILE");
+                f.Settings.SaamanDllPath = dll; f.Settings.SaamanProfilePath = profile; f.Settings.SaamanProfileManaged = true;
+                var target = f.Service.Discover().Single(t => t.Id == AtcRemovalApp.Gng);
+                await Reject(() => Task.FromResult(f.Service.Preview([new(target, true, true)], None, null)));
+                Assert(File.Exists(dll) && File.Exists(profile));
+                var plan = f.Service.Preview([new(target, true, true)], None, f.Recovery);
+                Assert(plan.BackupFiles.Files.Any(file => file.FullPath == dll) && plan.BackupFiles.Files.Any(file => file.FullPath == profile));
+                string? backup = await f.Service.ApplyAsync(plan, null, default);
+                Assert(backup is not null && !File.Exists(dll) && !File.Exists(profile));
+                RemovalFileService.VerifyBackup(plan.BackupFiles, backup!);
+            }),
+            ("selecting GNG never authorizes removal of external configured SAAMAN through a browser reset", async () =>
+            {
+                using var f = new Case(); f.File("gng/ESAA/package", "SYNTHETIC PACKAGE");
+                var dll = f.File("roaming/VatscaUpdateChecker/VATIRISProfile/SAAMAN.dll", "SYNTHETIC DLL");
+                f.Settings.SaamanDllPath = dll;
+                var target = f.Service.Discover().Single(t => t.Id == AtcRemovalApp.Gng);
+                await Reject(() => Task.FromResult(f.Service.Preview([new(target, true, true)], new(false, true, true, false, false), f.Recovery)));
+                Assert(File.Exists(dll) && f.DeletedCredentials.Count == 0);
+            }),
+            ("managed default APP/ACC profile requires recovery even when the SAAMAN DLL is external", async () =>
+            {
+                using var f = new Case();
+                var profile = f.File("gng/ESAA APP ACC.prf", "SYNTHETIC PROFILE");
+                f.Settings.SaamanDllPath = f.File("external/SAAMAN.dll", "SYNTHETIC DLL");
+                f.Settings.SaamanProfileManaged = true;
+                var target = f.Service.Discover().Single(t => t.Id == AtcRemovalApp.Gng);
+                await Reject(() => Task.FromResult(f.Service.Preview([new(target, true, true)], None, null)));
+                Assert(File.Exists(profile) && File.Exists(f.Settings.SaamanDllPath));
+                var plan = f.Service.Preview([new(target, true, true)], None, f.Recovery);
+                Assert(plan.BackupFiles.Files.Any(file => file.FullPath == profile) &&
+                    plan.BackupFiles.Files.All(file => file.FullPath != f.Settings.SaamanDllPath));
+            }),
+            ("changed SAAMAN configuration is protected again before direct removal", async () =>
+            {
+                using var f = new Case(); var retained = f.File("roaming/VatscaUpdateChecker/VATIRISProfile/SAAMAN.dll", "SYNTHETIC DLL");
+                var plan = f.Service.Preview([], new(false, true, true, false, false), null);
+                f.Settings.SaamanDllPath = retained;
+                await Reject(() => f.Service.ApplyAsync(plan, null, default));
+                Assert(File.Exists(retained) && f.DeletedCredentials.Count == 0);
+            }),
+            ("browser reset preserves dormant MAESTRO needed to disable SAAMAN", async () =>
+            {
+                using var f = new Case();
+                var maestro = f.File("roaming/VatscaUpdateChecker/VATIRISProfile/MAESTRO.dll", "SYNTHETIC MAESTRO");
+                f.EnableSaamanWithMaestro(maestro);
+                await Reject(() => Task.FromResult(f.Service.Preview([], new(false, true, true, false, false), f.Recovery)));
+                f.Settings.PatchSaaman = false; f.Settings.SaamanProfileManaged = false;
+                f.Settings.SaamanDllPath = ""; f.Settings.SaamanProfilePath = "";
+                await Reject(() => Task.FromResult(f.Service.Preview([], new(false, true, true, false, false), f.Recovery)));
+                Assert(File.Exists(maestro) && f.DeletedCredentials.Count == 0);
+            }),
+            ("original MAESTRO protection is rechecked when state appears after removal review", async () =>
+            {
+                using var f = new Case();
+                var maestro = f.File("roaming/VatscaUpdateChecker/VATIRISProfile/MAESTRO.dll", "SYNTHETIC MAESTRO");
+                var plan = f.Service.Preview([], new(false, true, true, false, false), f.Recovery);
+                f.EnableSaamanWithMaestro(maestro);
+                await Reject(() => f.Service.ApplyAsync(plan, null, default));
+                Assert(File.Exists(maestro) && f.DeletedCredentials.Count == 0);
+            }),
+            ("Launchpad resets retain original MAESTRO state and SAAMAN personal data", async () =>
+            {
+                using var f = new Case();
+                var maestro = f.File("gng/ESAA/Plugins/MAESTRO/MAESTRO.dll", "SYNTHETIC MAESTRO");
+                f.EnableSaamanWithMaestro(maestro);
+                var state = SaamanProfileService.GetProtectedPaths(f.Settings, f.SaamanStateRoot)
+                    .Single(path => Path.GetExtension(path).Equals(".json", StringComparison.OrdinalIgnoreCase));
+                var stateBytes = File.ReadAllBytes(state);
+                var personal = f.File("local/SAAMAN/preferences.json", "SYNTHETIC PERSONAL STATE");
+                var preferences = f.File("roaming/VatscaUpdateChecker/settings.json", "SYNTHETIC PREFERENCES");
+                var plan = f.Service.Preview([], new(true, true, false, true, true, true), f.Recovery);
+                Assert(plan.DirectRemovalFiles.Files.All(file => file.FullPath != state && file.FullPath != maestro && file.FullPath != personal));
+                await f.Service.ApplyAsync(plan, null, default);
+                Assert(!File.Exists(preferences) && File.Exists(maestro) && File.Exists(personal) &&
+                    File.ReadAllBytes(state).SequenceEqual(stateBytes));
+            }),
+            ("complete GNG removal exports MAESTRO restoration metadata and retains its local copy", async () =>
+            {
+                using var f = new Case();
+                var maestro = f.File("gng/ESAA/Plugins/MAESTRO/MAESTRO.dll", "SYNTHETIC MAESTRO");
+                f.EnableSaamanWithMaestro(maestro);
+                var state = SaamanProfileService.GetProtectedPaths(f.Settings, f.SaamanStateRoot)
+                    .Single(path => Path.GetExtension(path).Equals(".json", StringComparison.OrdinalIgnoreCase));
+                var target = f.Service.Discover().Single(t => t.Id == AtcRemovalApp.Gng);
+                var plan = f.Service.Preview([new(target, true, true)], None, f.Recovery);
+                Assert(plan.BackupFiles.Files.Any(file => file.FullPath == state) &&
+                    plan.DirectRemovalFiles.Files.All(file => file.FullPath != state));
+                var backup = await f.Service.ApplyAsync(plan, null, default);
+                Assert(File.Exists(state) && !File.Exists(maestro));
+                RemovalFileService.VerifyBackup(plan.BackupFiles, backup!);
+            }),
             ("GNG removal protects an unselected client reached through an outside junction", async () =>
             {
                 using var f = new Case(); var client = f.File("gng/ESAA/client/trackaudio.exe", "FAKE-CLIENT");
@@ -519,6 +628,7 @@ internal static class CoordinatorTests
         public bool WebViewRunning { get; set; }
         public List<string> DeletedCredentials { get; } = [];
         public string Recovery => _files.Backups;
+        public string SaamanStateRoot => PathOf("local/VatscaUpdateChecker/Saaman/ProfileState");
         public AppSettings Settings { get; }
         public AtcMaintenanceService Service { get; }
         public Case()
@@ -543,6 +653,16 @@ internal static class CoordinatorTests
         }
         public string PathOf(string relative) => _files.PathOf(relative);
         public string File(string relative, string contents) => _files.File(relative, contents);
+        public void EnableSaamanWithMaestro(string maestro)
+        {
+            var profile = File("gng/ESAA APP ACC.prf", "Plugins\tPlugin0\t" + maestro + "\nPlugins\tPlugin0Display0\tStandard ES radar screen\n");
+            var dll = File("saaman/SAAMAN.dll", "SYNTHETIC SAAMAN");
+            Settings.SaamanDllPath = dll; Settings.SaamanProfilePath = profile;
+            Settings.SaamanProfileManaged = true; Settings.PatchSaaman = true;
+            var policy = new SaamanProfilePolicy(profile, dll, true) { StateRoot = SaamanStateRoot };
+            var plan = SaamanProfileService.BuildPlan(policy, Settings.EuroscopeDataPath);
+            SaamanProfileService.Apply(plan, new SaamanProfileService.OperationContext(PathOf("saaman-profile-recovery"), () => { }));
+        }
         public void Dispose() => _files.Dispose();
     }
 }

@@ -33,7 +33,8 @@ public partial class MainWindow
             // Installation/recovery acquire their own shared lease. Keeping a lease while
             // the user signs in would also prevent those operations from acquiring it.
             var window = new GngUpdateWindow(root, _settings.LastEuroscopeProfile,
-                GngProtectedPaths.ForUpdate(_settings), CleanupProtectedPaths(), _requestedActivityRecovery?.RecoveryFolder) { Owner = this };
+                GngProtectedPaths.ForUpdate(_settings), CleanupProtectedPaths(), _requestedActivityRecovery?.RecoveryFolder,
+                saamanSettings: _settings) { Owner = this };
             ShowOwnedDialog(window);
             _setupRestartRequired |= window.RestartRequired;
             bool saved = true;

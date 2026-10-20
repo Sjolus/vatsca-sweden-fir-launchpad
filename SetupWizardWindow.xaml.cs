@@ -28,6 +28,7 @@ public partial class SetupWizardWindow : Window
     public bool RestartRequired => _state.RestartRequired;
     public bool RemovalRequested { get; private set; }
     public bool GngSetupRequested { get; private set; }
+    public bool SaamanSetupRequested { get; private set; }
 
     public SetupWizardWindow(AppSettings current) : this(new SetupWizardState(current)) { }
 
@@ -60,7 +61,7 @@ public partial class SetupWizardWindow : Window
         DarkModeChoice.IsChecked = _state.Draft.IsDarkMode;
         CompactChoice.IsChecked = _state.Draft.CompactLayout;
         StartupChoice.IsChecked = _state.Draft.CheckOnStartup;
-        foreach (var choice in new[] { EuroScopeNotUsed, TrackAudioNotUsed, VacsNotUsed, VatisNotUsed, VatEfsNotUsed })
+        foreach (var choice in new[] { EuroScopeNotUsed, TrackAudioNotUsed, VacsNotUsed, VatisNotUsed, VatEfsNotUsed, SaamanNotUsed })
             choice.IsChecked = _state.IsNotUsed((string)choice.Tag);
         _ready = wasReady;
     }
@@ -185,7 +186,10 @@ public partial class SetupWizardWindow : Window
         };
         foreach (var choice in choices)
             choice.Label.Text = string.IsNullOrWhiteSpace(choice.Path) ? "No program chosen. You can skip this program." : "Checking program file: " + choice.Path;
-        EuroScopeButton.IsEnabled = ProfileButton.IsEnabled = GngButton.IsEnabled = !_state.RestartRequired;
+        EuroScopeButton.IsEnabled = ProfileButton.IsEnabled = GngButton.IsEnabled = SaamanButton.IsEnabled = !_state.RestartRequired;
+        SaamanPathText.Text = string.IsNullOrWhiteSpace(_state.Draft.SaamanDllPath)
+            ? "No DLL chosen. Install SAAMAN or choose your existing copy."
+            : "Chosen DLL: " + _state.Draft.SaamanDllPath;
         FontsInstallButton.IsEnabled = !_state.RestartRequired && _fonts?.Entries.Any(f => !f.IsUpToDate && f.SourcePath != null) == true;
         SetFreshAvailability(VacsButton, _state.Draft.VacsExePath);
         SetFreshAvailability(TrackAudioButton, _state.Draft.TrackAudioExePath);
@@ -364,6 +368,14 @@ public partial class SetupWizardWindow : Window
         if (_childOpen || _state.RestartRequired) return;
         SaveProgress();
         GngSetupRequested = true;
+        Close();
+    }
+
+    private void Saaman_Click(object sender, RoutedEventArgs e)
+    {
+        if (_childOpen || _state.RestartRequired) return;
+        SaveProgress();
+        SaamanSetupRequested = true;
         Close();
     }
 

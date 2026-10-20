@@ -116,6 +116,9 @@ jobs:
       - name: Test VatEFS installation and updates
         run: dotnet run --project Tests/VatEfsInstaller.Tests/VatEfsInstaller.Tests.csproj -c Release
 
+      - name: Test SAAMAN releases, installation and recovery
+        run: dotnet run --project Tests/Saaman.Tests/Saaman.Tests.csproj -c Release
+
       - name: Test GNG cleanup and restore
         run: dotnet run --project Tests/GngCleanup.Tests/GngCleanup.Tests.csproj -c Release -- --archive
 
@@ -133,6 +136,9 @@ jobs:
 
       - name: Check WPF layouts
         run: dotnet Tests/UiReview/bin/Release/net9.0-windows/Launchpad.UiReview.dll --validate-layouts
+
+      - name: Check SAAMAN layouts
+        run: dotnet Tests/UiReview/bin/Release/net9.0-windows/Launchpad.UiReview.dll --check-saaman
 
   package:
     needs: build

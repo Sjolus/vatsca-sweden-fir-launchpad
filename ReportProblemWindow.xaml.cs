@@ -27,6 +27,7 @@ public partial class ReportProblemWindow : Window
             ReportingApplication.Euroscope => "EuroScope", ReportingApplication.Gng => "Swedish GNG package",
             ReportingApplication.Trackaudio => "TrackAudio", ReportingApplication.Vacs => "VACS",
             ReportingApplication.Vatis => "vATIS", ReportingApplication.Vatefs => "VatEFS", ReportingApplication.Vatiris => "VATIRIS",
+            ReportingApplication.Saaman => "SAAMAN",
             ReportingApplication.Maintenance => "Removal and recovery", _ => "Launchpad"
         })).ToArray();
         CategoryChoice.ItemsSource = new[] {

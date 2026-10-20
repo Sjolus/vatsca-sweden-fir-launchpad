@@ -39,15 +39,16 @@ public partial class MainWindow
             var dataFolder = _settings.EuroscopeDataPath;
             var executableFolder = string.IsNullOrWhiteSpace(_settings.EuroscopeExePath) ? null : Path.GetDirectoryName(_settings.EuroscopeExePath);
             var vatEfsFolder = _settings.VatEfsPath;
+            var saamanDll = _settings.SaamanDllPath;
             // The comparison key stays in memory. Paths are never passed to the reporting transport.
-            var signature = capture.SupportId + "|" + capture.Generation + "|" + dataFolder + "|" + executableFolder + "|" + vatEfsFolder + "|" +
+            var signature = capture.SupportId + "|" + capture.Generation + "|" + dataFolder + "|" + executableFolder + "|" + vatEfsFolder + "|" + saamanDll + "|" +
                 string.Join("|", observations.Select(item => $"{item.Component}:{item.Status}:{item.Version}"));
             if (signature == _lastInventorySignature && Stopwatch.GetElapsedTime(_lastInventoryCaptureTime) < TimeSpan.FromMinutes(10)) return;
             var inventory = await Task.Run(() =>
             {
                 var items = ReportingInventoryCollector.Collect(observations, dataFolder, executableFolder, vatEfsFolder);
                 var dlls = capture.IncludeDllInventory
-                    ? ReportingInventoryCollector.CollectDllInventory(dataFolder, executableFolder, vatEfsFolder) : null;
+                    ? ReportingInventoryCollector.CollectDllInventory(dataFolder, executableFolder, vatEfsFolder, saamanDll) : null;
                 return (Items: items, Dlls: dlls);
             });
             if (_windowClosed) return;
@@ -131,6 +132,7 @@ public partial class MainWindow
         "VACS" => ReportingApplication.Vacs,
         "vATIS" => ReportingApplication.Vatis,
         "VatEFS" => ReportingApplication.Vatefs,
+        "SAAMAN" => ReportingApplication.Saaman,
         "VATIRIS" => ReportingApplication.Vatiris,
         "Selected applications and data" => ReportingApplication.Maintenance,
         _ => ReportingApplication.Launchpad

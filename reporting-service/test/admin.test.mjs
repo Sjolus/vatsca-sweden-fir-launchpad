@@ -69,6 +69,12 @@ test('usage analytics default to a bounded UTC window and reject ambiguous filte
   assert.equal(selection.window.days, 30); assert.equal(selection.filters.application, 'euroscope'); assert.equal(selection.filters.launchpad_version, '2.2.0');
   assert.equal(selection.cohort.active_installations, 1); assert.equal(selection.cohort.app_launches, 1);
   assert.equal(selection.cohort.returning_available, false);
+  const saamanResponse = await f.request('/api/admin/inventory?application=saaman', undefined, session);
+  assert.equal(saamanResponse.status, 200);
+  const saaman = await saamanResponse.json();
+  assert.equal(saaman.filters.application, 'saaman');
+  assert.equal(saaman.inventory.dll_inventory.product_filter, 'saaman');
+  assert.deepEqual(saaman.inventory.components, []);
 });
 
 test('HTTP passkey flow binds cookies, uses private responses and supports logout', async t => {

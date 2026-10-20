@@ -1,7 +1,7 @@
 'use strict';
 // These views describe observations from opt-in installations, never a controller census.
 const usageNames = {
-  launchpad: 'Launchpad', euroscope: 'EuroScope', gng: 'Swedish GNG', trackaudio: 'TrackAudio', vacs: 'VACS', vatis: 'vATIS', vatefs: 'VatEFS', vatiris: 'VATIRIS', maintenance: 'Maintenance',
+  launchpad: 'Launchpad', euroscope: 'EuroScope', gng: 'Swedish GNG', trackaudio: 'TrackAudio', vacs: 'VACS', vatis: 'vATIS', vatefs: 'VatEFS', vatiris: 'VATIRIS', maintenance: 'Maintenance', saaman: 'SAAMAN',
   topsky: 'TopSky', rdf: 'RDF', vatefs_plugin: 'VatEFS plugin', euroscope_topsky: 'TopSky', euroscope_rdf: 'RDF', euroscope_vatefs: 'VatEFS plugin',
   afv_euroscope_bridge: 'AFV EuroScope Bridge', check_updates: 'Check for updates', controller_profile_review: 'Controller-profile review', gng_package_review: 'GNG package review', gng_cleanup_review: 'GNG cleanup review', gng_restore_review: 'GNG restore review', setup_guide: 'Setup guide', install_or_update: 'Install or update tools', adopt: 'Adopt existing paths', font_check: 'Font check',
   update_check: 'Check for updates', gng_review: 'GNG package review', profile_review: 'Controller-profile review', software_management: 'Install or update tools', setup: 'Setup guide', cleanup: 'GNG cleanup review',

@@ -77,6 +77,33 @@ internal static class DllInventoryTests
             using var reloaded = f.NewClient();
             Assert(reloaded.History.LastSent.Single().Json == sent.Json);
         });
+        await Test("SAAMAN keeps the existing consent and legacy schema through delivery and history", async () =>
+        {
+            using var f = new Fixture();
+            var details = Details() with { Entries = new[] { Entry(4) with { Product = ReportingDllProduct.Saaman,
+                Version = "1.3.37", VersionSource = ReportingDllVersionSource.Registration } } };
+            Assert(f.Client.TrySavePreferences(false, true, false));
+            Assert(!f.Client.RecordInventory(f.Client.BeginInventoryCapture()!, InventoryTests.Items(), details));
+            Assert(f.Client.TrySavePreferences(false, true, false, true));
+            Assert(f.Client.RecordInventory(f.Client.BeginInventoryCapture()!, InventoryTests.Items(), details));
+            await f.Client.FlushOnceAsync();
+            var sent = f.Client.History.LastSent.Single();
+            Assert(ReportingHistoryValidation.Valid(sent, f.Client.State.SupportId));
+            Assert(sent.Json.Contains("\"product\":\"saaman\"") && sent.Json.Contains("\"version\":\"1.3.37\""));
+            Assert(ReportingHistoryPresentation.Describe(sent).Contains("SAAMAN"));
+            using var reloaded = f.NewClient();
+            Assert(reloaded.History.LastSent.Single().Json == sent.Json);
+            Assert(InventoryTests.Items().Count == 10 && (int)ReportingApplication.Maintenance == 8 &&
+                (int)ReportingDllProduct.VatcanBookings == 11);
+            Assert(f.Client.TrySavePreferences(true, true, false, true));
+            Assert(!f.Client.RecordUsage(ReportingEventName.ApplicationOpened, new(Application: ReportingApplication.Saaman)));
+            var report = f.Client.PrepareReport(ReportingApplication.Saaman, ReportingCategory.Installation, false);
+            Assert(report.Json.Contains("\"application\":\"saaman\""));
+            Assert((await f.Client.SendReportAsync(report, default)).Succeeded);
+            var manual = f.Client.History.LastSent.Single(item => item.Stream == ReportingStream.ManualReport);
+            Assert(ReportingHistoryValidation.Valid(manual, f.Client.State.SupportId) &&
+                ReportingHistoryPresentation.Describe(manual).Contains("Application: SAAMAN"));
+        });
         await Test("DLL schema rejects malformed identities, arbitrary text, inconsistent status and oversized payloads", () =>
         {
             var valid = Details(); Assert(ReportingWire.ValidDllInventory(valid));

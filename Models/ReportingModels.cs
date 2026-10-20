@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace VatscaUpdateChecker.Models;
 
-public enum ReportingApplication { Launchpad, Euroscope, Gng, Trackaudio, Vacs, Vatis, Vatefs, Vatiris, Maintenance }
+public enum ReportingApplication { Launchpad, Euroscope, Gng, Trackaudio, Vacs, Vatis, Vatefs, Vatiris, Maintenance, Saaman }
 public enum ReportingCategory { Setup, Installation, Update, Gng, Launch, Appearance, Other }
 public enum ReportingEventName { SessionStarted, SetupStep, OperationStarted, OperationFinished, GngPackageObtained, PreferenceChanged, OperationFailed, UnhandledError, ApplicationOpened, FeatureUsed, PreferencesSnapshot, InventorySnapshot }
 public enum ReportingFeature { CheckUpdates, ControllerProfileReview, GngPackageReview, GngCleanupReview, GngRestoreReview, SetupGuide, InstallOrUpdate, Adopt, FontCheck }
@@ -14,7 +14,7 @@ public enum ReportingInventorySource { ConfiguredApp, RegisteredMsi, PackageMeta
 public sealed record ReportingInventoryEntry(ReportingInventoryComponent Component, ReportingInventoryStatus Status, ReportingInventorySource Source, string? Version = null);
 public sealed record ReportingAppObservation(ReportingInventoryComponent Component, ReportingInventoryStatus Status, string? Version = null);
 public enum ReportingDllInventoryStatus { Complete, Partial, Unavailable }
-public enum ReportingDllProduct { Unknown, Topsky, Rdf, Vatefs, AfvEuroscopeBridge, ArrivalLoadBalancer, Cdm, GroundRadar, Maestro, Vatiris, Vch, VatcanBookings }
+public enum ReportingDllProduct { Unknown, Topsky, Rdf, Vatefs, AfvEuroscopeBridge, ArrivalLoadBalancer, Cdm, GroundRadar, Maestro, Vatiris, Vch, VatcanBookings, Saaman }
 public enum ReportingDllRole { Current, Staged }
 public enum ReportingDllVersionSource { Unknown, Resource, Embedded, Registration }
 public sealed record ReportingDllEntry(string Sha256, ReportingDllProduct Product, ReportingDllRole Role, int Copies,

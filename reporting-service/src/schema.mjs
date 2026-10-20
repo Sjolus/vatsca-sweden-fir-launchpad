@@ -10,9 +10,9 @@ const DLL_VENDOR_VERSION = /^[0-9]{1,6}(?:\.[0-9]{1,6}){1,3}(?:-(?:19|20)[0-9]{2
 export const FEATURES = Object.freeze(['check_updates','controller_profile_review','gng_package_review','gng_cleanup_review','gng_restore_review','setup_guide','install_or_update','adopt','font_check']);
 export const INVENTORY = Object.freeze({euroscope:'configured_app',gng:'package_metadata',trackaudio:'configured_app',vacs:'configured_app',vatis:'configured_app',vatefs:'registered_msi',topsky:'plugin_file',rdf:'plugin_file',vatefs_plugin:'plugin_file',afv_euroscope_bridge:'plugin_file'});
 export const INVENTORY_STATUSES = Object.freeze(['known','unknown','absent','unavailable']);
-export const DLL_PRODUCTS = Object.freeze(['unknown','topsky','rdf','vatefs','afv_euroscope_bridge','arrival_load_balancer','cdm','ground_radar','maestro','vatiris','vch','vatcan_bookings']);
+export const DLL_PRODUCTS = Object.freeze(['unknown','topsky','rdf','vatefs','afv_euroscope_bridge','arrival_load_balancer','cdm','ground_radar','maestro','vatiris','vch','vatcan_bookings','saaman']);
 export const ENUMS = Object.freeze({
-  application: ['launchpad','euroscope','gng','trackaudio','vacs','vatis','vatefs','vatiris','maintenance'],
+  application: ['launchpad','euroscope','gng','trackaudio','vacs','vatis','vatefs','vatiris','maintenance','saaman'],
   operation: ['install','update','repair','replace','remove','cleanup','restore','restore_cleanup','prerequisite','setup','adopt','check','save','download','launch'],
   outcome: ['completed','cancelled','blocked','failed','unknown'],
   stage: ['start','check','prepare','download','verify','apply','finish','welcome','applications','gng','profile','fonts','preferences'],

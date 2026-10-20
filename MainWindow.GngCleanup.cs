@@ -42,6 +42,11 @@ public partial class MainWindow
     {
         yield return _settings.LastEuroscopeProfile;
         yield return _settings.VatEfsPath;
+        if (_settings.SaamanProfileManaged || _settings.PatchSaaman)
+            yield return string.IsNullOrWhiteSpace(_settings.SaamanProfilePath)
+                ? Path.Combine(_settings.EuroscopeDataPath, SaamanProfileService.DefaultProfileName)
+                : _settings.SaamanProfilePath;
         foreach (var path in GngProtectedPaths.ForUpdate(_settings)) yield return path;
+        foreach (var path in SaamanProfileService.GetProtectedPaths(_settings)) yield return path;
     }
 }

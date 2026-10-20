@@ -48,10 +48,14 @@ internal static class WireFixture
         inventory.Add(new(Guid.NewGuid(), support, session, now, "2.2.0", ReportingEventName.InventorySnapshot, Items: InventoryTests.Items(),
             DllInventory: new(ReportingDllInventoryStatus.Complete, new[] { dlls[1] with
             { Product = ReportingDllProduct.ArrivalLoadBalancer, Version = "0.2.11T", FileVersion = "1.0.0.2", VersionSource = ReportingDllVersionSource.Registration } })));
+        inventory.Add(new(Guid.NewGuid(), support, session, now, "2.5.0", ReportingEventName.InventorySnapshot, Items: InventoryTests.Items(),
+            DllInventory: new(ReportingDllInventoryStatus.Complete, new[] { dlls[1] with
+            { Product = ReportingDllProduct.Saaman, Version = "1.3.37", FileVersion = null, VersionSource = ReportingDllVersionSource.Registration } })));
         foreach (var entry in usage.Concat(errors).Concat(inventory))
             if (!ReportingWire.ValidEvent(entry, DateTime.UtcNow)) throw new InvalidDataException("Invalid synthetic wire fixture.");
         var reports = Enum.GetValues<ReportingCategory>().Select(category => new ReportingReport(1, Guid.NewGuid(), support,
-            "2.2.0", ReportingApplication.Gng, category, usage.Take(20).ToArray())).ToArray();
+            "2.2.0", category == ReportingCategory.Installation ? ReportingApplication.Saaman : ReportingApplication.Gng,
+            category, usage.Take(20).ToArray())).ToArray();
         var fixture = new
         {
             usage_batches = usage.Chunk(25).Select(events => new ReportingBatch(1, events)).ToArray(),

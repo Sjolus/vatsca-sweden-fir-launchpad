@@ -54,6 +54,8 @@ public partial class MainWindow : Window
     private void Fonts_Click(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "Fonts_Click");
     private void GngCleanup_Click(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "GngCleanup_Click");
     private void GngUpdate_Click(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "GngUpdate_Click");
+    private void SaamanManage_Click(object sender, RoutedEventArgs e) { }
+    private void SaamanGuide_Click(object sender, RoutedEventArgs e) { }
     private void EuroScopeManage_Click(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "EuroScopeManage_Click");
     private void Download_Click(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "Download_Click");
     private void SoftwareUpdate_Click(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "SoftwareUpdate_Click");
@@ -77,6 +79,8 @@ public partial class SettingsWindow : Window
 }
 public partial class AppConfigWindow : Window
 {
+    private void PreviewSaaman_Click(object sender, RoutedEventArgs e) { }
+    private void ApplySaaman_Click(object sender, RoutedEventArgs e) { }
     public AppConfigWindow() { InitializeComponent(); UiFixture.Initialize(this); }
     private void Preview_Click(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "Preview_Click");
     private void Save_Click(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "Save_Click");

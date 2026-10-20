@@ -133,6 +133,7 @@ public static class ReportingHistoryPresentation
         ReportingApplication.Vatis or ReportingInventoryComponent.Vatis => "vATIS",
         ReportingApplication.Vatefs or ReportingInventoryComponent.Vatefs => "VatEFS",
         ReportingApplication.Vatiris => "VATIRIS",
+        ReportingApplication.Saaman or ReportingDllProduct.Saaman => "SAAMAN",
         ReportingInventoryComponent.Topsky or ReportingDllProduct.Topsky => "TopSky",
         ReportingInventoryComponent.Rdf or ReportingDllProduct.Rdf => "RDF",
         ReportingInventoryComponent.VatefsPlugin => "VatEFS plugin",

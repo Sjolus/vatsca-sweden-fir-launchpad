@@ -165,6 +165,14 @@
                             ToolTip="Sign in on AeroNav, download a GNG package, then review its installation" AutomationProperties.Name="Set up or update the Swedish GNG package"/>
                     <Button x:Name="DetailFontsButton" Content="Check fonts…" Click="Fonts_Click" Style="{StaticResource DetailAction}"
                             Visibility="{Binding ShowGngMaintenance, Converter={StaticResource BoolToVisibility}}" ToolTip="{Binding FontsTooltip}" AutomationProperties.Name="Check GNG fonts"/>
+                    <Button x:Name="DetailSaamanButton" Content="Set up / update…" Click="SaamanManage_Click" Style="{StaticResource DetailAction}"
+                            Visibility="{Binding HasSaamanManagement, Converter={StaticResource BoolToVisibility}}" IsEnabled="{Binding SoftwareActionsAllowed}"
+                            ToolTip="Install or update SAAMAN from its official stable releases" AutomationProperties.Name="Set up or update SAAMAN"/>
+                    <Button x:Name="DetailSaamanProfileButton" Content="Profile options…" Click="AppConfig_Click" Style="{StaticResource DetailAction}"
+                            Visibility="{Binding HasSaamanManagement, Converter={StaticResource BoolToVisibility}}" IsEnabled="{Binding SoftwareActionsAllowed}"
+                            ToolTip="Review optional SAAMAN integration for the APP/ACC profile"/>
+                    <Button x:Name="DetailSaamanGuideButton" Content="Controller guide ↗" Click="SaamanGuide_Click" Style="{StaticResource DetailAction}"
+                            Visibility="{Binding HasSaamanManagement, Converter={StaticResource BoolToVisibility}}" IsEnabled="{Binding SoftwareActionsAllowed}"/>
                     <Button x:Name="DetailCleanupButton" Content="Clean up…" Click="GngCleanup_Click" Style="{StaticResource DetailAction}"
                             Visibility="{Binding ShowGngMaintenance, Converter={StaticResource BoolToVisibility}}" IsEnabled="{Binding SoftwareActionsAllowed}"
                             ToolTip="Compare old and new complete GNG ZIPs, then review files to move into a backup" AutomationProperties.Name="Review old GNG files for cleanup"/>

@@ -181,6 +181,8 @@ test('all-DLL view shows fingerprints, both version sources and locations withou
   assert.match(render.renderInventory(data).text,/Windows version resource/);
   Object.assign(data.inventory.dll_inventory.rows[0],{product:'vatcan_bookings',version:'1.1.6-2022wb',file_version:'1.0.0.1',version_source:'registration'});
   assert.match(render.renderInventory(data).text,/VATCAN Bookings.*1\.1\.6-2022wb EuroScope plugin registration File version: 1\.0\.0\.1/);
+  Object.assign(data.inventory.dll_inventory.rows[0],{product:'saaman',version:'1.3.37',file_version:null,version_source:'registration'});
+  assert.match(render.renderInventory(data).text,/SAAMAN.*1\.3\.37 EuroScope plugin registration/);
   assertFiniteChart(inventory);
 });
 
@@ -197,6 +199,8 @@ test('missing or unavailable detailed DLL data stays distinct from absence and c
   assert.match(panel.text,/Showing DLLs recognized as VATIRIS; unidentified DLLs remain visible under All applications/);
   assert.match(panel.text,/No matching DLL was reported.*partial or unavailable scans do not prove absence/);
   assert.doesNotMatch(panel.text,/selected application has no component/);
+  data.filters.application='saaman'; data.inventory.dll_inventory.product_filter='saaman';
+  assert.match(render.renderInventory(data).text,/Showing DLLs recognized as SAAMAN; unidentified DLLs remain visible under All applications/);
   assertFiniteChart(panel);
 });
 

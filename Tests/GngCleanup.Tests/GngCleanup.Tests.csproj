@@ -7,6 +7,11 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="..\..\Services\EuroScopeProcessGuard.cs" Link="EuroScopeProcessGuard.cs" />
+    <Compile Include="..\..\Services\SaamanProfileService.cs" Link="SaamanProfileService.cs" />
+    <Compile Include="..\..\Services\SaamanProfileService.RestoreState.cs" Link="SaamanProfileService.RestoreState.cs" />
+    <Compile Include="..\..\Services\SaamanFileSafety.cs" Link="SaamanFileSafety.cs" />
+    <Compile Include="..\..\Models\SaamanProfilePolicy.cs" Link="SaamanProfilePolicy.cs" />
+    <Compile Include="..\..\Models\AppSettings.cs" Link="AppSettings.cs" />
     <Compile Include="..\..\Services\GngCleanupService.cs" Link="GngCleanupService.cs" />
     <Compile Include="..\..\Services\MaintenanceLock.cs" Link="MaintenanceLock.cs" />
     <Compile Include="..\..\Services\PreservationPath.cs" Link="PreservationPath.cs" />

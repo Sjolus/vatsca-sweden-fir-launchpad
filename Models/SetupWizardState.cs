@@ -114,9 +114,27 @@ public sealed class SetupWizardState
             target.VatsimCid = settings.VatsimCid;
             target.ObsCallsign = settings.ObsCallsign;
             target.PatchVatEfs = settings.PatchVatEfs;
+            target.PatchSaaman = settings.PatchSaaman;
+            target.SaamanProfileManaged = settings.SaamanProfileManaged;
+            target.SaamanDllPath = settings.SaamanDllPath;
+            target.SaamanProfilePath = settings.SaamanProfilePath;
         }
         HasSavedActions = true;
         _actions.Add("Controller profile saved. Any file changes reported by that dialog have already taken effect.");
+    }
+
+    public void AcceptSaaman(AppSettings settings)
+    {
+        foreach (var target in new[] { Draft, _saved })
+        {
+            target.SaamanDllPath = settings.SaamanDllPath;
+            target.SaamanProfilePath = settings.SaamanProfilePath;
+            target.PatchSaaman = settings.PatchSaaman;
+            target.SaamanProfileManaged = settings.SaamanProfileManaged;
+        }
+        if (!string.IsNullOrWhiteSpace(settings.SaamanDllPath)) SetNotUsed("SAAMAN", false);
+        HasSavedActions = true;
+        _actions.Add("SAAMAN location saved. Enable it separately in Controller profile for the reviewed APP/ACC profile.");
     }
 
     public void RecordInstallation(SetupWizardApplication app, string executablePath,

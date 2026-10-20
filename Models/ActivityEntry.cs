@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace VatscaUpdateChecker.Models;
 
-public enum ActivityApplication { EuroScope, Gng, TrackAudio, Vacs, Vatis, VatEfs, Launchpad, Maintenance }
+public enum ActivityApplication { EuroScope, Gng, TrackAudio, Vacs, Vatis, VatEfs, Launchpad, Maintenance, Saaman }
 public enum ActivityOperation { Install, Update, Repair, Replace, Remove, Cleanup, Restore, RestoreCleanup, Prerequisite }
 public enum ActivityOutcome { Completed, Stopped, Cancelled, NeedsAttention }
 
@@ -15,6 +15,7 @@ public sealed record ActivityEntry(Guid Id, DateTimeOffset Time, ActivityApplica
     {
         ActivityApplication.Gng => "Swedish GNG", ActivityApplication.Vacs => "VACS",
         ActivityApplication.Vatis => "vATIS", ActivityApplication.VatEfs => "VatEFS",
+        ActivityApplication.Saaman => "SAAMAN",
         ActivityApplication.Launchpad => "Launchpad", ActivityApplication.Maintenance => "Selected applications and data",
         _ => Application.ToString()
     };

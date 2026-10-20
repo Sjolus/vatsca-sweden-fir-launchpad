@@ -1,6 +1,6 @@
 // Pipe Reporting.Tests --emit-wire into this checker. No HTTP or persistent store.
 import assert from 'node:assert/strict';
-import { validateBatch, validateReport } from '../../reporting-service/src/schema.mjs';
+import { validateBatch, validateReport, ENUMS, DLL_PRODUCTS } from '../../reporting-service/src/schema.mjs';
 
 let input = '';
 for await (const chunk of process.stdin) input += chunk.toString('utf8');
@@ -12,4 +12,9 @@ for (const [key, stream] of [['usage_batches', 'usage'], ['error_batches', 'erro
 }
 assert.equal(fixture.reports.length, 7);
 for (const report of fixture.reports) validateReport(report, now);
+const applications = fixture.usage_batches.flatMap(batch => batch.events).map(event => event.application).filter(Boolean);
+const products = fixture.inventory_batches.flatMap(batch => batch.events).flatMap(event => event.dll_inventory?.entries ?? []).map(entry => entry.product);
+assert.deepEqual([...new Set(applications)].sort(), [...ENUMS.application].sort());
+assert.deepEqual([...new Set(products)].sort(), [...DLL_PRODUCTS].sort());
+assert.ok(fixture.reports.some(report => report.application === 'saaman'));
 console.log(`PASS desktop/server wire compatibility: ${events} events covering every enum and ${fixture.reports.length} report categories.`);

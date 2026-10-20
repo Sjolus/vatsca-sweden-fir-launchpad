@@ -14,6 +14,8 @@ internal static class GngProtectedPaths
         // not that entire shared directory, when installing official GNG files.
         if (!string.IsNullOrWhiteSpace(settings.VatEfsPath))
             yield return Path.Combine(settings.VatEfsPath, "VatEFS.dll");
+        if (!string.IsNullOrWhiteSpace(settings.SaamanDllPath))
+            yield return settings.SaamanDllPath;
         foreach (var executable in new[] { settings.TrackAudioExePath, settings.VacsExePath, settings.VatisExePath })
         {
             if (!string.IsNullOrWhiteSpace(executable))

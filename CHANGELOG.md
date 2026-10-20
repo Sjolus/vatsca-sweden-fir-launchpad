@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.5.0] — 2026-10-20
+
+- Install and update SAAMAN from its latest stable GitHub release, or adopt an existing plugin. Show its version alongside the other applications.
+- Add an optional APP/ACC profile change that puts SAAMAN first and replaces MAESTRO's entry. Disabling it restores any MAESTRO entry Launchpad replaced, with its original order and display permissions, while keeping other profile changes. Preview and apply it separately from controller details, with a backup of the original profile.
+- Preserve the SAAMAN profile choice during GNG updates. Apply its plugin changes only to the selected profile and keep other plugins' display settings.
+- Verify downloaded SAAMAN files, keep recovery copies before replacing the DLL, and require EuroScope to be closed for installation, profile changes and recovery.
+- Recognize SAAMAN in optional detailed DLL reporting and the maintainer dashboard.
+- Move controller-profile explanations into information buttons available by mouse or keyboard, keeping the form easier to scan.
+
 ## [2.4.0] — 2026-10-14
 
 - Restore visible Show and confirmed Close actions for running applications. Add reviewed Start all and Close all actions, with individual selection and normal application close prompts.

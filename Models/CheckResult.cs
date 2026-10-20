@@ -156,6 +156,14 @@ public class CheckResult : INotifyPropertyChanged
         get
         {
             if (IsNotUsed) return "Optional · your saved locations and settings are kept";
+            if (HasSaamanManagement) return Status switch
+            {
+                CheckStatus.Checking => "Checking the DLL and stable releases",
+                CheckStatus.NotConfigured => "Install or choose your existing SAAMAN.dll",
+                CheckStatus.UpdateAvailable => "Close EuroScope before updating",
+                CheckStatus.Error => "Review the DLL or release check",
+                _ => "Runs inside EuroScope · optional APP/ACC integration"
+            };
             if (HasSoftwareUpdate)
             {
                 if (SoftwareNeedsSetup && !SoftwareUpdateBusy)
@@ -294,6 +302,7 @@ public class CheckResult : INotifyPropertyChanged
     /// <summary>Uses the dedicated inline Launchpad update action in the existing status column.</summary>
     public bool HasSelfUpdate { get; init; }
     public bool HasEuroScopeManagement { get; init; }
+    public bool HasSaamanManagement { get; init; }
     public string EuroScopeSetupText => string.IsNullOrWhiteSpace(LaunchPath) || !File.Exists(LaunchPath) ? "Set up…" : "Manage…";
     public bool ShowConfigure => (HasFontsCheck && string.IsNullOrWhiteSpace(LaunchPath)) ||
         (IsLocalUrl && !HasSoftwareUpdate && Status is CheckStatus.Unknown or CheckStatus.NotConfigured);
@@ -543,7 +552,7 @@ public class CheckResult : INotifyPropertyChanged
     }
 
     public bool ShowLaunch =>
-        !string.IsNullOrEmpty(LaunchPath) &&
+        !HasSaamanManagement && !string.IsNullOrEmpty(LaunchPath) &&
         (IsLocalUrl ? IsLocalUrlReachable || IsRunning :
          IsWebApp   ? true :
          IsFolder   ? Directory.Exists(LaunchPath) :
@@ -555,7 +564,7 @@ public class CheckResult : INotifyPropertyChanged
     /// <summary>Split launch+profile button for EuroScope.</summary>
     public bool ShowSplitLaunch => ShowLaunch && HasProfiles && !ShowRunningActions;
 
-    public bool ShowRunningActions => IsRunning && !IsFolder && !HasSelfUpdate;
+    public bool ShowRunningActions => IsRunning && !IsFolder && !HasSelfUpdate && !HasSaamanManagement;
 
     public string LaunchTooltip => IsFolder ? "Open the GNG package folder." : IsRunning
         ? $"Show the running {DisplayName} window."
@@ -622,7 +631,7 @@ public class CheckResult : INotifyPropertyChanged
 
     public string DownloadActionText => IsLocalUrl ? "Open releases ↗" : "Get package ↗";
     public bool ShowDownload =>
-        !HasEuroScopeManagement && !HasFontsCheck && !HasSoftwareUpdate && !string.IsNullOrEmpty(DownloadUrl) &&
+        !HasEuroScopeManagement && !HasSaamanManagement && !HasFontsCheck && !HasSoftwareUpdate && !string.IsNullOrEmpty(DownloadUrl) &&
         (IsLocalUrl ? Status is not (CheckStatus.Unknown or CheckStatus.Checking) : Status == CheckStatus.UpdateAvailable);
 
     public event PropertyChangedEventHandler? PropertyChanged;

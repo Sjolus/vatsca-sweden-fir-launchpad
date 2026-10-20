@@ -56,6 +56,23 @@ test('DLL registration versions remain distinct from Windows file metadata in st
   assert.deepEqual(reopened.admitBatch('inventory',batch(snapshot)),{accepted:0,duplicates:1});
 });
 
+test('SAAMAN filtering retains detailed observations independently of usage and fixed component summaries',t=>{
+  const f=fixture(t),saaman=dll(1,{product:'saaman',version:'1.3.37',version_source:'registration'});
+  f.store.admitBatch('inventory',batch(withDlls(inventory(f,A),[saaman,dll(2,{product:'vatefs'})]),
+    withDlls(inventory(f,B),[{...saaman,role:'staged',copies:2}]),inventory(f,C)));
+  const result=f.store.usage({application:'saaman'});
+  assert.equal(result.cohort.active_installations,0);
+  assert.equal(result.inventory.snapshot_installations,3);
+  assert.deepEqual(result.inventory.components,[]);
+  assert.equal(result.inventory.dll_inventory.product_filter,'saaman');
+  assert.equal(result.inventory.dll_inventory.not_shared_installations,1);
+  assert.equal(result.inventory.dll_inventory.rows.length,2);
+  assert.ok(result.inventory.dll_inventory.rows.every(row=>row.product==='saaman' && row.version==='1.3.37' && row.file_version===null));
+  assert.equal(result.inventory.dll_inventory.current_installations,1);
+  assert.equal(result.inventory.dll_inventory.staged_installations,1);
+  assert.equal(f.store.usage().inventory.dll_inventory.rows.length,3);
+});
+
 test('DLL reporting retains immutable legacy retries and bounds grouped output without inventing absence',t=>{
   const f=fixture(t),legacy=inventory(f,A);
   assert.deepEqual(f.store.admitBatch('inventory',batch(legacy)),{accepted:1,duplicates:0});

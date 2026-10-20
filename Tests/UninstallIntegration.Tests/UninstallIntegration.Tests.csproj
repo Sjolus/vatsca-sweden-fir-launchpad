@@ -6,6 +6,11 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../../Models/SaamanProfilePolicy.cs" Link="SaamanProfilePolicy.cs" />
+    <Compile Include="../../Services/SaamanProfileService.cs" Link="SaamanProfileService.cs" />
+    <Compile Include="../../Services/SaamanProfileService.RestoreState.cs" Link="SaamanProfileService.RestoreState.cs" />
+    <Compile Include="../../Services/SaamanFileSafety.cs" Link="SaamanFileSafety.cs" />
+    <Compile Include="../../Services/EuroScopeProcessGuard.cs" Link="EuroScopeProcessGuard.cs" />
     <PackageReference Include="Velopack" Version="1.2.161" />
     <Compile Include="..\..\Models\AppSettings.cs" Link="AppSettings.cs" />
     <Compile Include="..\..\Services\LaunchpadUninstallService.cs" Link="LaunchpadUninstallService.cs" />

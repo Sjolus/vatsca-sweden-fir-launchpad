@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { resolve, dirname } from 'node:path';
 import { createRequire } from 'node:module';
 import { createAuth, cookieValue, sessionCookie, SESSION_COOKIE, FLOW_COOKIE, ACCESS_CONFLICT_MESSAGE } from './auth.mjs';
-import { VERSION } from './schema.mjs';
+import { VERSION, ENUMS } from './schema.mjs';
 import { readJson } from './intake.mjs';
 
 const publicDirectory = fileURLToPath(new URL('../public/', import.meta.url));
@@ -133,7 +133,7 @@ export function createAdminHandler({ store, config, now = () => Date.now() }) {
         const application = url.searchParams.get('application') || undefined;
         const launchpad_version = url.searchParams.get('launchpad_version') || undefined;
         const days = url.searchParams.has('days') ? Number(url.searchParams.get('days')) : undefined;
-        if ((application && !['launchpad','euroscope','gng','trackaudio','vacs','vatis','vatefs','vatiris','maintenance'].includes(application)) || (launchpad_version && (launchpad_version.length > 40 || !VERSION.test(launchpad_version))) || (days !== undefined && ![7,30].includes(days))) throw new Error('Invalid filters');
+        if ((application && !ENUMS.application.includes(application)) || (launchpad_version && (launchpad_version.length > 40 || !VERSION.test(launchpad_version))) || (days !== undefined && ![7,30].includes(days))) throw new Error('Invalid filters');
         if (path === '/api/admin/overview') { reply(res, 200, store.overview({ application, launchpad_version, days })); return true; }
         if (path === '/api/admin/usage' || path === '/api/admin/inventory') {
           if ([...url.searchParams.keys()].some(key => !['application', 'launchpad_version', 'days'].includes(key)) || [...url.searchParams.keys()].some(key => url.searchParams.getAll(key).length !== 1)) throw new Error('Invalid filters');

@@ -20,6 +20,7 @@ public partial class GngUpdateWindow : Window
     private readonly string? _selectedProfile;
     private readonly string[] _protectedPaths;
     private readonly string[] _cleanupProtectedPaths;
+    private readonly AppSettings? _saamanSettings;
     private readonly Dictionary<Window, WebView2> _popups = new();
     private readonly HashSet<Window> _downloadHiddenPopups = [];
     private bool _browserInteractionBlocked;
@@ -70,11 +71,12 @@ public partial class GngUpdateWindow : Window
     private bool CanGetPackage => Idle && !_recoveryRequired && !_selectionInFlight;
 
     public GngUpdateWindow(string dataFolder, string? selectedProfile, IEnumerable<string> protectedPaths,
-        IEnumerable<string>? cleanupProtectedPaths = null, string? recoveryFolder = null)
+        IEnumerable<string>? cleanupProtectedPaths = null, string? recoveryFolder = null, AppSettings? saamanSettings = null)
     {
         InitializeComponent();
         DataFolder = dataFolder ?? string.Empty;
         _selectedProfile = selectedProfile;
+        _saamanSettings = saamanSettings?.Copy();
         _suggestedRecoveryFolder = recoveryFolder;
         _protectedPaths = protectedPaths.Where(path => !string.IsNullOrWhiteSpace(path)).ToArray();
         _cleanupProtectedPaths = (cleanupProtectedPaths ?? _protectedPaths).Where(path => !string.IsNullOrWhiteSpace(path)).ToArray();
@@ -863,7 +865,8 @@ public partial class GngUpdateWindow : Window
         SetBusy(true, "Checking package contents and your destination to prepare the file review…", "Preparing installation review");
         try
         {
-            var plan = await Task.Run(() => GngUpdateService.BuildPlan(path, DataFolder, _protectedPaths, referencePath, preserveListLayout));
+            var saamanPolicy = _saamanSettings is null ? null : SaamanProfileService.Capture(_saamanSettings, DataFolder);
+            var plan = await Task.Run(() => GngUpdateService.BuildPlan(path, DataFolder, _protectedPaths, referencePath, preserveListLayout, saamanPolicy));
             if (_closed) return;
             _plan = plan;
             _primaryPackagePath = _referenceVersion = null;
@@ -1032,7 +1035,11 @@ public partial class GngUpdateWindow : Window
         try
         {
             GngUpdateService.RequireNoPendingUpdate(DataFolder);
-            var cleanup = new GngCleanupWindow(DataFolder, _selectedProfile, _cleanupProtectedPaths, _oldCompleteZip, _newCompleteZip) { Owner = this };
+            // A just-completed GNG installation may have saved MAESTRO restoration
+            // information after this window opened. Refresh its cleanup protections.
+            var cleanupPaths = _saamanSettings is null ? _cleanupProtectedPaths :
+                _cleanupProtectedPaths.Concat(SaamanProfileService.GetProtectedPaths(_saamanSettings)).ToArray();
+            var cleanup = new GngCleanupWindow(DataFolder, _selectedProfile, cleanupPaths, _oldCompleteZip, _newCompleteZip) { Owner = this };
             cleanup.ShowDialog();
             AttemptedChanges |= cleanup.AttemptedChanges;
         }

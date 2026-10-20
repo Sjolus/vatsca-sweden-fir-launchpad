@@ -43,10 +43,10 @@ public static partial class GngUpdateService
     // Destination/profile compatibility is reviewed only after both downloads finish.
     public static string ValidatePackage(string zipPath) => FormatVersion(ReadPackage(CanonicalPath(zipPath)).Generation);
 
-    public static GngUpdatePlan BuildPlan(string zipPath, string dataFolder, IEnumerable<string>? protectedPaths = null, string? fullPackagePath = null, bool preserveListLayout = true) =>
-        BuildPlan(zipPath, dataFolder, protectedPaths, ProductionContext(), fullPackagePath, preserveListLayout);
+    public static GngUpdatePlan BuildPlan(string zipPath, string dataFolder, IEnumerable<string>? protectedPaths = null, string? fullPackagePath = null, bool preserveListLayout = true, SaamanProfilePolicy? saamanPolicy = null) =>
+        BuildPlan(zipPath, dataFolder, protectedPaths, ProductionContext(), fullPackagePath, preserveListLayout, saamanPolicy);
 
-    internal static GngUpdatePlan BuildPlan(string zipPath, string dataFolder, IEnumerable<string>? protectedPaths, OperationContext context, string? fullPackagePath = null, bool preserveListLayout = true)
+    internal static GngUpdatePlan BuildPlan(string zipPath, string dataFolder, IEnumerable<string>? protectedPaths, OperationContext context, string? fullPackagePath = null, bool preserveListLayout = true, SaamanProfilePolicy? saamanPolicy = null)
     {
         var root = ExistingDirectory(dataFolder);
         var protections = ValidateRoots(root, protectedPaths, context);
@@ -66,6 +66,21 @@ public static partial class GngUpdateService
                 throw new InvalidOperationException("A Full Package installation already supplies its complete reference. Remove the additional, different reference ZIP.");
         }
         var dependencies = new List<GngUpdateDependency>();
+        var saamanDependencies = new List<GngUpdateDependency>();
+        if (saamanPolicy is not null)
+        {
+            saamanPolicy = SaamanProfileService.ValidatePolicy(saamanPolicy, root);
+            if (saamanPolicy.Enabled)
+            {
+                SaamanProfileService.ValidateDll(saamanPolicy.DllPath);
+                var snapshot = Snapshot(saamanPolicy.DllPath);
+                var dependency = new GngUpdateDependency(saamanPolicy.DllPath, snapshot.Hash, snapshot.Length);
+                saamanDependencies.Add(dependency);
+                dependencies.Add(dependency);
+                if (package.Entries.Keys.Any(p => Paths.Equals(Contained(root, p), saamanPolicy.DllPath)))
+                    throw new InvalidOperationException("This GNG package includes the configured SAAMAN.dll. Review the SAAMAN installation location before updating GNG; the selected DLL will not be overwritten.");
+            }
+        }
         foreach (var plugin in package.ProfilePlugins.Where(p => !package.Entries.ContainsKey(p)))
         {
             var existing = Contained(root, plugin);
@@ -105,6 +120,18 @@ public static partial class GngUpdateService
             warnings.Add("The matching Full Package will be cached intact as a reference; only the Update-Only ZIP is installed. Cleanup still verifies that the Full reference's replacement sectors are installed; matching AIRAC/revision alone does not prove that.");
         if (installedGenerations.Any(g => Paths.Equals(g, package.Generation)))
             warnings.Add("This generation is already present. This is a repair/reinstall preview; missing package files will be restored and package defaults refreshed.");
+        if (saamanPolicy is not null)
+        {
+            var target = Path.GetRelativePath(root, saamanPolicy.ProfilePath);
+            if (package.Entries.ContainsKey(target))
+                warnings.Add(saamanPolicy.Enabled
+                    ? "SAAMAN remains the first plugin in " + target + "; MAESTRO profile entries are removed. Plugin binaries are not deleted."
+                    : "SAAMAN entries are removed from " + target + "; any MAESTRO entries replaced by Launchpad are restored. Other plugin changes are kept.");
+            else if (!File.Exists(saamanPolicy.ProfilePath))
+                throw new InvalidOperationException("The selected SAAMAN APP/ACC profile is missing from both this folder and the GNG package. Review the selected profile in Manage SAAMAN.");
+            else
+                warnings.Add("The selected SAAMAN APP/ACC profile is not supplied by this package. It remains unchanged: " + target);
+        }
         foreach (var localProfile in Directory.EnumerateFiles(root, "ES*.prf"))
             if (!package.Entries.ContainsKey(Path.GetFileName(localProfile)))
                 warnings.Add("Existing profile is not supplied by this package and will not be upgraded: " + Path.GetFileName(localProfile) + ". Select a profile supplied by the new package afterward; review old profiles separately in cleanup.");
@@ -141,7 +168,37 @@ public static partial class GngUpdateService
                 if (before?.Length > 4 * 1024 * 1024 || entry.Length > 4 * 1024 * 1024) throw new IOException("A profile is too large to merge safely.");
                 using var stream = archive.GetEntry(entry.ZipName)!.Open();
                 using var reader = new StreamReader(stream, PrfEncoding, detectEncodingFromByteOrderMarks: true);
-                merged = MergeProfile(before is null ? "" : File.ReadAllText(path, PrfEncoding), reader.ReadToEnd(), root, knownPlugins);
+                var localText = before is null ? "" : File.ReadAllText(path, PrfEncoding);
+                merged = MergeProfile(localText, reader.ReadToEnd(), root, knownPlugins);
+                if (saamanPolicy is not null && Paths.Equals(path, saamanPolicy.ProfilePath))
+                {
+                    saamanPolicy = SaamanProfileService.PreparePolicy(saamanPolicy,
+                        before is null ? PrfEncoding.GetString(merged) : localText, root);
+                    if (saamanPolicy.StateDependency is { } state)
+                    {
+                        var dependency = new GngUpdateDependency(state.Path, state.Hash, state.Length);
+                        saamanDependencies.Add(dependency);
+                        dependencies.Add(dependency);
+                    }
+                    if (!saamanPolicy.Enabled)
+                    {
+                        foreach (var maestro in SaamanProfileService.GetMaestroDllPaths(saamanPolicy, root))
+                        {
+                            // A Full Package may supply or upgrade the restored plugin itself.
+                            if (package.Entries.Keys.Any(p => Paths.Equals(Contained(root, p), maestro))) continue;
+                            EnsureNoReparse(maestro);
+                            if (!File.Exists(maestro))
+                                throw new InvalidOperationException("MAESTRO cannot be restored because its DLL is missing: " + maestro + ". Restore the DLL or choose a Full Package that contains it.");
+                            if (new FileInfo(maestro).Length is <= 0 or > MaxFile)
+                                throw new IOException("The MAESTRO DLL is empty or exceeds the supported file size.");
+                            var original = Snapshot(maestro);
+                            var dependency = new GngUpdateDependency(maestro, original.Hash, original.Length);
+                            saamanDependencies.Add(dependency);
+                            dependencies.Add(dependency);
+                        }
+                    }
+                    merged = PrfEncoding.GetBytes(SaamanProfileService.TransformMerged(localText, PrfEncoding.GetString(merged), saamanPolicy));
+                }
                 afterHash = Hash(merged);
                 afterLength = merged.Length;
                 action = before is null ? "Add profile" : "Merge profile";
@@ -155,7 +212,8 @@ public static partial class GngUpdateService
                 detail = "Changed since the previous managed install. Installing refreshes this package default; your current bytes will be backed up.";
                 warnings.Add("Customized package default will be replaced: " + entry.Path);
             }
-            files.Add(new(entry.Path, action, detail) { BeforeHash = before?.Hash, BeforeLength = before?.Length ?? 0, AfterHash = afterHash, AfterLength = afterLength, MergedBytes = merged });
+            files.Add(new(entry.Path, action, detail) { BeforeHash = before?.Hash, BeforeLength = before?.Length ?? 0, AfterHash = afterHash, AfterLength = afterLength, MergedBytes = merged,
+                Dependencies = saamanPolicy is not null && Paths.Equals(path, saamanPolicy.ProfilePath) ? saamanDependencies.ToArray() : [] });
         }
         if (preserveListLayout) ApplyListLayouts(root, package, archive, files, protections, dependencies);
         foreach (var unchanged in files.Where(f => !f.WritesFile))
@@ -170,7 +228,7 @@ public static partial class GngUpdateService
                     warnings.Add("A preserved local TopSky file overrides RDF_Mode: " + Path.GetRelativePath(root, settings) + ". Review RDF/TopSky compatibility after updating; Launchpad does not change this preference.");
             }
         return new(Path.GetFileName(zipPath), FormatVersion(package.Generation), root, zipPath, files, warnings)
-            { PackageHash = package.Hash, Generation = package.Generation, ProtectedPaths = protections, Dependencies = dependencies, PreserveListLayout = preserveListLayout,
+            { PackageHash = package.Hash, Generation = package.Generation, ProtectedPaths = protections, Dependencies = dependencies, PreserveListLayout = preserveListLayout, SaamanPolicy = saamanPolicy,
                 ReferencePackagePath = fullPackagePath, ReferencePackageHash = reference?.Hash, ReferencePackageName = fullPackagePath is null ? null : Path.GetFileName(fullPackagePath) };
     }
 
@@ -188,12 +246,13 @@ public static partial class GngUpdateService
         using var parents = new DirectoryGuard(backupBase, true);
         using var updateLock = new FileStream(Path.Combine(backupBase, "update.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
         progress?.Report("Rechecking the package and the files shown in the preview…");
-        var fresh = BuildPlan(plan.PackagePath, root, plan.ProtectedPaths, context, plan.ReferencePackagePath, plan.PreserveListLayout);
+        var fresh = BuildPlan(plan.PackagePath, root, plan.ProtectedPaths, context, plan.ReferencePackagePath, plan.PreserveListLayout, plan.SaamanPolicy);
         if (Fingerprint(fresh) != Fingerprint(plan)) throw new InvalidOperationException("The package or local files changed after preview. Review a fresh preview before installing.");
         var writePaths = fresh.Files.Where(f => f.WritesFile).Select(f => CanonicalPath(Contained(root, f.RelativePath))).ToHashSet(Paths);
         // Inputs which are also replacements are checked by their reviewed before hashes during backup/move.
         // Keeping those handles open here would prevent the installer's own verified moves.
-        using var dependencyGuard = new DependencyGuard(fresh.Dependencies.Where(d => d.Hash is not null && !writePaths.Contains(d.Path)));
+        using var dependencyGuard = new DependencyGuard(fresh.Dependencies.Where(d => d.Hash is not null && !writePaths.Contains(d.Path) &&
+            !Paths.Equals(d.Path, fresh.SaamanPolicy?.StateDependency?.Path)));
         var previousComplete = VerifiedCompletePackagePath(ReadInstallation(root, context));
         var transaction = Path.Combine(backupBase, DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N"));
         using var transactionGuard = new DirectoryGuard(transaction, true);
@@ -233,6 +292,8 @@ public static partial class GngUpdateService
                     CopyVerified(Contained(root, file.RelativePath), Contained(transaction, "originals\\" + file.RelativePath), file.BeforeLength, file.BeforeHash);
             }
         }
+        using var saamanState = fresh.SaamanPolicy?.StateDependency is not null
+            ? SaamanProfileService.PersistRestoreState(fresh.SaamanPolicy) : null;
         WriteJson(Path.Combine(transaction, ManifestName), journal);
         WriteJson(Path.Combine(backupBase, PendingName), new Pending(transaction));
         try
@@ -247,6 +308,7 @@ public static partial class GngUpdateService
                     MoveVerified(destination, Contained(transaction, "displaced\\" + file.RelativePath), file.BeforeLength, file.BeforeHash);
                 MoveVerified(Contained(transaction, "stage\\" + file.RelativePath), destination, file.AfterLength, file.AfterHash);
             }
+            saamanState?.Complete();
             var allFiles = fresh.Files.Select(f => new SavedFile(f.RelativePath, f.BeforeHash, f.BeforeLength, f.AfterHash, f.AfterLength)).ToList();
             WriteJson(currentFile, new Installation(transaction, cache, fresh.PackageHash, fresh.Generation, allFiles, completeCache, completeHash));
             WriteJson(Path.Combine(transaction, ManifestName), journal with { Status = "Complete" });
@@ -666,7 +728,7 @@ public static partial class GngUpdateService
             throw new InvalidOperationException("Choose the current or a newer GNG package. Downgrades are not installed.");
     }
 
-    private static string Fingerprint(GngUpdatePlan plan) => Hash(Encoding.UTF8.GetBytes(plan.PackageHash + "\n" + plan.DataFolder + "\n" + plan.ReferencePackagePath + "\n" + plan.ReferencePackageHash + "\n" + plan.PreserveListLayout + "\n" + string.Join("\n", plan.ProtectedPaths) + "\n" +
+    private static string Fingerprint(GngUpdatePlan plan) => Hash(Encoding.UTF8.GetBytes(plan.PackageHash + "\n" + plan.DataFolder + "\n" + plan.ReferencePackagePath + "\n" + plan.ReferencePackageHash + "\n" + plan.PreserveListLayout + "\n" + plan.SaamanPolicy + "\n" + plan.SaamanPolicy?.RestoreStateFingerprint + "\n" + string.Join("\n", plan.ProtectedPaths) + "\n" +
         string.Join("\n", plan.Dependencies.Select(d => d.Path + "|" + d.Hash + "|" + d.Length)) + "\n" +
         string.Join("\n", plan.Files.Select(f => f.RelativePath + "|" + f.Action + "|" + f.BeforeHash + "|" + f.BeforeLength + "|" + f.AfterHash + "|" + f.AfterLength))));
     private static string BackupBase(string root, OperationContext context)

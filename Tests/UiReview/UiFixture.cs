@@ -21,6 +21,15 @@ internal static class UiReviewProgram
         {
             app.InitializeComponent();
             UiFixture.SetTextScale(1);
+            if (args.Contains("--check-saaman"))
+            {
+                app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+                var option = Array.IndexOf(args, "--snapshots");
+                var output = option >= 0 && option + 1 < args.Length ? args[option + 1] : null;
+                Console.WriteLine(SaamanLayoutReview.Run(output));
+                app.Shutdown();
+                return 0;
+            }
             if (args.Contains("--check") || args.Contains("--validate-layouts") || args.Contains("--check-application-controls"))
             {
                 app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
@@ -59,6 +68,7 @@ public sealed class UiReviewHost : Window
         Add(screens, "Main window", () => Open(new MainWindow()));
         Add(screens, "Settings", () => Open(new SettingsWindow()));
         Add(screens, "Controller profile", () => Open(new AppConfigWindow()));
+        Add(screens, "SAAMAN", () => Open(new SaamanWindow()));
         Add(screens, "Manage / remove", () => Open(new MaintenanceWindow()));
         Add(screens, "Recent activity", () => Open(new ActivityWindow()));
         Add(screens, "Privacy and support", () => Open(new ReportingPreferencesWindow()));
@@ -168,6 +178,9 @@ internal static partial class UiFixture
         }
         if (window is AppConfigWindow)
         {
+            Text(window,"SaamanHintText",Blank ? "Choose SAAMAN.dll in Set up / update before enabling this option."
+                : "Puts SAAMAN first in ESAA APP ACC.prf, replacing MAESTRO. Uncheck to restore the MAESTRO entries Launchpad replaced, including their order and display settings. Other edits stay.\n\nChoose the DLL in Manage SAAMAN first. Close EuroScope before applying. Changes are backed up.");
+            Find<CheckBox>(window,"PatchSaamanBox")!.IsChecked = false;
             Text(window,"NameBox","Åsa Östergård (synthetic)"); Text(window,"CidBox","0000000"); Text(window,"ObsBox","ES");
             Find<ComboBox>(window,"RatingBox")!.ItemsSource = new[] { "Observer (OBS)","Student 1 (S1)","Student 2 (S2)","Student 3 (S3)","Controller (C1)" };
             Find<ComboBox>(window,"RatingBox")!.SelectedIndex = 2;
@@ -220,6 +233,8 @@ internal static partial class UiFixture
                 SoftwareUpdate=new(SoftwareApp.VatEfs,Blank?SoftwareUpdatePhase.Unavailable:SoftwareUpdatePhase.Available,"Synthetic VatEFS package update."), IsWebApp=true, IsLocalUrl=true, IsLocalUrlReachable=!Blank, LaunchPath="http://localhost:17770",
                 InstalledVersion=Blank?"Not installed":"v0.0.14", LatestVersion="v0.0.15", LatestIsPrerelease=true,
                 DownloadUrl="https://github.com/minsulander/vatefs/releases/tag/v0.0.15", Status=Blank?CheckStatus.NotConfigured:CheckStatus.UpdateAvailable },
+            new() { AppName="SAAMAN", HasSaamanManagement=true, InstalledVersion=Blank?"—":"v1.3.37", LatestVersion="v1.3.37", Status=Blank?CheckStatus.NotConfigured:CheckStatus.UpToDate,
+                StatusMessage="Arrival manager for Stockholm Arlanda. Runs inside EuroScope.\n\nUse Profile options to enable SAAMAN first in the APP/ACC plugin list and replace MAESTRO." },
             new() { AppName="VATIRIS", IsWebApp=true, LaunchPath="https://vatiris.se", Status=CheckStatus.WebApp, InstalledVersion="N/A", LatestVersion="N/A" },
             new() { AppName="Sweden FIR Launchpad", HasSelfUpdate=true, InstalledVersion="2.0.0-dev.1", LatestVersion="2.0.0", ShowSelfUpdateAction=true, SelfUpdateActionText="Download update", SelfUpdateSummary="Update available", StatusMessage="Synthetic self-update; no network requests." }
         };

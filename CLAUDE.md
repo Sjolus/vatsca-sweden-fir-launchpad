@@ -16,7 +16,7 @@ Ask before making a Git commit and before starting a desktop or native installer
 
 A WPF desktop application for VATSIM Scandinavia controllers. It:
 
-- Checks EuroScope against the pinned supported build and checks GNG, TrackAudio, VACS, vATIS, VatEFS and Launchpad releases
+- Checks EuroScope against the pinned supported build and checks GNG, TrackAudio, VACS, vATIS, VatEFS, SAAMAN and Launchpad releases
 - Manages VATSIM profile credentials across EuroScope `.prf` files
 - Launches configured applications, shows running windows, and offers separate normal-close and confirmed force-stop actions
 - Offers optional guided setup, reviewed adoption of existing paths, and explicit client installation/update
@@ -53,7 +53,7 @@ Converters/   WPF IValueConverter implementations.
 Themes/       Light.xaml and Dark.xaml resource dictionaries (hot-swapped at runtime).
 ```
 
-Windows use code-behind intentionally; do not introduce a DI container or MVVM framework. MainWindow's eight-row initialization, launch-path assignment and check results share positional indices. Keep them aligned when changing rows. Partial MainWindow files isolate the larger operation workflows.
+Windows use code-behind intentionally; do not introduce a DI container or MVVM framework. MainWindow has nine rows. The first six retain positional launch/check assignments; SAAMAN and Launchpad are selected by their management flags. Keep the remaining indices aligned when changing rows. Partial MainWindow files isolate the larger operation workflows.
 
 `UpdateChecker` updates UI-bound `CheckResult` instances and must retain the caller's synchronization context across awaits. MainWindow invokes these methods on its UI thread; property-change observers also update the application summary directly. Only pure network helpers such as `FetchLatestTag` may opt out of context capture. `Tests/UpdateChecker.Tests` checks delayed success and failure responses with a synthetic single-thread context, without opening windows or contacting release services.
 
@@ -68,6 +68,20 @@ Registered and executable versions must agree before a VACS/TrackAudio update. A
 Installer and client management shipped in 2.0.0, including reviewed removal/reset and discovery of existing installations. The TopSky font check shipped in 2.0.1. Release 2.1.0 adds authenticated GNG installation, list-layout preservation, old/new-package cleanup and managed VatEFS installation and updates. Full GNG package removal in the maintenance dialog remains separate from selective obsolete-file cleanup.
 
 Release 2.2.0 adds the setup, presentation, process-control, review and activity-history improvements described below.
+
+### SAAMAN
+
+`SaamanReleaseService` selects the highest published stable version from the bounded official GitHub release list. `SaamanInstallService` verifies asset hashes/sizes, the checksum list and static x86 plugin registration before installing the DLL. It retains licence notices in its recovery store and never loads the DLL. Fresh installation defaults to `ESAA\Plugins\SAAMAN\SAAMAN.dll`; adoption records a verified existing copy. Updates require a verified backup and recovery receipt under `%LOCALAPPDATA%\VatscaUpdateChecker\SAAMAN`. An incomplete DLL replacement blocks another update until recovery. Recovery restores a previous DLL only; fresh-install removal remains manual. SAAMAN's own LocalAppData state is not modified.
+
+`SaamanWindow` has explicit review, confirmation, progress and recovery. DLL installation and recovery take `MaintenanceLock`, check every EuroScope process and pin filesystem paths through `SaamanFileSafety`; callers release their wizard lease before opening it. WebView2 preparation uses the existing separately confirmed runtime service. No client is launched. The main row is a plugin row with management/profile actions, without process controls.
+
+`SaamanProfileService` shares a pure Windows-1252-preserving transformation between direct profile apply and GNG previews. `PatchSaaman` starts false; `SaamanProfileManaged` distinguishes an untouched configuration from a managed option that was disabled. The default target is exactly `ESAA APP ACC.prf`; a custom target must be explicitly selected inside the configured data folder. Enabling inserts SAAMAN first, removes SAAMAN duplicates and MAESTRO entries, and preserves other plugins' relative order and display suffixes. Disabling removes SAAMAN and restores the original MAESTRO entry, order and display permissions when Launchpad replaced it. This is a plugin-entry change, not a full-profile rollback: preserve subsequent unrelated edits and do not fabricate a MAESTRO entry if none existed. An untouched, disabled option leaves unmanaged profiles alone; normal GNG profile merging still applies.
+
+Original MAESTRO plugin groups and ordering anchors are retained per profile under `%LOCALAPPDATA%\VatscaUpdateChecker\Saaman\ProfileState`, separately from EuroScope data and without unrelated profile content. Preview and apply validate this state's hash and the required DLLs; the saved groups remain after disabling so a later GNG rollback does not lose the restoration information.
+
+Profile-only apply backs up and revalidates the reviewed bytes and DLL without saving controller identity fields. GNG captures the same policy in its plan, includes the exact transformed bytes in the diff, hashes the DLL dependency, and revalidates before writing. Configured DLLs and managed target profiles are protected from unrelated cleanup/removal; full GNG removal may include files proven inside its reviewed root only with a recovery export. `SetupWizardState.AcceptSaaman` accepts the dialog's SAAMAN settings without copying unrelated draft fields.
+
+SAAMAN's static registration name/version joins the existing detailed-DLL reporting consent, including an explicitly configured external DLL. The ten-component legacy inventory shape stays unchanged. Backend enum acceptance must be deployed before releasing a client that sends SAAMAN events or detailed inventory. The synthetic `Tests/Saaman.Tests`, `Tests/Profile.Tests`, `Tests/GngUpdate.Tests` and `--check-saaman` WPF layouts cover the integration without loading plugins or starting clients.
 
 ### Existing installations and maintenance
 

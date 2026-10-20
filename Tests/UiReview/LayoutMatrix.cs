@@ -100,7 +100,7 @@ internal static partial class LayoutMatrix
             }
             Require(UiFixture.ErrorCount == errorsBefore, "An unhandled fixture exception was logged.");
             Require(trace.Errors.Count == 0, "WPF binding errors: " + string.Join(" | ", trace.Errors));
-            return $"PASS: {layouts} hidden layout cases; both themes, blank/mixed paths, default/minimum sizes, independent 100/125/150% text size and compact/expanded density, compact eight-row fit, selected application details and profile, pin/detail controls, activity/recovery layouts, persistent restart notice, profile and six-step wizard scrolling/footer reachability, explicit GNG setup, inert GNG start/sign-in/download/cancel/review/completion/runtime fallback, production changes-only review filter/counts/reset/empty state, warning/input contrast, read-only progress bindings, missing/stale paths and update/cancellation states. No windows shown.";
+            return $"PASS: {layouts} hidden layout cases; both themes, blank/mixed paths, default/minimum sizes, independent 100/125/150% text size and compact/expanded density, compact nine-row fit, selected application details and profile, pin/detail controls, activity/recovery layouts, persistent restart notice, profile and six-step wizard scrolling/footer reachability, explicit GNG setup, inert GNG start/sign-in/download/cancel/review/completion/runtime fallback, production changes-only review filter/counts/reset/empty state, warning/input contrast, read-only progress bindings, missing/stale paths and update/cancellation states. No windows shown.";
         }
         finally
         {

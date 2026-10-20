@@ -22,7 +22,7 @@ public partial class MainWindow
         {
             while (!_windowClosed)
             {
-                bool gngRequested;
+                bool gngRequested, saamanRequested;
                 using (lease)
                 {
                     var wizard = new SetupWizardWindow(state) { Owner = this };
@@ -31,17 +31,25 @@ public partial class MainWindow
                     _setupRestartRequired |= wizard.RestartRequired;
                     removalRequested = wizard.RemovalRequested && !_setupRestartRequired;
                     gngRequested = wizard.GngSetupRequested && !_setupRestartRequired;
+                    saamanRequested = wizard.SaamanSetupRequested && !_setupRestartRequired;
                     finished = wizard.Finished;
                     _settings.SetupWizardCompleted = finished;
-                    _settings.SetupWizardDismissed = !finished && !gngRequested;
+                    _settings.SetupWizardDismissed = !finished && !gngRequested && !saamanRequested;
                     saved = SettingsService.TrySave(_settings);
                 }
                 lease = null;
-                if (!gngRequested || _windowClosed) break;
+                if ((!gngRequested && !saamanRequested) || _windowClosed) break;
 
                 // The package service owns its mutation lease. Release the wizard lease
                 // before entering GNG, then reacquire it before profile/font actions.
-                await OpenWizardGng(state);
+                if (saamanRequested)
+                {
+                    var saaman = new SaamanWindow(state.Draft.Copy()) { Owner = this };
+                    ShowOwnedDialog(saaman);
+                    if (saaman.SettingsChanged) state.AcceptSaaman(saaman.Settings);
+                    if (saaman.RequiresRestart) { _setupRestartRequired = true; state.RequireRestart(); }
+                }
+                else await OpenWizardGng(state);
                 _settings = state.Dismiss();
                 saved &= SettingsService.TrySave(_settings);
                 if (_windowClosed || !TryAcquireMaintenanceGuard(out lease)) break;
@@ -112,7 +120,7 @@ public partial class MainWindow
         }
 
         var window = new GngUpdateWindow(root, state.Draft.LastEuroscopeProfile,
-            GngProtectedPaths.ForUpdate(state.Draft), CleanupProtectedPaths()) { Owner = this };
+            GngProtectedPaths.ForUpdate(state.Draft), CleanupProtectedPaths(), saamanSettings: state.Draft) { Owner = this };
         ShowOwnedDialog(window);
         if (window.RestartRequired)
         {

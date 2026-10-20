@@ -136,6 +136,43 @@ var tests = new List<(string Name, Action Test)>
         var summary = string.Join("\n", state.Summary());
         True(!summary.Contains(edited.VatsimName) && !summary.Contains(edited.VatsimCid));
     }),
+    ("SAAMAN handoff saves only its reviewed choices and preserves unrelated drafts", () =>
+    {
+        var current = Existing();
+        ApplicationPreferences.SetNotUsed(current, "SAAMAN", true);
+        var state = new SetupWizardState(current);
+        state.Draft.IsDarkMode = false;
+        var edited = state.Draft.Copy();
+        edited.SaamanDllPath = @"C:\Synthetic\SAAMAN\SAAMAN.dll";
+        edited.SaamanProfilePath = @"C:\Synthetic\GNG\Reviewed APP.prf";
+        edited.PatchSaaman = true; edited.SaamanProfileManaged = true;
+        edited.VatsimName = "unrelated identity";
+        edited.EuroscopeDataPath = @"C:\Unreviewed";
+        edited.VatisExePath = @"C:\Unreviewed\vATIS.exe";
+        state.AcceptSaaman(edited);
+        var saved = state.Dismiss();
+        Equal(edited.SaamanDllPath, saved.SaamanDllPath);
+        Equal(edited.SaamanProfilePath, saved.SaamanProfilePath);
+        True(saved.PatchSaaman && saved.SaamanProfileManaged);
+        Equal(current.VatsimName, saved.VatsimName);
+        Equal(current.EuroscopeDataPath, saved.EuroscopeDataPath);
+        Equal(current.VatisExePath, saved.VatisExePath);
+        True(saved.IsDarkMode && !state.Draft.IsDarkMode && state.HasSavedActions);
+        True(!ApplicationPreferences.IsNotUsed(saved, "SAAMAN"));
+        True(state.Actions.Any(a => a.Contains("SAAMAN")));
+    }),
+    ("Controller profile handoff retains an explicit SAAMAN disable across dismissal", () =>
+    {
+        var current = Existing();
+        current.SaamanDllPath = @"C:\Synthetic\SAAMAN.dll";
+        current.PatchSaaman = current.SaamanProfileManaged = true;
+        var state = new SetupWizardState(current);
+        var edited = state.Draft.Copy(); edited.PatchSaaman = false;
+        state.AcceptControllerProfile(edited);
+        var saved = state.Dismiss();
+        True(!saved.PatchSaaman && saved.SaamanProfileManaged);
+        Equal(current.SaamanDllPath, saved.SaamanDllPath);
+    }),
     ("incomplete setup never adopts an unverified path", () =>
     {
         var current = Existing(); var state = new SetupWizardState(current);

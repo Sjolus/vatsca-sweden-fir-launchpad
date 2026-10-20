@@ -91,7 +91,10 @@ internal static class Program
             ("TrackAudio executable", (settings, path) => settings.TrackAudioExePath = path),
             ("VACS executable", (settings, path) => settings.VacsExePath = path),
             ("vATIS executable", (settings, path) => settings.VatisExePath = path),
-            ("VatEFS path", (settings, path) => settings.VatEfsPath = path)
+            ("VatEFS path", (settings, path) => settings.VatEfsPath = path),
+            ("SAAMAN DLL", (settings, path) => settings.SaamanDllPath = path),
+            ("managed SAAMAN profile", (settings, path) => { settings.SaamanProfilePath = path; settings.SaamanProfileManaged = true; }),
+            ("enabled SAAMAN profile", (settings, path) => { settings.SaamanProfilePath = path; settings.PatchSaaman = true; })
         };
         foreach (var field in configuredFields)
             WithFixture("managed-root preservation blocks configured " + field.Name, f =>
@@ -168,6 +171,64 @@ internal static class Program
             var alias = Path.Combine(f.DirectoryPath, "linked-client"); SyntheticJunction.Create(alias, f.Root);
             try { Throws(() => Service.ValidateConfiguredPaths(new() { VacsExePath = Path.Combine(alias, "current", Service.MainExeName) }, f.Environment())); }
             finally { Directory.Delete(alias, false); }
+        });
+        WithFixture("outside SAAMAN alias into managed root blocks missing plugin and managed profile paths", f =>
+        {
+            var alias = Path.Combine(f.DirectoryPath, "linked-saaman"); SyntheticJunction.Create(alias, f.Root);
+            try
+            {
+                Throws(() => Service.ValidateConfiguredPaths(new() { SaamanDllPath = Path.Combine(alias, "missing", "SAAMAN.dll") }, f.Environment()));
+                Throws(() => Service.ValidateConfiguredPaths(new() { SaamanProfileManaged = true, SaamanProfilePath = Path.Combine(alias, "ESAA APP ACC.prf") }, f.Environment()));
+                Equal(0, f.Handoffs.Count);
+            }
+            finally { Directory.Delete(alias, false); }
+        });
+        WithFixture("dormant MAESTRO inside Launchpad root blocks native uninstall", f =>
+        {
+            string maestro = Path.Combine(f.Root, "MAESTRO.dll"); File.WriteAllText(maestro, "SYNTHETIC MAESTRO");
+            var settings = f.EnableSaamanWithMaestro(maestro);
+            Throws(() => Service.ValidateConfiguredPaths(settings, f.Environment()));
+            Throws(() => Service.Uninstall(f.Environment(), true, settings));
+            settings.PatchSaaman = false; settings.SaamanProfileManaged = false;
+            settings.SaamanDllPath = ""; settings.SaamanProfilePath = "";
+            Throws(() => Service.Uninstall(f.Environment(), true, settings));
+            Equal(0, f.Handoffs.Count); Equal(0, f.Starts.Count); Assert(File.Exists(maestro));
+        });
+        WithFixture("a missing original MAESTRO still protects its managed-root path", f =>
+        {
+            string maestro = Path.Combine(f.Root, "MAESTRO.dll"); File.WriteAllText(maestro, "SYNTHETIC MAESTRO");
+            var settings = f.EnableSaamanWithMaestro(maestro); File.Delete(maestro);
+            Throws(() => Service.Uninstall(f.Environment(), true, settings));
+            Equal(0, f.Handoffs.Count);
+        });
+        WithFixture("custom profile restoration survives cleared profile preferences", f =>
+        {
+            string maestro = Path.Combine(f.Root, "MAESTRO.dll"); File.WriteAllText(maestro, "SYNTHETIC MAESTRO");
+            var settings = f.EnableSaamanWithMaestro(maestro, profileName: "Custom APP ACC.prf");
+            Throws(() => Service.ValidateConfiguredPaths(settings, f.Environment()));
+            settings.PatchSaaman = false; settings.SaamanProfileManaged = false;
+            settings.SaamanDllPath = ""; settings.SaamanProfilePath = "";
+            Throws(() => Service.Uninstall(f.Environment(), true, settings));
+            Equal(0, f.Handoffs.Count); Assert(File.Exists(maestro));
+        });
+        WithFixture("original MAESTRO metadata inside managed root blocks native uninstall", f =>
+        {
+            string maestro = Path.Combine(f.DirectoryPath, "MAESTRO.dll"); File.WriteAllText(maestro, "SYNTHETIC MAESTRO");
+            string stateRoot = Path.Combine(f.Root, "saaman-state");
+            var settings = f.EnableSaamanWithMaestro(maestro, stateRoot);
+            Throws(() => Service.Uninstall(f.Environment(saamanStateRoot: stateRoot), true, settings));
+            Equal(0, f.Handoffs.Count);
+        });
+        WithFixture("outside original MAESTRO and restoration metadata remain through handoff", f =>
+        {
+            string maestro = Path.Combine(f.DirectoryPath, "MAESTRO.dll"); File.WriteAllText(maestro, "SYNTHETIC MAESTRO");
+            var settings = f.EnableSaamanWithMaestro(maestro);
+            var state = SaamanProfileService.GetProtectedPaths(settings, f.SaamanState)
+                .Single(path => Path.GetExtension(path).Equals(".json", StringComparison.OrdinalIgnoreCase));
+            var bytes = File.ReadAllBytes(state);
+            Service.Uninstall(f.Environment(), true, settings);
+            Equal(1, f.Handoffs.Count); Equal(0, f.Starts.Count);
+            Assert(File.Exists(maestro) && File.ReadAllBytes(state).SequenceEqual(bytes));
         });
         WithFixture("outside junction alias blocks a future export inside managed root", f =>
         {
@@ -351,6 +412,7 @@ internal static class Program
         public string Updater => Path.Combine(Root, "Update.exe");
         public string ManifestPath => Path.Combine(Root, "current", "sq.version");
         public string Storage => Path.Combine(DirectoryPath, "registration-cache");
+        public string SaamanState => Path.Combine(DirectoryPath, "saaman-state");
         public Service.ManagedInstallation? Installation;
         public Service.Registration? Registration;
         public int Writes;
@@ -365,13 +427,26 @@ internal static class Program
             Registration = new(Root, "Sweden FIR Launchpad", Service.NativeCommand(Updater), Service.NativeCommand(Updater, true));
         }
         public void Manifest(string id, string version) => File.WriteAllText(ManifestPath, $"<package><metadata><id>{id}</id><version>{version}</version></metadata></package>");
-        public Service.UninstallEnvironment Environment(Action<string, string>? write = null, Action<ProcessStartInfo>? start = null) => new()
+        public Service.UninstallEnvironment Environment(Action<string, string>? write = null, Action<ProcessStartInfo>? start = null,
+            string? saamanStateRoot = null) => new()
         {
-            StorageRoot = Storage, Locate = () => Installation, ReadRegistration = () => Registration,
+            StorageRoot = Storage, SaamanProfileStateRoot = saamanStateRoot ?? SaamanState, Locate = () => Installation, ReadRegistration = () => Registration,
             WriteCommands = write ?? ((interactive, quiet) => { Writes++; Registration = Registration! with { UninstallString = interactive, QuietUninstallString = quiet }; }),
             PrepareHandoff = installation => Handoffs.Add(installation),
             RunNativeUninstall = start ?? (info => Starts.Add(info))
         };
+        public AppSettings EnableSaamanWithMaestro(string maestro, string? stateRoot = null, string profileName = "ESAA APP ACC.prf")
+        {
+            string data = Path.Combine(DirectoryPath, "gng"); Directory.CreateDirectory(data);
+            string profile = Path.Combine(data, profileName);
+            string dll = Path.Combine(data, "SAAMAN.dll"); File.WriteAllText(dll, "SYNTHETIC SAAMAN");
+            File.WriteAllText(profile, "Plugins\tPlugin0\t" + maestro + "\nPlugins\tPlugin0Display0\tStandard ES radar screen\n");
+            var policy = new SaamanProfilePolicy(profile, dll, true) { StateRoot = stateRoot ?? SaamanState };
+            var plan = SaamanProfileService.BuildPlan(policy, data);
+            SaamanProfileService.Apply(plan, new SaamanProfileService.OperationContext(Path.Combine(DirectoryPath, "profile-recovery"), () => { }));
+            return new AppSettings { EuroscopeDataPath = data, SaamanDllPath = dll, SaamanProfilePath = profile,
+                SaamanProfileManaged = true, PatchSaaman = true };
+        }
         public Service.RegistrationTicket Ticket() => new(Root, "1.5.0", Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(Main))), 1234, 5678,
             @"Local\SwedenFirLaunchpad.Finalizer." + Guid.NewGuid().ToString("N"), DateTime.UtcNow.AddMinutes(5));
         public string HelperFolder(bool completed)
