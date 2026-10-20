@@ -1,5 +1,9 @@
 # Changelog
 
+## [2.5.2] — 2026-10-21
+
+- Fix unreadable dark-mode text under **What is sent?** in the Privacy and support dialog. (#20)
+
 ## [2.5.1] — 2026-10-21
 
 - Restore vATIS update checks and package downloads after its Windows feed moved to a new address.

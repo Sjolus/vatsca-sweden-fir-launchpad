@@ -42,7 +42,7 @@
                 <TextBlock Margin="22,5,0,14" Foreground="{DynamicResource SecondaryText}" TextWrapping="Wrap"
                            Text="Limited technical details when something fails: Launchpad version, application, action and error category. Software-version context is included only if version sharing is also enabled. This works without usage statistics."/>
                 <TextBlock x:Name="ChoiceExplanation" TextWrapping="Wrap" Margin="0,0,0,14"/>
-                <Expander Header="What is sent?" Margin="0,0,0,16">
+                <Expander Header="What is sent?" Foreground="{DynamicResource PrimaryText}" Margin="0,0,0,16">
                     <StackPanel Margin="0,8,0,0">
                         <TextBlock TextWrapping="Wrap" Text="Reports include a random support ID, Launchpad version, selected application, action, outcome and time. Error reports use fixed technical categories. Names, CID, passwords, Hoppie codes, file paths, profiles and browser sign-in data are excluded."/>
                         <TextBlock TextWrapping="Wrap" Margin="0,8,0,0" Text="Data is sent to launchpad.space.sjolus.org. The support ID links reports from this installation; it is not your VATSIM identity. Turning reporting off clears unsent reports for that category. Turning DLL details off also discards unsent snapshots containing those details. Reports already received are kept according to the service's retention policy; local last-sent copies are kept until replaced or your support ID is changed."/>
