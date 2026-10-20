@@ -8,6 +8,7 @@ namespace VatscaUpdateChecker.Services;
 public static partial class SaamanProfileService
 {
     private const int MaximumStateBytes = 128 * 1024;
+    internal const int MaximumProtectedStateEntries = 256;
     internal static string DefaultStateRoot => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "VatscaUpdateChecker", "Saaman", "ProfileState");
@@ -77,29 +78,50 @@ public static partial class SaamanProfileService
     {
         if (string.IsNullOrWhiteSpace(settings.EuroscopeDataPath)) return [];
         if (!Directory.Exists(stateRoot ?? DefaultStateRoot)) return [];
-        // Protection is read-only and survives a preferences reset. The matching
-        // state does not authorize an otherwise unmanaged profile mutation. A
-        // caller may adopt an alias later; resolve it only for this read-only lookup.
+        // Protection is read-only and independent of the current profile choice:
+        // preferences can be reset while a custom profile still contains SAAMAN.
         var data = PreservationPath.Resolve(settings.EuroscopeDataPath);
-        var profile = string.IsNullOrWhiteSpace(settings.SaamanProfilePath)
-            ? Path.Combine(data, DefaultProfileName)
-            : Path.IsPathFullyQualified(settings.SaamanProfilePath)
-                ? PreservationPath.Resolve(settings.SaamanProfilePath) : Path.Combine(data, settings.SaamanProfilePath);
-        var policy = ValidatePolicy(new(profile, "", false), data);
-        var path = StatePath(policy.ProfilePath, stateRoot, data);
-        var (state, _, _) = ReadState(path, policy.ProfilePath);
-        if (state is null) return [];
-        var result = new List<string> { path, path + ".previous" };
-        // GNG recovery can restore an enabled profile after this sidecar became
-        // inactive. Keep its retained original DLLs safe until a new capture.
-        foreach (var group in state.Maestro)
+        var root = SaamanFileSafety.Canonical(stateRoot ?? DefaultStateRoot);
+        if (SaamanFileSafety.Overlaps(root, data))
+            throw new InvalidOperationException("MAESTRO restoration state must be stored separately from EuroScope data.");
+        using var parents = new SaamanFileSafety.DirectoryGuard(root, false);
+        var entries = Directory.EnumerateFileSystemEntries(root).Take(MaximumProtectedStateEntries + 1).ToArray();
+        if (entries.Length > MaximumProtectedStateEntries)
+            throw new IOException("There are too many saved SAAMAN profile-state entries to check safely. Review the state folder before removing files.");
+        var result = new HashSet<string>(Names);
+        foreach (var entry in entries)
+        {
+            var name = Path.GetFileName(entry);
+            var mainName = name.EndsWith(".json.previous", StringComparison.OrdinalIgnoreCase) ? name[..^9] : name;
+            if (mainName.Length != 69 || !mainName.EndsWith(".json", StringComparison.OrdinalIgnoreCase) ||
+                !mainName[..64].All(Uri.IsHexDigit)) continue;
+            var (state, _, _) = ReadState(entry, null);
+            if (state is null)
+                throw new IOException("A saved SAAMAN profile state disappeared while checking protected files. Review removal again.");
+            var savedProfile = PreservationPath.Normalize(state.ProfilePath);
+            var expectedName = Hash(Encoding.UTF8.GetBytes(savedProfile.ToUpperInvariant())) + ".json";
+            if (!Names.Equals(mainName, expectedName))
+                throw new InvalidDataException("A saved MAESTRO restoration-state filename does not match its profile.");
+            var profile = PreservationPath.Resolve(savedProfile);
+            if (!profile.StartsWith(data.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (!Names.Equals(Path.GetExtension(profile), ".prf"))
+                throw new InvalidDataException("The saved MAESTRO restoration state does not name a EuroScope profile.");
+            var mainPath = Path.Combine(root, mainName);
+            result.Add(mainPath);
+            result.Add(mainPath + ".previous");
+            // GNG recovery can restore an enabled profile after its state became
+            // inactive. Both retained versions remain protective, never authority
+            // to modify a profile whose option is currently unmanaged.
+            foreach (var group in state.Maestro)
             {
                 var dll = ResolvePluginPath(group.Path, data);
                 result.Add(dll);
                 var parent = Path.GetDirectoryName(dll)!;
                 if (Names.Equals(Path.GetFileName(parent), "MAESTRO")) result.Add(parent);
             }
-        return result.Distinct(Names).ToArray();
+        }
+        return result.ToArray();
     }
 
     internal static SaamanRestoreStateLease PersistRestoreState(SaamanProfilePolicy policy) => new(policy);
@@ -262,7 +284,7 @@ public static partial class SaamanProfileService
         return Path.Combine(root, key + ".json");
     }
 
-    private static (SaamanMaestroState? State, byte[]? Bytes, string? Hash) ReadState(string path, string profilePath)
+    private static (SaamanMaestroState? State, byte[]? Bytes, string? Hash) ReadState(string path, string? profilePath)
     {
         path = SaamanFileSafety.Canonical(path);
         if (!File.Exists(path))
@@ -278,7 +300,9 @@ public static partial class SaamanProfileService
         try { state = JsonSerializer.Deserialize<SaamanMaestroState>(bytes, new JsonSerializerOptions { MaxDepth = 12 }); }
         catch (JsonException) { throw new InvalidDataException("The MAESTRO restoration state is unreadable. Keep the existing recovery files and repair the saved state before applying."); }
         if (state is null) throw new InvalidDataException("The MAESTRO restoration state is empty.");
-        ValidateState(state, profilePath);
+        if (string.IsNullOrWhiteSpace(state.ProfilePath) || state.ProfilePath.Length > 4096)
+            throw new InvalidDataException("The saved MAESTRO restoration state has an invalid profile path.");
+        ValidateState(state, profilePath ?? state.ProfilePath);
         return (state, bytes, Hash(bytes));
     }
 

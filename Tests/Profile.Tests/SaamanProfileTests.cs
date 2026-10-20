@@ -284,6 +284,70 @@ internal static class SaamanProfileTests
             Require(File.ReadAllBytes(f.Profile).SequenceEqual(profileBefore) && File.ReadAllBytes(statePath).SequenceEqual(stateBefore),
                 "Failed restoration metadata left the profile or baseline changed.");
         });
+        Test("protection discovers custom profiles after preferences reset and excludes other roots", () =>
+        {
+            using var f = new SaamanFixture(source);
+            var customProfile = Path.Combine(f.Data, "Custom APP ACC.prf");
+            File.Move(f.Profile, customProfile);
+            var customPlan = SaamanProfileService.BuildPlan(f.Policy with { ProfilePath = customProfile }, f.Data);
+            SaamanProfileService.Apply(customPlan, new(f.Recovery, () => {}));
+            var otherData = Path.Combine(f.Base, "OtherGng");
+            Directory.CreateDirectory(otherData);
+            var otherPolicy = SaamanProfileService.PreparePolicy(
+                f.Policy with { ProfilePath = Path.Combine(otherData, "Other.prf") }, source, otherData);
+            using (var state = SaamanProfileService.PersistRestoreState(otherPolicy)) state.Complete();
+            var paths = SaamanProfileService.GetProtectedPaths(new AppSettings { EuroscopeDataPath = f.Data }, f.State);
+            Require(paths.Contains(f.Maestro) && paths.Contains(customPlan.Policy.StateDependency!.Path),
+                "Reset profile preferences lost a custom profile's original MAESTRO protection.");
+            Require(!paths.Contains(otherPolicy.StateDependency!.Path) &&
+                !paths.Contains(Path.Combine(otherData, "ESAA", "Plugins", "MAESTRO.dll")),
+                "Protection included a different configured GNG root.");
+        });
+        Test("a retained previous snapshot stays protective when its main sidecar is missing", () =>
+        {
+            using var f = new SaamanFixture(source);
+            var enabled = f.Enable();
+            SaamanProfileService.Apply(SaamanProfileService.BuildPlan(f.Policy with { Enabled = false }, f.Data), new(f.Recovery, () => {}));
+            var statePath = enabled.Policy.StateDependency!.Path;
+            File.Delete(statePath);
+            var paths = SaamanProfileService.GetProtectedPaths(new AppSettings { EuroscopeDataPath = f.Data }, f.State);
+            Require(paths.Contains(f.Maestro) && paths.Contains(statePath + ".previous"), "A retained snapshot stopped protecting original files.");
+        });
+        Test("protection enumeration fails closed at its fixed entry limit", () =>
+        {
+            using var f = new SaamanFixture(source);
+            Directory.CreateDirectory(f.State);
+            for (var i = 0; i <= SaamanProfileService.MaximumProtectedStateEntries; i++)
+                File.WriteAllText(Path.Combine(f.State, "extra-" + i + ".txt"), "");
+            Reject(() => SaamanProfileService.GetProtectedPaths(new AppSettings { EuroscopeDataPath = f.Data }, f.State));
+        });
+        Test("full apply does not save SAAMAN choice after a failed plugin step", () =>
+        {
+            using var f = new SaamanFixture(source);
+            var settings = new AppSettings { PatchSaaman = true, SaamanDllPath = f.Dll };
+            var saved = false;
+            var original = File.ReadAllBytes(f.Profile);
+            File.Delete(f.Dll);
+            Reject(() => ProfileService.Apply(settings, f.Data, () => saved = true, policy =>
+                SaamanProfileService.Apply(SaamanProfileService.BuildPlan(policy with { StateRoot = f.State }, f.Data), new(f.Recovery, () => {}))));
+            Require(!saved && File.ReadAllBytes(f.Profile).SequenceEqual(original), "A failed plugin step saved the requested choice.");
+        });
+        Test("full apply saves completed SAAMAN choice before a later identity-write failure", () =>
+        {
+            using var f = new SaamanFixture(source);
+            var settings = new AppSettings { PatchSaaman = true, SaamanDllPath = f.Dll };
+            var saved = false;
+            var blocked = Path.Combine(f.Data, "ESZZ identity-failure.prf");
+            File.WriteAllText(blocked, "; synthetic identity target");
+            using var lockTarget = new FileStream(blocked, FileMode.Open, FileAccess.Read, FileShare.None);
+            Reject(() => ProfileService.Apply(settings, f.Data, () =>
+            {
+                Require(f.Read().Contains("SAAMAN.dll") && !f.Read().Contains("MAESTRO.dll"), "Choice was saved before the plugin result.");
+                saved = true;
+            }, policy => SaamanProfileService.Apply(
+                SaamanProfileService.BuildPlan(policy with { StateRoot = f.State }, f.Data), new(f.Recovery, () => {}))));
+            Require(saved && f.Read().Contains("SAAMAN.dll"), "A later identity failure lost the successful plugin choice.");
+        });
         return count;
     }
     private static void Require(bool condition, string message) { if (!condition) throw new Exception(message); }

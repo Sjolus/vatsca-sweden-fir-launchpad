@@ -228,8 +228,12 @@ public partial class AppConfigWindow : Window
         Settings.VatsimCid    = built.VatsimCid;
         Settings.ObsCallsign  = built.ObsCallsign;
         Settings.PatchVatEfs  = built.PatchVatEfs;
-        Settings.PatchSaaman = built.PatchSaaman;
-        Settings.SaamanProfileManaged = built.SaamanProfileManaged;
+
+        void SaveSaamanChoice()
+        {
+            Settings.PatchSaaman = built.PatchSaaman;
+            Settings.SaamanProfileManaged = built.SaamanProfileManaged;
+        }
 
         // Follow the action shown in the dialog: a folder appearing later must not turn
         // "Save profile" into permission to write files. Apply itself rechecks a disappearing folder.
@@ -237,7 +241,9 @@ public partial class AppConfigWindow : Window
         {
             try
             {
-                var recovery = ProfileService.Apply(Settings, _euroscopeDataPath);
+                // Keep the previous choice if the plugin step fails. Later identity
+                // writes may fail separately after the plugin change has succeeded.
+                var recovery = ProfileService.Apply(built, _euroscopeDataPath, SaveSaamanChoice);
                 if (recovery is not null)
                     MessageBox.Show(this, "Controller profile applied. The original APP/ACC profile is saved at:\n\n" + recovery,
                         "SAAMAN profile recovery", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -250,6 +256,7 @@ public partial class AppConfigWindow : Window
         }
         else
         {
+            SaveSaamanChoice();
             MessageBox.Show(this, "Your controller profile was saved in Launchpad. No EuroScope files were updated because the data folder is not configured or is unavailable.",
                 "Controller profile saved", MessageBoxButton.OK, MessageBoxImage.Information);
         }

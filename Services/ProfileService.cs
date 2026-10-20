@@ -81,7 +81,12 @@ public static class ProfileService
     // Apply stored settings to EuroScope files
     // -------------------------------------------------------------------------
 
-    public static string? Apply(AppSettings s, string euroscopeDataPath)
+    public static string? Apply(AppSettings s, string euroscopeDataPath, Action? saamanApplied = null) =>
+        Apply(s, euroscopeDataPath, saamanApplied, policy =>
+            SaamanProfileService.Apply(SaamanProfileService.BuildPlan(policy, euroscopeDataPath)));
+
+    internal static string? Apply(AppSettings s, string euroscopeDataPath, Action? saamanApplied,
+        Func<SaamanProfilePolicy, string?> applySaaman)
     {
         if (!Directory.Exists(euroscopeDataPath))
             throw new DirectoryNotFoundException("The EuroScope data folder is unavailable. No profile files were updated.");
@@ -89,8 +94,14 @@ public static class ProfileService
         // Validate and recoverably apply the optional plugin change before any of
         // the existing controller-identity writes. An untouched option is a no-op.
         var saamanPolicy = SaamanProfileService.Capture(s, euroscopeDataPath);
-        var saamanRecovery = saamanPolicy is null ? null :
-            SaamanProfileService.Apply(SaamanProfileService.BuildPlan(saamanPolicy, euroscopeDataPath));
+        string? saamanRecovery = null;
+        if (saamanPolicy is not null)
+        {
+            saamanRecovery = applySaaman(saamanPolicy);
+            // Save only the plugin choice that actually reached its reviewed
+            // result, even if a later controller-identity write then fails.
+            saamanApplied?.Invoke();
+        }
         var password = CredentialManagerService.Load(CredentialManagerService.TargetVatsim) ?? string.Empty;
         var prfFiles = Directory.GetFiles(euroscopeDataPath, "ES*.prf");
         Logger.Log("APPLY", $"Patching {prfFiles.Length} .prf file(s) in {euroscopeDataPath}");

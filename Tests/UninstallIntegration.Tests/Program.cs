@@ -201,6 +201,16 @@ internal static class Program
             Throws(() => Service.Uninstall(f.Environment(), true, settings));
             Equal(0, f.Handoffs.Count);
         });
+        WithFixture("custom profile restoration survives cleared profile preferences", f =>
+        {
+            string maestro = Path.Combine(f.Root, "MAESTRO.dll"); File.WriteAllText(maestro, "SYNTHETIC MAESTRO");
+            var settings = f.EnableSaamanWithMaestro(maestro, profileName: "Custom APP ACC.prf");
+            Throws(() => Service.ValidateConfiguredPaths(settings, f.Environment()));
+            settings.PatchSaaman = false; settings.SaamanProfileManaged = false;
+            settings.SaamanDllPath = ""; settings.SaamanProfilePath = "";
+            Throws(() => Service.Uninstall(f.Environment(), true, settings));
+            Equal(0, f.Handoffs.Count); Assert(File.Exists(maestro));
+        });
         WithFixture("original MAESTRO metadata inside managed root blocks native uninstall", f =>
         {
             string maestro = Path.Combine(f.DirectoryPath, "MAESTRO.dll"); File.WriteAllText(maestro, "SYNTHETIC MAESTRO");
@@ -425,10 +435,10 @@ internal static class Program
             PrepareHandoff = installation => Handoffs.Add(installation),
             RunNativeUninstall = start ?? (info => Starts.Add(info))
         };
-        public AppSettings EnableSaamanWithMaestro(string maestro, string? stateRoot = null)
+        public AppSettings EnableSaamanWithMaestro(string maestro, string? stateRoot = null, string profileName = "ESAA APP ACC.prf")
         {
             string data = Path.Combine(DirectoryPath, "gng"); Directory.CreateDirectory(data);
-            string profile = Path.Combine(data, "ESAA APP ACC.prf");
+            string profile = Path.Combine(data, profileName);
             string dll = Path.Combine(data, "SAAMAN.dll"); File.WriteAllText(dll, "SYNTHETIC SAAMAN");
             File.WriteAllText(profile, "Plugins\tPlugin0\t" + maestro + "\nPlugins\tPlugin0Display0\tStandard ES radar screen\n");
             var policy = new SaamanProfilePolicy(profile, dll, true) { StateRoot = stateRoot ?? SaamanState };
