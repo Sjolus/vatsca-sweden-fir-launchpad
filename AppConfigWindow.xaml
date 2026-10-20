@@ -7,6 +7,36 @@
         WindowStartupLocation="CenterOwner"
         Background="{DynamicResource AppBg}" FontSize="{DynamicResource TextSize12}">
 
+    <Window.Resources>
+        <Style x:Key="ProfileInfoButton" TargetType="Button" BasedOn="{StaticResource ThemedButton}">
+            <Setter Property="Content" Value="ⓘ"/>
+            <Setter Property="MinWidth" Value="28"/>
+            <Setter Property="MinHeight" Value="28"/>
+            <Setter Property="Padding" Value="3"/>
+            <Setter Property="Margin" Value="6,0,0,0"/>
+            <Setter Property="FontSize" Value="{DynamicResource TextSize14}"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="AutomationProperties.HelpText" Value="{Binding ToolTip.Content.Text, RelativeSource={RelativeSource Self}}"/>
+            <Setter Property="ToolTipService.InitialShowDelay" Value="250"/>
+            <Setter Property="ToolTipService.ShowDuration" Value="60000"/>
+            <EventSetter Event="Click" Handler="ProfileInfo_Open"/>
+            <EventSetter Event="GotKeyboardFocus" Handler="ProfileInfo_Open"/>
+            <EventSetter Event="LostKeyboardFocus" Handler="ProfileInfo_Close"/>
+            <EventSetter Event="Unloaded" Handler="ProfileInfo_Close"/>
+            <EventSetter Event="PreviewKeyDown" Handler="ProfileInfo_KeyDown"/>
+        </Style>
+        <Style x:Key="ProfileHelpTip" TargetType="ToolTip">
+            <Setter Property="Placement" Value="Bottom"/>
+            <Setter Property="Padding" Value="12"/>
+            <Setter Property="Background" Value="{DynamicResource InputBg}"/>
+            <Setter Property="Foreground" Value="{DynamicResource InputFg}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource InputBorder}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontSize" Value="{DynamicResource TextSize12}"/>
+        </Style>
+    </Window.Resources>
+
     <DockPanel Margin="20">
 
         <!-- Buttons -->
@@ -38,17 +68,25 @@
         <StackPanel>
         <!-- Sync status banner -->
         <Border x:Name="SyncBanner"
-                Padding="10,8" Margin="0,0,0,16">
+                Padding="10,8" Margin="0,0,0,12">
             <TextBlock x:Name="SyncText" Foreground="{DynamicResource WarningFg}" FontSize="{DynamicResource TextSize12}" TextWrapping="Wrap"/>
         </Border>
 
-        <TextBlock Text="EuroScope profile folder" FontWeight="SemiBold" Margin="0,0,0,4"
-                   Foreground="{DynamicResource PrimaryText}"/>
+        <Grid HorizontalAlignment="Left" Margin="0,0,0,2">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <TextBlock Text="EuroScope profile folder" FontWeight="SemiBold" VerticalAlignment="Center"
+                       Foreground="{DynamicResource PrimaryText}"/>
+            <Button Grid.Column="1" Style="{StaticResource ProfileInfoButton}" AutomationProperties.Name="About applying the controller profile">
+                <Button.ToolTip>
+                    <ToolTip Style="{StaticResource ProfileHelpTip}">
+                        <TextBlock x:Name="ApplyHintText" MaxWidth="360" TextWrapping="Wrap"/>
+                    </ToolTip>
+                </Button.ToolTip>
+            </Button>
+        </Grid>
         <TextBox x:Name="TargetPathText" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="80"
                  VerticalScrollBarVisibility="Auto" Padding="6,5" FontSize="{DynamicResource TextSize12}"
-                 AutomationProperties.Name="EuroScope profile folder"/>
-        <TextBlock x:Name="ApplyHintText" TextWrapping="Wrap" Margin="0,6,0,16"
-                   Foreground="{DynamicResource SecondaryText}" FontSize="{DynamicResource TextSize12}"/>
+                 AutomationProperties.Name="EuroScope profile folder" Margin="0,0,0,12"/>
 
         <!-- Fields -->
         <StackPanel>
@@ -56,22 +94,32 @@
             <!-- Name -->
             <TextBlock Text="Full Name" FontWeight="SemiBold" Margin="0,0,0,4"
                        Foreground="{DynamicResource PrimaryText}"/>
-            <TextBox x:Name="NameBox" Margin="0,0,0,14" Padding="6,5" FontFamily="Consolas" FontSize="{DynamicResource TextSize12}" AutomationProperties.Name="Full name"/>
+            <TextBox x:Name="NameBox" Margin="0,0,0,10" Padding="6,5" FontFamily="Consolas" FontSize="{DynamicResource TextSize12}" AutomationProperties.Name="Full name"/>
 
             <!-- Rating -->
             <TextBlock Text="VATSIM Rating" FontWeight="SemiBold" Margin="0,0,0,4"
                        Foreground="{DynamicResource PrimaryText}"/>
-            <ComboBox x:Name="RatingBox" Margin="0,0,0,14" Padding="6,5" FontSize="{DynamicResource TextSize12}" AutomationProperties.Name="VATSIM rating"/>
+            <ComboBox x:Name="RatingBox" Margin="0,0,0,10" Padding="6,5" FontSize="{DynamicResource TextSize12}" AutomationProperties.Name="VATSIM rating"/>
 
             <!-- CID -->
             <TextBlock Text="VATSIM CID" FontWeight="SemiBold" Margin="0,0,0,4"
                        Foreground="{DynamicResource PrimaryText}"/>
-            <TextBox x:Name="CidBox" Margin="0,0,0,14" Padding="6,5" FontFamily="Consolas" FontSize="{DynamicResource TextSize12}" AutomationProperties.Name="VATSIM CID"/>
+            <TextBox x:Name="CidBox" Margin="0,0,0,10" Padding="6,5" FontFamily="Consolas" FontSize="{DynamicResource TextSize12}" AutomationProperties.Name="VATSIM CID"/>
 
             <!-- Password -->
-            <TextBlock Text="VATSIM Password" FontWeight="SemiBold" Margin="0,0,0,4"
-                       Foreground="{DynamicResource PrimaryText}"/>
-            <Grid Margin="0,0,0,4">
+            <Grid HorizontalAlignment="Left" Margin="0,0,0,2">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <TextBlock Text="VATSIM Password" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{DynamicResource PrimaryText}"/>
+                <Button Grid.Column="1" Style="{StaticResource ProfileInfoButton}" AutomationProperties.Name="About the VATSIM password">
+                    <Button.ToolTip>
+                        <ToolTip Style="{StaticResource ProfileHelpTip}">
+                            <TextBlock MaxWidth="360" TextWrapping="Wrap"
+                                       Text="Stored in Windows Credential Manager. Applying also writes it to EuroScope profile files."/>
+                        </ToolTip>
+                    </Button.ToolTip>
+                </Button>
+            </Grid>
+            <Grid Margin="0,0,0,10">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
@@ -83,13 +131,20 @@
                         Padding="8,5" Margin="4,0,0,0" Cursor="Hand"
                         Click="TogglePassword_Click" AutomationProperties.Name="Show VATSIM password"/>
             </Grid>
-            <TextBlock Text="Stored in Windows Credential Manager. Applying also writes the password into EuroScope profile files."
-                       FontSize="{DynamicResource TextSize11}" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,14" TextWrapping="Wrap"/>
-
             <!-- Hoppie Code -->
-            <TextBlock Text="Hoppie ACARS Code (optional)" FontWeight="SemiBold" Margin="0,0,0,4"
-                       Foreground="{DynamicResource PrimaryText}"/>
-            <Grid Margin="0,0,0,4">
+            <Grid HorizontalAlignment="Left" Margin="0,0,0,2">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <TextBlock Text="Hoppie ACARS Code (optional)" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{DynamicResource PrimaryText}" TextWrapping="Wrap"/>
+                <Button Grid.Column="1" Style="{StaticResource ProfileInfoButton}" AutomationProperties.Name="About the Hoppie ACARS code">
+                    <Button.ToolTip>
+                        <ToolTip Style="{StaticResource ProfileHelpTip}">
+                            <TextBlock MaxWidth="360" TextWrapping="Wrap"
+                                       Text="Your Hoppie data-link login code. Stored in Windows Credential Manager and written to plugin files when applied. Leave blank to keep existing codes in those files."/>
+                        </ToolTip>
+                    </Button.ToolTip>
+                </Button>
+            </Grid>
+            <Grid Margin="0,0,0,10">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
@@ -101,12 +156,19 @@
                         Padding="8,5" Margin="4,0,0,0" Cursor="Hand"
                         Click="ToggleHoppie_Click" AutomationProperties.Name="Show Hoppie ACARS code"/>
             </Grid>
-            <TextBlock Text="For Hoppie data-link messaging. Stored in Windows Credential Manager; applying a code also writes it into plugin files. Leave blank if unused. This does not remove codes already in those files."
-                       FontSize="{DynamicResource TextSize11}" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,14" TextWrapping="Wrap"/>
-
             <!-- OBS Callsign -->
-            <TextBlock Text="OBS Callsign Prefix (optional)" FontWeight="SemiBold" Margin="0,0,0,4"
-                       Foreground="{DynamicResource PrimaryText}"/>
+            <Grid HorizontalAlignment="Left" Margin="0,0,0,2">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <TextBlock Text="OBS Callsign Prefix (optional)" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{DynamicResource PrimaryText}" TextWrapping="Wrap"/>
+                <Button Grid.Column="1" Style="{StaticResource ProfileInfoButton}" AutomationProperties.Name="About the observer callsign prefix">
+                    <Button.ToolTip>
+                        <ToolTip Style="{StaticResource ProfileHelpTip}">
+                            <TextBlock MaxWidth="360" TextWrapping="Wrap"
+                                       Text="Enter ES for ES_OBS. Creates an observer login in LoginProfiles.txt. Leave blank to keep existing observer logins."/>
+                        </ToolTip>
+                    </Button.ToolTip>
+                </Button>
+            </Grid>
             <Grid Margin="0,0,0,4">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -117,17 +179,55 @@
                            Margin="6,0,0,0" Foreground="{DynamicResource SecondaryText}"
                            FontFamily="Consolas" FontSize="{DynamicResource TextSize12}"/>
             </Grid>
-            <TextBlock Text="Creates an observer login callsign: enter ES for ES_OBS in LoginProfiles.txt. Leave blank to keep existing observer logins unchanged."
-                       FontSize="{DynamicResource TextSize11}" Foreground="{DynamicResource SecondaryText}" TextWrapping="Wrap"/>
-
             <!-- VatEFS plugin toggle -->
-            <CheckBox x:Name="PatchVatEfsBox" Margin="0,18,0,0"
-                      Foreground="{DynamicResource PrimaryText}" AutomationProperties.Name="Enable VatEFS plugin in EuroScope profiles">
-                <TextBlock Text="Enable VatEFS plugin in EuroScope .prf files" TextWrapping="Wrap"/>
-            </CheckBox>
-            <TextBlock Text="Adds VatEFS.dll + draw permissions when checked, removes them when unchecked. Requires VatEFS folder set in Settings."
-                       FontSize="{DynamicResource TextSize11}" Foreground="{DynamicResource SecondaryText}" Margin="22,2,0,0"
-                       TextWrapping="Wrap"/>
+            <Grid Margin="0,8,0,0" HorizontalAlignment="Left">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <CheckBox x:Name="PatchVatEfsBox" VerticalAlignment="Center"
+                          Foreground="{DynamicResource PrimaryText}" AutomationProperties.Name="Enable VatEFS plugin in EuroScope profiles">
+                    <TextBlock Text="Enable VatEFS plugin in EuroScope .prf files" TextWrapping="Wrap"/>
+                </CheckBox>
+                <Button x:Name="VatEfsInfoButton" Grid.Column="1" Style="{StaticResource ProfileInfoButton}"
+                        AutomationProperties.Name="About VatEFS profile integration">
+                    <Button.ToolTip>
+                        <ToolTip Style="{StaticResource ProfileHelpTip}">
+                            <TextBlock x:Name="VatEfsHintText" MaxWidth="360" TextWrapping="Wrap"
+                                       FontSize="{DynamicResource TextSize12}"
+                                       Text="Adds VatEFS and its radar-screen permissions. Uncheck to remove those entries. Set the VatEFS folder in Settings first."/>
+                        </ToolTip>
+                    </Button.ToolTip>
+                </Button>
+            </Grid>
+
+            <Grid Margin="0,8,0,0" HorizontalAlignment="Left">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <CheckBox x:Name="PatchSaamanBox" VerticalAlignment="Center"
+                          Foreground="{DynamicResource PrimaryText}"
+                          AutomationProperties.Name="Enable SAAMAN in the reviewed APP ACC profile">
+                    <TextBlock Text="Use SAAMAN in the APP/ACC profile" TextWrapping="Wrap"/>
+                </CheckBox>
+                <Button x:Name="SaamanInfoButton" Grid.Column="1" Style="{StaticResource ProfileInfoButton}"
+                        AutomationProperties.Name="About SAAMAN profile integration">
+                    <Button.ToolTip>
+                        <ToolTip x:Name="SaamanInfoTip" Style="{StaticResource ProfileHelpTip}">
+                            <TextBlock x:Name="SaamanHintText" MaxWidth="360" TextWrapping="Wrap"
+                                       FontSize="{DynamicResource TextSize12}"/>
+                        </ToolTip>
+                    </Button.ToolTip>
+                </Button>
+            </Grid>
+            <WrapPanel Margin="22,8,0,0">
+                <Button x:Name="PreviewSaamanButton" Content="Preview SAAMAN" Click="PreviewSaaman_Click"
+                        Padding="10,6" Margin="0,0,8,6" Cursor="Hand"/>
+                <Button x:Name="ApplySaamanButton" Content="Apply SAAMAN only" Click="ApplySaaman_Click"
+                        Padding="10,6" Margin="0,0,0,6" Cursor="Hand"
+                        ToolTip="Save this plugin choice and update only its selected APP/ACC profile. Other fields on this form are not saved."/>
+            </WrapPanel>
 
         </StackPanel>
         </StackPanel>

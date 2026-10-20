@@ -26,6 +26,11 @@ public class AppSettings
     public string VatisExePath { get; set; } = string.Empty;
     public string VatEfsPath { get; set; } = string.Empty;
     public bool PatchVatEfs { get; set; } = false;
+    public string SaamanDllPath { get; set; } = string.Empty;
+    public string SaamanProfilePath { get; set; } = string.Empty;
+    public bool PatchSaaman { get; set; }
+    // An untouched, unchecked option must not remove a manually configured plugin.
+    public bool SaamanProfileManaged { get; set; }
 
     // EuroScope profile fields (password is stored separately in Windows Credential Manager)
     public string VatsimName { get; set; } = string.Empty;

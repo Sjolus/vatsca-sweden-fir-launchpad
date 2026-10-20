@@ -38,6 +38,17 @@ test('DLL registration labels preserve public vendor suffixes without widening a
   assert.throws(()=>validateEvent(legacy,'inventory',CLOCK),{code:'invalid_request'});
 });
 
+test('SAAMAN uses existing typed application and detailed DLL fields while legacy inventory stays unchanged',()=>{
+  const entry=dll({product:'saaman',version:'1.3.37',version_source:'registration'});
+  const snapshot=validateEvent(detailed([entry]),'inventory',CLOCK);
+  assert.deepEqual(snapshot.dll_inventory.entries,[entry]);
+  assert.equal(snapshot.items.length,10);
+  assert.equal(validateEvent(event({application:'saaman',event_name:'operation_finished',operation:'install'}),'usage',CLOCK).application,'saaman');
+  assert.equal(validateReport(report({application:'saaman'}),CLOCK).application,'saaman');
+  assert.throws(()=>validateEvent(event({application:'saaman',event_name:'application_opened'}),'usage',CLOCK),{code:'invalid_request'});
+  assert.throws(()=>validateEvent(detailed([{...entry,profile_path:'C:\\Synthetic\\SAAMAN.json'}]),'inventory',CLOCK),{code:'invalid_request'});
+});
+
 test('DLL inventory rejects private fields, ambiguous sources, invalid hashes and inflated bounds',()=>{
   for(const change of [
     {filename:'private.dll'},{path:'C:\\Synthetic\\private.dll'},{product_name:'private product'},{product:'custom'},

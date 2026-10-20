@@ -2,7 +2,9 @@
 
 A Windows desktop app for [VATSIM Scandinavia](https://vatsca.org) controllers. Check versions, launch configured ATC tools, manage supported installations and apply your controller details to EuroScope profiles.
 
-**Launchpad 2.4.0** restores visible Show and Close controls, adds reviewed Start all and Close all actions, and lets you inspect your last sent reports. Optional detailed DLL reporting includes plugin versions and separates current copies from staged files.
+Launchpad supports reviewed installation and updates, optional controller-profile changes, and local recovery history. Downloads, installations and application launches always require an explicit action.
+
+Latest release: **2.5.0** — 20 October 2026. See the [changelog](CHANGELOG.md) for what's new.
 
 ![Launchpad's compact application list with TrackAudio selected and its update status shown below](Assets/screenshot.png)
 
@@ -38,7 +40,7 @@ The final page links to relevant VATSCA guides for EuroScope/GNG, TrackAudio and
 - **Compact** keeps equal-height rows with details below. **Expanded** adds a short explanation to every row. Text size is a separate setting, and the details panel can be resized or expanded for longer messages.
 - **Pin** keeps Launchpad on top. Its window size, position, monitor and maximized state are remembered.
 - **Activity** shows recent installation, update, removal and recovery outcomes, with the relevant recovery folders. GNG recovery still requires its normal review and confirmation.
-- Use **Controller profile → Preview** to inspect proposed profile changes before applying them.
+- Use **Controller profile → Preview** to inspect proposed profile changes before applying them. The **ⓘ** buttons explain each option; open them with the mouse or keyboard.
 
 The profile sync indicator checks only the first matching `ES*.prf`. A blank Hoppie code leaves existing Hoppie files unchanged; the preview says so.
 
@@ -52,6 +54,7 @@ The profile sync indicator checks only the first matching `ES*.prf`. A blank Hop
 | vATIS | Update the recognized standard per-user layout, with a complete recovery backup. Fresh setup supports the reviewed beta.19 package only after explicit beta opt-in, and refuses an existing installation/data folder. |
 | Swedish GNG package | Choose **Details… → Set up / update…** to sign in on AeroNav, download or import a ZIP, review the changes and install. |
 | VatEFS | Install missing copies and update recognized all-users MSI installations in Program Files, including official prereleases. Close EuroScope and the VatEFS backend first. The browser launch stays available when its local service is running. |
+| SAAMAN | Install or update the latest stable Arlanda arrival-manager plugin, or choose an existing `SAAMAN.dll`. Optional profile integration puts it first in APP/ACC and replaces MAESTRO's entry. Close EuroScope before making changes. |
 | Other custom tools | Configure their paths; installation remains manual. |
 
 Close the target application first. Launchpad downloads and verifies the official package, then shows installation status. Its supported installer routes do not request normal client launch. Windows elevation and prerequisite prompts may still appear.
@@ -61,6 +64,12 @@ Downloads and preparation can be cancelled. Once installation starts, wait for i
 Unknown layouts, unsupported helper versions or missing prerequisites may require manual installation. After a failed update, check again before retrying. Do not run vATIS Setup over an existing data folder.
 
 Read [client update support](docs/third-party-updates.md) and [EuroScope management](docs/euroscope-management.md) for the detailed restrictions and recovery steps.
+
+### SAAMAN in APP/ACC
+
+Choose **SAAMAN → Details… → Set up / update…** to install the plugin or select an existing copy. Then open **Profile options…**, select **Use SAAMAN in the APP/ACC profile**, and use **Preview SAAMAN** before **Apply SAAMAN only**. The option starts unchecked. Applying it places SAAMAN first, removes the old MAESTRO entry and preserves the other plugins and their display settings. This action changes only the selected profile, which defaults to `ESAA APP ACC.prf`; a renamed APP/ACC profile can be selected explicitly.
+
+The profile-only action does not save controller credentials. GNG updates retain the chosen integration in their review. Turning it off removes SAAMAN and restores the original MAESTRO entry, order and display permissions when Launchpad replaced it. Other profile changes stay in place; this does not roll back the whole profile or create a MAESTRO entry if none existed. Leaving the option untouched preserves independently configured plugins. DLL updates and profile changes keep separate recovery copies; SAAMAN's own preferences stay in place.
 
 ## Remove applications or reset data
 

@@ -8,7 +8,7 @@ using VatscaUpdateChecker.Models;
 
 namespace VatscaUpdateChecker.Services;
 
-// Reads only explicitly configured EuroScope/VatEFS locations. The legacy summary
+// Reads only explicitly configured EuroScope/VatEFS/SAAMAN locations. The legacy summary
 // has fixed component IDs; the separately consented DLL snapshot includes every DLL.
 // It does not discover apps, read profiles/settings, query registrations or load DLLs.
 public static class ReportingInventoryCollector
@@ -153,14 +153,15 @@ public static class ReportingInventoryCollector
     }
 
     public static ReportingDllInventory CollectDllInventory(string? euroscopeDataFolder, string? euroscopeExecutableFolder,
-        string? vatEfsFolder = null) => CollectDllInventory(euroscopeDataFolder, euroscopeExecutableFolder, vatEfsFolder, new());
+        string? vatEfsFolder = null, string? saamanDllPath = null) =>
+        CollectDllInventory(euroscopeDataFolder, euroscopeExecutableFolder, vatEfsFolder, new(), saamanDllPath);
 
     internal sealed record DllScanLimits(int Entries = 4096, int Directories = 128, int Depth = 4,
         long FileBytes = 64L * 1024 * 1024, long TotalBytes = 256L * 1024 * 1024,
         int Groups = ReportingWire.MaximumDllEntries, int JsonBytes = ReportingWire.MaximumDllInventoryBytes);
 
     internal static ReportingDllInventory CollectDllInventory(string? euroscopeDataFolder, string? euroscopeExecutableFolder,
-        string? vatEfsFolder, DllScanLimits limits)
+        string? vatEfsFolder, DllScanLimits limits, string? saamanDllPath = null)
     {
         if (limits.Entries is < 1 or > 4096 || limits.Directories is < 1 or > 128 || limits.Depth is < 0 or > 4 ||
             limits.FileBytes is < 1 or > 64L * 1024 * 1024 || limits.TotalBytes is < 1 or > 256L * 1024 * 1024 ||
@@ -209,6 +210,26 @@ public static class ReportingInventoryCollector
                 recognized = true;
                 string dll = Path.Combine(lease.Root, "VatEFS.dll");
                 // This explicit file is included without walking the backend's dependencies.
+                if (Exists(dll) && !scannedFiles.Contains(dll))
+                {
+                    if (++entries > limits.Entries) Stop();
+                    else ReadDll(dll, ReportingDllRole.Current, lease);
+                }
+            }
+            catch (Exception error) when (IsReadError(error)) { partial = true; }
+        }
+        if (!stopped && !string.IsNullOrWhiteSpace(saamanDllPath))
+        {
+            try
+            {
+                if (!Path.IsPathFullyQualified(saamanDllPath) ||
+                    !Path.GetExtension(saamanDllPath).Equals(".dll", StringComparison.OrdinalIgnoreCase))
+                    throw new IOException("An explicit local DLL path is required.");
+                string dll = Path.GetFullPath(saamanDllPath);
+                using var lease = PathLease.OpenRoot(Path.GetDirectoryName(dll)!);
+                recognized = true;
+                // The selected DLL may be outside EuroScope. Never walk its
+                // sibling files or read the associated SAAMAN settings/profile.
                 if (Exists(dll) && !scannedFiles.Contains(dll))
                 {
                     if (++entries > limits.Entries) Stop();

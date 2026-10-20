@@ -55,10 +55,10 @@ public static class LaunchpadUninstallService
     internal static void ValidateConfiguredPaths(AppSettings settings, UninstallEnvironment environment, params string?[] recoveryPaths)
     {
         var installation = Validate(environment.Locate(), environment);
-        ValidateConfiguredPaths(settings, installation.Root, recoveryPaths);
+        ValidateConfiguredPaths(settings, installation.Root, environment.SaamanProfileStateRoot, recoveryPaths);
     }
 
-    private static void ValidateConfiguredPaths(AppSettings settings, string managedRoot, string?[] recoveryPaths)
+    private static void ValidateConfiguredPaths(AppSettings settings, string managedRoot, string saamanStateRoot, string?[] recoveryPaths)
     {
         ArgumentNullException.ThrowIfNull(settings);
         var paths = new (string Label, string? Path)[]
@@ -69,8 +69,16 @@ public static class LaunchpadUninstallService
             ("TrackAudio executable", settings.TrackAudioExePath),
             ("VACS executable", settings.VacsExePath),
             ("vATIS executable", settings.VatisExePath),
-            ("VatEFS path", settings.VatEfsPath)
-        }.Concat(recoveryPaths.Select(path => ("recovery export", path)));
+            ("VatEFS path", settings.VatEfsPath),
+            ("SAAMAN DLL", settings.SaamanDllPath),
+            ("SAAMAN APP/ACC profile", settings.SaamanProfileManaged || settings.PatchSaaman
+                ? string.IsNullOrWhiteSpace(settings.SaamanProfilePath)
+                    ? string.IsNullOrWhiteSpace(settings.EuroscopeDataPath) ? "" : Path.Combine(settings.EuroscopeDataPath, "ESAA APP ACC.prf")
+                    : settings.SaamanProfilePath
+                : "")
+        }.Concat(recoveryPaths.Select(path => ("recovery export", path)))
+            .Concat(SaamanProfileService.GetProtectedPaths(settings, saamanStateRoot)
+                .Select(path => ("SAAMAN restoration metadata or original MAESTRO files", (string?)path)));
         string root = PreservationPath.Normalize(managedRoot);
         string resolvedRoot = PreservationPath.Resolve(root);
         foreach (var (label, configured) in paths)
@@ -97,7 +105,7 @@ public static class LaunchpadUninstallService
     {
         if (!maintenanceHeld) throw new InvalidOperationException("Acquire the maintenance lock before uninstalling Launchpad.");
         var installation = Validate(environment.Locate(), environment);
-        ValidateConfiguredPaths(settings, installation.Root, [recoveryFolder]);
+        ValidateConfiguredPaths(settings, installation.Root, environment.SaamanProfileStateRoot, [recoveryFolder]);
         // The outside-root helper holds the handoff gate until native removal finishes.
         // Return only once it is ready; the caller then shuts down without restoring normal controls.
         environment.PrepareHandoff(installation);
@@ -391,6 +399,7 @@ public static class LaunchpadUninstallService
         // The executable cannot remove its own mapped image. A completed temporary copy may remain
         // after uninstall, until a later Launchpad launch or Windows/user temporary-file cleanup.
         public string StorageRoot { get; init; } = Path.Combine(Path.GetTempPath(), "SwedenFirLaunchpad-Maintenance");
+        public string SaamanProfileStateRoot { get; init; } = SaamanProfileService.DefaultStateRoot;
         public Func<ManagedInstallation?> Locate { get; init; } = () =>
         {
             var locator = VelopackLocator.Current;

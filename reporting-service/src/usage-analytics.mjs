@@ -97,8 +97,8 @@ export function createUsageAnalytics({db,now,limits}) {
 }
 
 function dllInventory(query,application) {
-  if(application && !['euroscope','gng','vatefs','vatiris'].includes(application))return null;
-  const product=['vatefs','vatiris'].includes(application)?application:null;
+  if(application && !['euroscope','gng','vatefs','vatiris','saaman'].includes(application))return null;
+  const product=['vatefs','vatiris','saaman'].includes(application)?application:null;
   // These are scan outcomes for the entire independent inventory sample, not a
   // claim that an unreported DLL is absent. A newer legacy snapshot replaces an
   // older detailed snapshot rather than carrying stale file observations forward.

@@ -8,7 +8,7 @@ using VatscaUpdateChecker.Models;
 
 namespace VatscaUpdateChecker;
 
-internal static class LayoutSnapshots
+internal static partial class LayoutSnapshots
 {
     internal static void CaptureApplicationControls(string outputDirectory)
     {

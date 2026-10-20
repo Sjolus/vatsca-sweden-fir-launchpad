@@ -80,6 +80,7 @@ internal static class ReportingPluginRegistrationReader
         "VatIRIS" => ReportingDllProduct.Vatiris,
         "VatEFS" => ReportingDllProduct.Vatefs,
         "VCH" => ReportingDllProduct.Vch,
+        "SAAMAN" => ReportingDllProduct.Saaman,
         _ => ReportingDllProduct.Unknown
     };
 

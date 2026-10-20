@@ -2,7 +2,7 @@
 
 Close the application you want to update. In Launchpad, choose **Check for Updates**, open that application's **Details…**, then choose the update action.
 
-Launchpad downloads the official package, checks it, runs the vendor installer and verifies the installed version. Progress appears in the app. Checking alone does not download or install anything.
+Launchpad downloads and verifies the official package, applies the reviewed change and checks the installed version. Most applications use their vendor installer; SAAMAN is a plugin DLL. Progress appears in the app. Checking alone does not download or install anything.
 
 ## Supported installations
 
@@ -29,6 +29,20 @@ Close every EuroScope instance and the VatEFS backend before installing or updat
 Before an update, Launchpad exports the complete installed VatEFS folder to `%LOCALAPPDATA%\VatscaUpdateChecker\SoftwareUpdates\VatEfsRecovery`. This includes configuration stored beside its program files. Keep that recovery copy if you have local changes; restoration is manual. External EuroScope profiles, browser settings and `VatEFSsettings.json` outside the installation folder are not changed by this installation route.
 
 While Windows Installer runs, Launchpad shows elapsed time and the diagnostic log location. Failed installations retain that log under `%LOCALAPPDATA%\VatscaUpdateChecker\SoftwareUpdates\VatEfsLogs`. An unexpectedly long wait does not cause Launchpad to stop or restart the installer.
+
+## SAAMAN
+
+Choose **SAAMAN → Details… → Set up / update…**. Launchpad follows the latest stable [SAAMAN release](https://github.com/Kaskobiii/SAAMAN/releases), excluding drafts and prereleases. The default destination is `ESAA\Plugins\SAAMAN\SAAMAN.dll` inside your EuroScope data folder. **Choose existing DLL…** checks a copy without loading it, then saves its location. SAAMAN runs inside EuroScope and has no separate Launch button.
+
+Review the release and destination before confirming installation. Launchpad verifies the release files' sizes and SHA-256 hashes, the published checksum list, and the DLL's plugin identity and version. It also retains the release's licence notices. WebView2 is required; the window offers a separate runtime installation action if needed.
+
+Installation leaves EuroScope profiles unchanged. **Controller profile** offers an unchecked SAAMAN option for `ESAA APP ACC.prf`. Use **Preview SAAMAN** to inspect the proposed plugin list, then **Apply SAAMAN only** to change that profile without saving controller credentials. SAAMAN becomes the first plugin, MAESTRO's entry is removed, and remaining plugins retain their relative order and display settings. The MAESTRO DLL is not deleted. Select a differently named APP/ACC profile explicitly in the management window if necessary.
+
+GNG update previews include the saved profile choice. Disabling a previously managed integration removes SAAMAN and restores the original MAESTRO entry, order and display permissions when Launchpad replaced it. Other profile edits remain in place: disabling does not restore a whole-profile backup or create a MAESTRO entry if none existed. These SAAMAN changes apply only to the selected profile; GNG still updates the other package profiles normally. Leaving the option untouched preserves an independently configured SAAMAN profile.
+
+Restoring MAESTRO requires its original DLL and Launchpad's saved restoration record. If either is missing, the review explains what to recover before applying.
+
+Close every EuroScope instance before installation, profile changes or recovery. Replaced DLLs and original profiles are backed up under `%LOCALAPPDATA%\VatscaUpdateChecker\SAAMAN`. **Review latest recovery…** can restore the previous DLL after checking the current files. A fresh installation has no previous DLL to restore. SAAMAN's preferences and browser state in `%LOCALAPPDATA%\SAAMAN` are retained.
 
 ## During an update
 

@@ -4,7 +4,7 @@ namespace VatscaUpdateChecker.Models;
 public static class ApplicationPreferences
 {
     public static readonly string[] OptionalApplications =
-        ["EuroScope", "EuroScope (GNG Pack)", "TrackAudio", "VACS", "vATIS", "VatEFS", "VATIRIS"];
+        ["EuroScope", "EuroScope (GNG Pack)", "TrackAudio", "VACS", "vATIS", "VatEFS", "SAAMAN", "VATIRIS"];
 
     public static bool IsNotUsed(AppSettings settings, string appName) =>
         OptionalApplications.Contains(appName, StringComparer.Ordinal) &&

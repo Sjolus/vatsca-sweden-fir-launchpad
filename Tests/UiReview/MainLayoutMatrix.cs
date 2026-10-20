@@ -124,7 +124,7 @@ internal static partial class LayoutMatrix
     {
         UiFixture.Blank = UiFixture.Minimum = false;
         UiFixture.Scale = 1;
-        var window = new MainWindow { Width = 880, Height = 550, Tag = "Compact" };
+        var window = new MainWindow { Width = 880, Height = 590, Tag = "Compact" };
         try
         {
             window.RefreshSyntheticDetailsLayout();
@@ -134,11 +134,11 @@ internal static partial class LayoutMatrix
             var list = Required<ItemsControl>(window, "AppList");
             var scroll = Required<ScrollViewer>(window, "ApplicationsScroll");
             var panel = Required<FrameworkElement>(window, "ApplicationDetails");
-            Require(list.Items.Count == 8, "Density case must exercise all eight application rows.");
+            Require(list.Items.Count == 9, "Density case must exercise all nine application rows.");
             Require(IsPresented(panel), "Compact mode must always expose its shared details panel.");
             Require(ReferenceEquals(panel.DataContext, list.Items[0]), "The initial details must identify the first application.");
             Require(scroll.ExtentHeight <= scroll.ViewportHeight + .5,
-                $"Compact mixed-state rows require scrolling at 880×550: extent {scroll.ExtentHeight}, viewport {scroll.ViewportHeight}.");
+                $"Compact mixed-state rows require scrolling at 880×590: extent {scroll.ExtentHeight}, viewport {scroll.ViewportHeight}.");
             CheckRowReadability(window);
             CheckFooter(window);
 

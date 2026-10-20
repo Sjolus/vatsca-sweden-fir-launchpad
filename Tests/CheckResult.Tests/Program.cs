@@ -8,6 +8,23 @@ File.WriteAllText(fakeExe, "Synthetic existence fixture; never executed.");
 var passed = 0;
 try
 {
+    Run("SAAMAN is managed as a plugin and never exposes standalone launch or stop", () =>
+    {
+        var row = new CheckResult { AppName = "SAAMAN", HasSaamanManagement = true, LaunchPath = fakeExe,
+            InstalledVersion = "v1.3.36", LatestVersion = "v1.3.37", Status = CheckStatus.UpdateAvailable,
+            DownloadUrl = "https://github.com/Kaskobiii/SAAMAN/releases" };
+        True(!row.ShowLaunch && !row.ShowSimpleLaunch && !row.ShowSplitLaunch && !row.ShowDownload);
+        Equal("Latest stable", row.LatestVersionCaption);
+        Equal("Update available", row.RowStatusText);
+        row.IsRunning = true;
+        True(!row.ShowRunningActions);
+        row.IsRunning = false;
+        row.IsNotUsed = true;
+        Equal("Not used", row.RowStatusText);
+        row.IsNotUsed = false;
+        row.Status = CheckStatus.NotConfigured;
+        True(row.RowExplanation.Contains("SAAMAN.dll"));
+    });
     Run("unknown, missing and unreported versions remain distinct", () =>
     {
         var row = new CheckResult { AppName = "EuroScope", HasEuroScopeManagement = true };

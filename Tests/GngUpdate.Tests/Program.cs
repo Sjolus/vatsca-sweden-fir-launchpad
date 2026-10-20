@@ -58,6 +58,7 @@ sealed class Suite(string fixturesDirectory, string? filter)
         TextDiffTests.Run(Test);
         FilePreviewTests.Run(Test);
         EuroScopeProcessGuardTests.Run(Test);
+        SaamanGngTests.Run(Test);
     ListLayoutTests.Run(Test);
     BackendListLayoutTests.Run(Test);
     PackageCacheTests.Run(Test);

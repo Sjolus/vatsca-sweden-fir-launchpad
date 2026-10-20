@@ -23,6 +23,7 @@ public sealed record GngUpdatePlan(
     internal IReadOnlyList<string> ProtectedPaths { get; init; } = [];
     internal IReadOnlyList<GngUpdateDependency> Dependencies { get; init; } = [];
     public bool PreserveListLayout { get; init; } = true;
+    public SaamanProfilePolicy? SaamanPolicy { get; init; }
     public string? ReferencePackageName { get; init; }
     internal string? ReferencePackagePath { get; init; }
     internal string? ReferencePackageHash { get; init; }

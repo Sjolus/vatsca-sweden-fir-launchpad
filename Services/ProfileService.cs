@@ -81,11 +81,16 @@ public static class ProfileService
     // Apply stored settings to EuroScope files
     // -------------------------------------------------------------------------
 
-    public static void Apply(AppSettings s, string euroscopeDataPath)
+    public static string? Apply(AppSettings s, string euroscopeDataPath)
     {
         if (!Directory.Exists(euroscopeDataPath))
             throw new DirectoryNotFoundException("The EuroScope data folder is unavailable. No profile files were updated.");
 
+        // Validate and recoverably apply the optional plugin change before any of
+        // the existing controller-identity writes. An untouched option is a no-op.
+        var saamanPolicy = SaamanProfileService.Capture(s, euroscopeDataPath);
+        var saamanRecovery = saamanPolicy is null ? null :
+            SaamanProfileService.Apply(SaamanProfileService.BuildPlan(saamanPolicy, euroscopeDataPath));
         var password = CredentialManagerService.Load(CredentialManagerService.TargetVatsim) ?? string.Empty;
         var prfFiles = Directory.GetFiles(euroscopeDataPath, "ES*.prf");
         Logger.Log("APPLY", $"Patching {prfFiles.Length} .prf file(s) in {euroscopeDataPath}");
@@ -115,7 +120,6 @@ public static class ProfileService
                 }
             }
         }
-
         if (!string.IsNullOrWhiteSpace(s.ObsCallsign))
             PatchLoginProfiles(
                 Path.Combine(euroscopeDataPath, "ESAA", "Settings"),
@@ -143,6 +147,7 @@ public static class ProfileService
                     RemoveVatEfsFromPrf(prf);
             }
         }
+        return saamanRecovery;
     }
 
     // -------------------------------------------------------------------------
@@ -310,6 +315,18 @@ public static class ProfileService
             sb.AppendLine($"  {curDsp,-55}  →  {newLine,-55}  {obsTag}");
         }
 
+        // SAAMAN is applied before VatEFS. Preview the same sequence so its
+        // renumbering is reflected in the later VatEFS slot calculations.
+        var saamanPolicy = SaamanProfileService.Capture(s, euroscopeDataPath);
+        if (saamanPolicy is not null)
+        {
+            var saamanPlan = SaamanProfileService.BuildPlan(saamanPolicy, euroscopeDataPath);
+            saamanPolicy = saamanPlan.Policy;
+            sb.AppendLine();
+            sb.AppendLine("SAAMAN plugin step (before the VatEFS step below):");
+            sb.AppendLine(SaamanProfileService.GeneratePreview(saamanPlan));
+        }
+
         // ── VatEFS plugin (per .prf) ─────────────────────────────────────────────
 
         if (!string.IsNullOrWhiteSpace(euroscopeDataPath) && !string.IsNullOrWhiteSpace(s.VatEfsPath))
@@ -322,6 +339,8 @@ public static class ProfileService
             foreach (var prf in prfFiles)
             {
                 var lines     = File.ReadAllLines(prf, PrfEncoding);
+                if (saamanPolicy is not null && string.Equals(SaamanFileSafety.Canonical(prf), saamanPolicy.ProfilePath, StringComparison.OrdinalIgnoreCase))
+                    lines = SaamanProfileService.Transform(string.Join("\r\n", lines), saamanPolicy).Split("\r\n");
                 int existing  = -1;
                 string? curDll = null;
                 var existingDisplays = new SortedSet<int>();

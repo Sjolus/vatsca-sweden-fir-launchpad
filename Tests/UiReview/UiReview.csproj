@@ -24,6 +24,8 @@
     <Compile Include="../../Services/ReportingWire.cs" Link="ReportingWire.cs" />
     <Compile Include="../../Services/ReportingHistoryPresentation.cs" Link="ReportingHistoryPresentation.cs" />
     <Page Include="../../AppConfigWindow.xaml" Link="AppConfigWindow.xaml" />
+    <Compile Include="../../AppConfigWindow.Help.cs" Link="AppConfigWindow.Help.cs" />
+    <Page Include="../../SaamanWindow.xaml" Link="SaamanWindow.xaml" />
     <Page Include="../../MaintenanceWindow.xaml" Link="MaintenanceWindow.xaml" />
     <Page Include="../../GngCleanupWindow.xaml" Link="GngCleanupWindow.xaml" />
     <Page Include="../../GngUpdateWindow.xaml" Link="GngUpdateWindow.xaml" />
@@ -42,6 +44,8 @@
     <Compile Include="../../GngUpdateWindow.EuroScope.cs" Link="GngUpdateWindow.EuroScope.cs" />
     <Compile Include="../../GngUpdateWindow.BrowserPresentation.cs" Link="GngUpdateWindow.BrowserPresentation.cs" />
     <Compile Include="../../Models/GngUpdatePlan.cs" Link="GngUpdatePlan.cs" />
+    <Compile Include="../../Models/SaamanProfilePolicy.cs" Link="SaamanProfilePolicy.cs" />
+    <Compile Include="../../Models/Saaman.cs" Link="Saaman.cs" />
     <Compile Include="../../Models/GngReviewNotes.cs" Link="GngReviewNotes.cs" />
     <Compile Include="../../GngFileDiffWindow.xaml.cs" Link="GngFileDiffWindow.xaml.cs" />
     <Compile Include="../../Models/GngFilePreview.cs" Link="GngFilePreview.cs" />

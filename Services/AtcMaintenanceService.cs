@@ -88,7 +88,16 @@ public sealed class AtcMaintenanceService
         var localRoots = GetLaunchpadDataRoots(local);
         backupRoots.AddRange(localRoots);
         deleteRoots.AddRange(localRoots);
-        ValidateTargetOverlap(selected, localRoots);
+        if (!string.IsNullOrWhiteSpace(backupDestination) && selected.Any(s => s.Target.Id == AtcRemovalApp.Gng && s.RemoveApplication))
+        {
+            var stateRoot = Path.Combine(_environment.LocalAppData, "VatscaUpdateChecker", "Saaman", "ProfileState");
+            var restorationState = SaamanProfileService.GetProtectedPaths(_settings, stateRoot)
+                .Where(path => IsWithin(stateRoot, path)).ToArray();
+            backupRoots.AddRange(restorationState);
+            if (restorationState.Length > 0)
+                review.AppendLine("Saved MAESTRO restoration metadata is retained locally and included in the recovery export.");
+        }
+        ValidateTargetOverlap(selected, localRoots, backupDestination);
         if (local.Settings) review.AppendLine("Launchpad: delete preferences, identity fields, activity history, log and process-tracking files.");
         if (local.BrowserSessions) review.AppendLine("Launchpad: delete its dedicated VATIRIS/VatEFS and AeroNav sign-in browser sessions.");
         if (local.Downloads) review.AppendLine("Launchpad: delete temporary client/GNG downloads and verification staging. Managed GNG package copies stay with their recovery backups.");
@@ -121,7 +130,7 @@ public sealed class AtcMaintenanceService
         ActivityHistoryReset = false;
         RequireNoRestart();
         LastBackupFolder = null;
-        ValidateConfiguredPaths(plan.Selections, plan.DirectRemovalFiles.Roots);
+        ValidateConfiguredPaths(plan.Selections, plan.DirectRemovalFiles.Roots, plan.BackupDestination);
         // Callers hold MaintenanceLock throughout review/apply. Identity and bytes are checked again here.
         foreach (var selection in plan.Selections)
         {
@@ -149,7 +158,7 @@ public sealed class AtcMaintenanceService
         progress?.Report("Removing selected applications. Wait for completion; do not close Launchpad.");
         foreach (var selection in plan.Selections.Where(s => s.RemoveApplication && s.Target.VendorSpec != null))
         {
-            ValidateConfiguredPaths(plan.Selections, plan.DirectRemovalFiles.Roots);
+            ValidateConfiguredPaths(plan.Selections, plan.DirectRemovalFiles.Roots, plan.BackupDestination);
             // Verify this vendor's original snapshot, not roots already changed by a completed
             // uninstaller (.dead markers/logs are legitimate vendor output, not direct deletion targets).
             RemovalFileService.Verify(plan.VendorSnapshots[selection.Target.Id]);
@@ -163,7 +172,7 @@ public sealed class AtcMaintenanceService
             RequireNoRestart();
         }
         RequireBrowsersClosed(plan.LaunchpadData);
-        ValidateConfiguredPaths(plan.Selections, plan.DirectRemovalFiles.Roots);
+        ValidateConfiguredPaths(plan.Selections, plan.DirectRemovalFiles.Roots, plan.BackupDestination);
         if (backup != null) RemovalFileService.VerifyBackup(plan.BackupFiles, backup);
         foreach (var selection in plan.Selections.Where(s => s.Target.VendorSpec == null || !s.RemoveApplication))
             if (_catalog.IsRunning(selection.Target)) throw new InvalidOperationException("Close " + selection.Target.Name + " before removing its data.");
@@ -202,9 +211,9 @@ public sealed class AtcMaintenanceService
             throw new InvalidOperationException("Close GNG sign-in windows and applications using WebView2 before deleting browser sessions. Launchpad will not close them for you.");
     }
 
-    private void ValidateTargetOverlap(IReadOnlyList<AtcRemovalSelection> selected, IReadOnlyList<string> localRoots)
+    private void ValidateTargetOverlap(IReadOnlyList<AtcRemovalSelection> selected, IReadOnlyList<string> localRoots, string? backupDestination)
     {
-        ValidateConfiguredPaths(selected, localRoots);
+        ValidateConfiguredPaths(selected, localRoots, backupDestination);
         var all = _catalog.Discover(_settings);
         foreach (var target in all)
         {
@@ -236,7 +245,7 @@ public sealed class AtcMaintenanceService
         }
     }
 
-    private void ValidateConfiguredPaths(IReadOnlyList<AtcRemovalSelection> selected, IReadOnlyList<string> directRoots)
+    private void ValidateConfiguredPaths(IReadOnlyList<AtcRemovalSelection> selected, IReadOnlyList<string> directRoots, string? backupDestination)
     {
         // Recognition grants removal permission, not preservation. A portable, incomplete or
         // currently missing configured copy must not disappear from the overlap safety boundary.
@@ -246,15 +255,23 @@ public sealed class AtcMaintenanceService
                 ? selection.Target.DataRoots : Array.Empty<string>()))).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         if (removes.Length == 0) return;
         var resolvedRoots = removes.Select(PreservationPath.Resolve).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-        var configured = new (AtcRemovalApp App, string Name, string Path)[]
+        var configured = new (AtcRemovalApp? App, string Name, string Path)[]
         {
             (AtcRemovalApp.EuroScope, "EuroScope executable", _settings.EuroscopeExePath),
             (AtcRemovalApp.Gng, "EuroScope/GNG data folder", _settings.EuroscopeDataPath),
             (AtcRemovalApp.Vacs, "VACS executable", _settings.VacsExePath),
             (AtcRemovalApp.Vatis, "vATIS executable", _settings.VatisExePath),
             (AtcRemovalApp.TrackAudio, "TrackAudio executable", _settings.TrackAudioExePath),
-            (AtcRemovalApp.VatEfs, "VatEFS plugin folder", _settings.VatEfsPath)
-        };
+            (AtcRemovalApp.VatEfs, "VatEFS plugin folder", _settings.VatEfsPath),
+            (null, "SAAMAN DLL", _settings.SaamanDllPath),
+            (null, "SAAMAN APP/ACC profile", _settings.SaamanProfileManaged || _settings.PatchSaaman
+                ? string.IsNullOrWhiteSpace(_settings.SaamanProfilePath)
+                    ? string.IsNullOrWhiteSpace(_settings.EuroscopeDataPath) ? "" : Path.Combine(_settings.EuroscopeDataPath, "ESAA APP ACC.prf")
+                    : _settings.SaamanProfilePath
+                : "")
+        }.Concat(SaamanProfileService.GetProtectedPaths(_settings, Path.Combine(_environment.LocalAppData,
+            "VatscaUpdateChecker", "Saaman", "ProfileState"))
+            .Select(path => (App: (AtcRemovalApp?)null, Name: "SAAMAN restoration metadata or original MAESTRO files", Path: path)));
         foreach (var item in configured)
         {
             if (string.IsNullOrWhiteSpace(item.Path) || selected.Any(selection => selection.Target.Id == item.App && selection.RemoveApplication)) continue;
@@ -262,6 +279,18 @@ public sealed class AtcMaintenanceService
             try { path = PreservationPath.Normalize(item.Path); resolvedPath = PreservationPath.Resolve(path); }
             catch (Exception ex) when (ex is IOException or ArgumentException or InvalidDataException or UnauthorizedAccessException or System.Security.SecurityException)
             { throw new InvalidOperationException("The configured " + item.Name + " path is invalid. Correct or clear it before removing application/data folders.", ex); }
+            // A reviewed complete GNG removal may include its own SAAMAN files
+            // in the verified recovery export. Selecting GNG never authorizes
+            // deletion of an external configured DLL/profile through another reset.
+            if (item.App is null && selected.Where(selection => selection.Target.Id == AtcRemovalApp.Gng && selection.RemoveApplication)
+                .SelectMany(selection => selection.Target.ProgramRoots).Any(root =>
+                    IsWithin(root, path) && IsWithin(PreservationPath.Resolve(root), resolvedPath)))
+            {
+                if (string.IsNullOrWhiteSpace(backupDestination))
+                    throw new InvalidOperationException("The GNG package contains the configured " + item.Name +
+                        ". Choose an external recovery export before removing this package.");
+                continue;
+            }
             if (removes.Any(root => IsWithin(root, path)) || resolvedRoots.Any(root => IsWithin(root, resolvedPath)))
                 throw new InvalidOperationException("A removal folder contains the unselected configured " + item.Name +
                     ". This path is protected even when the installation is missing, portable or unsupported. Relocate it or resolve the configuration before removal.");

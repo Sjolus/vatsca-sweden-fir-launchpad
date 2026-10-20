@@ -32,6 +32,8 @@ public partial class MainWindow : Window
     private int _openDialogCount;
     private readonly bool _firstSetup;
     private bool _setupRestartRequired;
+    private CheckResult LaunchpadRow => _results.Single(row => row.HasSelfUpdate);
+    private CheckResult SaamanRow => _results.Single(row => row.HasSaamanManagement);
 
     public MainWindow()
     {
@@ -61,6 +63,7 @@ public partial class MainWindow : Window
             new() { AppName = "VACS", SoftwareApp = SoftwareApp.Vacs },
             new() { AppName = "vATIS", SoftwareApp = SoftwareApp.Vatis },
             new() { AppName = "VatEFS", SoftwareApp = SoftwareApp.VatEfs, IsWebApp = true, IsLocalUrl = true, LaunchPath = "http://localhost:17770" },
+            new() { AppName = "SAAMAN", HasSaamanManagement = true },
             new() { AppName = "VATIRIS", IsWebApp = true, LaunchPath = "https://vatiris.se", Status = CheckStatus.WebApp, InstalledVersion = "N/A", LatestVersion = "N/A" },
             new() { AppName = "Sweden FIR Launchpad", HasSelfUpdate = true },
         };
@@ -245,6 +248,7 @@ public partial class MainWindow : Window
                 UpdateChecker.CheckEuroscope(_results[0], _settings.EuroscopeExePath),
                 UpdateChecker.CheckGng(_results[1], _settings.EuroscopeDataPath),
                 CheckSoftwareAsync(),
+                CheckSaamanAsync(),
                 CheckLaunchpadAsync()
             );
             if (_windowClosed) return;
@@ -301,7 +305,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        var row = _results[7];
+        var row = LaunchpadRow;
         row.SelfUpdateBusy = true;
         row.Status = CheckStatus.Checking;
         row.SelfUpdateProgress = null;
@@ -330,7 +334,7 @@ public partial class MainWindow : Window
 
     private void ApplySelfUpdateState(LaunchpadUpdateState state)
     {
-        var row = _results[7];
+        var row = LaunchpadRow;
         row.InstalledVersion = FormatLaunchpadVersion(state.CurrentVersion);
         row.LatestVersion = FormatLaunchpadVersion(state.AvailableVersion);
         row.DownloadUrl = LaunchpadDownloads;
@@ -383,7 +387,7 @@ public partial class MainWindow : Window
 
     private void UpdateSelfUpdateActionEnabled()
     {
-        _results[7].SelfUpdateActionEnabled = CanRunSelfUpdateAction();
+        LaunchpadRow.SelfUpdateActionEnabled = CanRunSelfUpdateAction();
         UpdateSoftwareActions();
     }
 
@@ -391,7 +395,7 @@ public partial class MainWindow : Window
     {
         if (!CanRunSelfUpdateAction())
         {
-            _results[7].StatusMessage = "Finish the current operation and close Launchpad's other windows before updating Launchpad.";
+            LaunchpadRow.StatusMessage = "Finish the current operation and close Launchpad's other windows before updating Launchpad.";
             return;
         }
 
@@ -401,7 +405,7 @@ public partial class MainWindow : Window
         if (!_launchpadUpdates.IsInstalled || status == LaunchpadUpdateStatus.NoFeed)
         {
             try { Process.Start(new ProcessStartInfo(LaunchpadDownloads) { UseShellExecute = true }); }
-            catch { _results[7].StatusMessage = "The browser could not open. Visit Launchpad's GitHub Releases page for the installer."; }
+            catch { LaunchpadRow.StatusMessage = "The browser could not open. Visit Launchpad's GitHub Releases page for the installer."; }
             return;
         }
 
@@ -415,8 +419,8 @@ public partial class MainWindow : Window
             try { _launchpadUpdates.RestartToApply(); }
             catch (Exception ex)
             {
-                _results[7].StatusMessage = ex.Message;
-                _results[7].SelfUpdateSummary = "Restart failed";
+                LaunchpadRow.StatusMessage = ex.Message;
+                LaunchpadRow.SelfUpdateSummary = "Restart failed";
             }
             finally
             {
@@ -438,7 +442,7 @@ public partial class MainWindow : Window
         catch (OperationCanceledException) when (_windowClosed) { }
         catch (Exception ex)
         {
-            if (!_windowClosed) _results[7].StatusMessage = ex.Message;
+            if (!_windowClosed) LaunchpadRow.StatusMessage = ex.Message;
         }
         finally
         {

@@ -2,7 +2,7 @@
 
 You can use Launchpad with an existing setup or install supported applications from scratch, including [Swedish GNG](gng-updates.md). Choose only the tools you need.
 
-This guide describes Launchpad 2.2.0 and later.
+This guide describes Launchpad 2.5.0 and later.
 
 ## Keep your existing setup
 
@@ -35,6 +35,7 @@ Open an application's **Details…**, then **Install…** (**Set up…** for Eur
 | TrackAudio | An installation for the current Windows user. | Existing TrackAudio settings can be reused; Launchpad exports them first. |
 | vATIS | The supported beta.19 package, with an explicit choice to use the beta. | An existing vATIS folder must be handled through update or removal first. Setup cannot overwrite it. |
 | VatEFS | The official MSI, including prereleases, under `%ProgramFiles%\VatEFS` for all users. Close EuroScope and the VatEFS backend first. | Fresh installation refuses an existing registration or folder. Supported installed copies use the update action with a recovery backup. External profiles and browser settings stay in place. |
+| SAAMAN | The latest stable plugin release, available from the guide's Controller profile step. An existing DLL can also be selected. | Installing the DLL leaves profiles unchanged. Enable the optional APP/ACC integration separately after reviewing it. |
 | Swedish GNG | Choose Download Swedish GNG and sign in if asked. Launchpad chooses Update Only for a recognized existing setup, or Full Package for setup/repair; review installation afterward. Original ZIP import is also available. | Supported personal files and profile fields are preserved. Shared defaults are replaced with backups; read the preview before confirming. |
 
 If Launchpad finds an existing copy or leftover installation files, use the existing-applications route or **Remove / reset…** before trying a fresh install. Unsupported layouts can be installed manually through the vendor.
@@ -50,6 +51,7 @@ Setup shows a separate action when a Microsoft runtime is needed:
 - **EuroScope:** Visual C++ x86.
 - **VatEFS:** the same Visual C++ x86 runtime used by its EuroScope plugin.
 - **GNG browser:** WebView2. ZIP import remains available without it.
+- **SAAMAN:** WebView2.
 
 Confirm the runtime installation when prompted. If Windows requires a restart, restart before continuing. Shared runtimes stay installed when you remove Launchpad or an ATC application.
 
@@ -60,6 +62,8 @@ The normal route has six steps: Welcome, Applications, Swedish GNG, Controller p
 At the GNG step, keep your existing data folder or choose **Install or update GNG…**. The package window has its own review and confirmation. After a completed installation, the guide resumes at Controller profile; cancelling returns to the GNG step.
 
 **Controller profile** lets you enter details and preview changes to supported EuroScope files. Choose **Preview** before **Save & apply**; with a configured target, this updates its Swedish profiles. Without an available target folder, **Save profile** stores the details in Launchpad only. Keeping your existing configuration is also fine.
+
+This step also offers **Set up / update SAAMAN…**. After choosing its DLL, review the optional APP/ACC profile change with **Preview SAAMAN** and **Apply SAAMAN only**. This separate action does not save controller credentials. See [SAAMAN setup and recovery](third-party-updates.md#saaman).
 
 At Fonts, choose **Check fonts**. Missing or older fonts can be opened in Windows font preview; choose Install there, then check again. The guide does not install fonts automatically or start EuroScope. The last page also links to the relevant VATSCA guides for EuroScope/GNG, TrackAudio audio/PTT and Sweden's vATIS profile.
 

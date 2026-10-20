@@ -114,7 +114,8 @@ foreach (var test in tests)
     test.Run();
     Console.WriteLine("PASS profile: " + test.Name);
 }
-Console.WriteLine($"{tests.Length} profile checks passed. Synthetic temporary files only; no real credentials, settings, registry, apps or network.");
+var saamanCount = SaamanProfileTests.Run();
+Console.WriteLine($"{tests.Length + saamanCount} profile checks passed. Synthetic temporary files only; no real credentials, settings, registry, apps or network.");
 
 static void Check(bool condition, string message) { if (!condition) throw new Exception(message); }
 static void RejectUnavailable(string path)

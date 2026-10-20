@@ -26,7 +26,8 @@ internal static class PluginRegistrationTests
             ("VATCAN Bookings", "1.1.6-2022wb", ReportingDllProduct.VatcanBookings),
             ("Arrival Load Balance", "0.2.11T", ReportingDllProduct.ArrivalLoadBalancer),
             ("VatIRIS", "0.0.5", ReportingDllProduct.Vatiris),
-            ("VatEFS", "0.0.5", ReportingDllProduct.Vatefs)
+            ("VatEFS", "0.0.5", ReportingDllProduct.Vatefs),
+            ("SAAMAN", "1.3.37", ReportingDllProduct.Saaman)
         };
         foreach (var (name, version, product) in examples)
         {

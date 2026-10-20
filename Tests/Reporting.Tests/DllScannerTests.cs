@@ -55,6 +55,71 @@ internal static class DllScannerTests
             Assert(ReportingInventoryCollector.CollectDllInventory(null, null) is
                 { Status: ReportingDllInventoryStatus.Unavailable, Entries.Count: 0 });
         });
+        Check("configured external SAAMAN reads only the selected DLL and keeps unknown identity honest", () =>
+        {
+            using var f = new Fixture(); string folder = Path.Combine(f.Root, "saaman"); Directory.CreateDirectory(folder);
+            string selected = Path.Combine(folder, "controller-selected.DLL");
+            byte[] bytes = PluginRegistrationFixture.Create("SAAMAN", "1.3.37");
+            File.WriteAllBytes(selected, bytes);
+            File.WriteAllBytes(Path.Combine(folder, "unselected-dependency.dll"), [2]);
+            File.WriteAllText(Path.Combine(folder, "SAAMAN.json"), "synthetic profile secret, never read");
+            var inventory = ReportingInventoryCollector.CollectDllInventory(null, null, null, selected);
+            Assert(inventory.Status == ReportingDllInventoryStatus.Complete &&
+                inventory.Entries.Single() is { Product: ReportingDllProduct.Saaman, Version: "1.3.37", VersionSource: ReportingDllVersionSource.Registration });
+            Assert(inventory.Entries.Single().Sha256 == Hash(bytes) && ReportingWire.ValidDllInventory(inventory));
+            string json = Encoding.UTF8.GetString(ReportingWire.Bytes(inventory));
+            Assert(!json.Contains(selected) && !json.Contains("controller-selected") && !json.Contains("secret") && !json.Contains(".json"));
+            Assert(ReportingInventoryCollector.Collect([], null, null).Count == 10);
+            File.WriteAllBytes(selected, [3]);
+            inventory = ReportingInventoryCollector.CollectDllInventory(null, null, null, selected);
+            Assert(inventory.Entries.Single() is { Product: ReportingDllProduct.Unknown, Version: null });
+            File.Delete(selected);
+            Assert(ReportingInventoryCollector.CollectDllInventory(null, null, null, selected) is
+                { Status: ReportingDllInventoryStatus.Complete, Entries.Count: 0 });
+            Assert(ReportingInventoryCollector.CollectDllInventory(null, null, null, Path.Combine(folder, "SAAMAN.json")) is
+                { Status: ReportingDllInventoryStatus.Unavailable, Entries.Count: 0 });
+        });
+        Check("configured SAAMAN overlaps and hard links cannot inflate detailed copies or override staged placement", () =>
+        {
+            using var f = new Fixture(); var (data, plugins) = Folders(f);
+            string selected = Path.Combine(plugins, "SAAMAN.dll");
+            File.WriteAllBytes(selected, PluginRegistrationFixture.Create("SAAMAN", "1.3.37"));
+            var inventory = ReportingInventoryCollector.CollectDllInventory(data, null, null, selected);
+            Assert(inventory.Status == ReportingDllInventoryStatus.Complete && inventory.Entries.Single().Copies == 1);
+            string alias = Path.Combine(f.Root, "external-saaman.dll");
+            if (!CreateHardLink(alias, selected, IntPtr.Zero)) throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+            inventory = ReportingInventoryCollector.CollectDllInventory(data, null, null, alias);
+            Assert(inventory.Entries.Single().Copies == 1);
+            string staging = Path.Combine(plugins, "Updated Plugin"); Directory.CreateDirectory(staging);
+            string staged = Path.Combine(staging, "SAAMAN.dll"); File.Move(selected, staged);
+            inventory = ReportingInventoryCollector.CollectDllInventory(data, null, null, staged);
+            Assert(inventory.Entries.Single() is { Role: ReportingDllRole.Staged, Copies: 1 });
+        });
+        Check("configured SAAMAN obeys read, link and size limits while preserving other observed DLLs", () =>
+        {
+            using var f = new Fixture(); var (data, plugins) = Folders(f);
+            File.WriteAllBytes(Path.Combine(plugins, "readable.dll"), [1]);
+            string folder = Path.Combine(f.Root, "external"); Directory.CreateDirectory(folder);
+            string selected = Path.Combine(folder, "SAAMAN.dll"); File.WriteAllBytes(selected, [2, 3, 4]);
+            using (var locked = new FileStream(selected, FileMode.Open, FileAccess.Read, FileShare.None))
+            {
+                var inventory = ReportingInventoryCollector.CollectDllInventory(data, null, null, selected);
+                Assert(inventory is { Status: ReportingDllInventoryStatus.Partial, UnreadableFiles: 1 });
+                Assert(inventory.Entries.Single().Sha256 == Hash([1]));
+            }
+            var limited = ReportingInventoryCollector.CollectDllInventory(data, null, null,
+                new ReportingInventoryCollector.DllScanLimits(FileBytes: 2), selected);
+            Assert(limited is { Status: ReportingDllInventoryStatus.Partial, UnreadableFiles: 0 });
+            Assert(limited.Entries.Single().Sha256 == Hash([1]));
+            string link = Path.Combine(f.Root, "linked-saaman"); InventoryTests.CreateJunction(link, folder);
+            try
+            {
+                var inventory = ReportingInventoryCollector.CollectDllInventory(data, null, null, Path.Combine(link, "SAAMAN.dll"));
+                Assert(inventory is { Status: ReportingDllInventoryStatus.Partial, UnreadableFiles: 0 });
+                Assert(inventory.Entries.Single().Sha256 == Hash([1]));
+            }
+            finally { Directory.Delete(link); }
+        });
         Check("physical DLL aliases count once per role while actual copied files count separately", () =>
         {
             using var f = new Fixture(); var (data, plugins) = Folders(f);

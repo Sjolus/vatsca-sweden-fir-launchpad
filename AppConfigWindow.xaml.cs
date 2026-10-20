@@ -38,6 +38,11 @@ public partial class AppConfigWindow : Window
         PasswordBox.Password = CredentialManagerService.Load(CredentialManagerService.TargetVatsim)  ?? string.Empty;
         HoppieBox.Password   = CredentialManagerService.Load(CredentialManagerService.TargetHoppie) ?? string.Empty;
         PatchVatEfsBox.IsChecked = current.PatchVatEfs;
+        PatchSaamanBox.IsChecked = current.PatchSaaman;
+        var saamanTarget = string.IsNullOrWhiteSpace(current.SaamanProfilePath)
+            ? SaamanProfileService.DefaultProfileName : Path.GetFileName(current.SaamanProfilePath);
+        SaamanHintText.Text = "Puts SAAMAN first in " + saamanTarget +
+            ", replacing MAESTRO. Uncheck to restore the MAESTRO entries Launchpad replaced, including their order and display settings. Other edits stay.\n\nChoose the DLL in Manage SAAMAN first. Close EuroScope before applying. Changes are backed up.";
 
         // Select current rating
         var ratingToSelect = current.VatsimRating >= 0 ? current.VatsimRating : 0;
@@ -56,10 +61,11 @@ public partial class AppConfigWindow : Window
         TargetPathText.Text = string.IsNullOrWhiteSpace(_euroscopeDataPath) ? "Not configured" : _euroscopeDataPath;
         SaveProfileButton.Content = canApply ? "Save & apply" : "Save profile";
         PreviewButton.IsEnabled = canApply;
+        PreviewSaamanButton.IsEnabled = ApplySaamanButton.IsEnabled = canApply;
         PreviewButton.ToolTip = canApply ? "Review changes to the configured EuroScope files." : "Set an existing EuroScope data folder in Settings to preview file changes.";
         ApplyHintText.Text = canApply
-            ? "Save & apply stores this controller profile and updates all EuroScope profiles (ES*.prf) in the folder above. Preview lets you review the file changes first."
-            : "Save profile stores your details and credentials in Launchpad only. Set an existing EuroScope data folder in Settings before applying them to files.";
+            ? "Save & apply saves your details and updates every ES*.prf file in this folder. Preview shows the changes."
+            : "Save profile keeps your details in Launchpad. Choose a EuroScope data folder in App settings to apply them to files.";
         SyncBanner.SetResourceReference(System.Windows.Controls.Border.BackgroundProperty, "WarningBg");
         SyncText.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, "WarningFg");
         if (!canApply)
@@ -74,7 +80,7 @@ public partial class AppConfigWindow : Window
         }
         else if (!ProfileService.IsInSync(Settings, _euroscopeDataPath))
         {
-            SyncText.Text = "The saved profile is out of sync with EuroScope files. Preview the changes before applying.";
+            SyncText.Text = "Saved profile differs from EuroScope. Preview before applying.";
         }
         else
         {
@@ -129,6 +135,7 @@ public partial class AppConfigWindow : Window
             return;
         }
         var temp        = BuildSettingsFromForm();
+        if (!ValidateSaamanChoice(temp)) return;
         var maskedText  = ProfileService.GeneratePreview(temp, VatsimPasswordValue, HoppieCodeValue, _euroscopeDataPath, showCredentials: false);
         var changes = "Apply your name, CID, rating and password to the Swedish EuroScope profiles in the folder below. The server selection becomes AUTOMATIC.";
         if (!string.IsNullOrWhiteSpace(HoppieCodeValue)) changes += " Update the supported Hoppie code files.";
@@ -136,11 +143,16 @@ public partial class AppConfigWindow : Window
         if (!string.IsNullOrWhiteSpace(temp.VatEfsPath)) changes += temp.PatchVatEfs
             ? " Enable the configured VatEFS plugin where its DLL is available."
             : " Remove VatEFS plugin entries from these profiles.";
+        if (temp.SaamanProfileManaged) changes += temp.PatchSaaman
+            ? " Put SAAMAN first and remove MAESTRO entries in the selected APP/ACC profile only."
+            : " Remove SAAMAN entries in the selected APP/ACC profile only and restore any MAESTRO entry Launchpad replaced, including its order and display permissions.";
         var kept = "Other profile settings stay in place." +
             (string.IsNullOrWhiteSpace(HoppieCodeValue) ? " Existing Hoppie codes in plugin files stay unchanged because the code field is blank." : "") +
             (string.IsNullOrWhiteSpace(temp.ObsCallsign) ? " Existing observer logins stay unchanged because the prefix is blank." : "");
         var summary = ReviewSummaries.Format(changes + "\n\nProfile folder: " + _euroscopeDataPath, kept,
-            "This profile action does not create a recovery copy. Make a copy of any custom profiles you want to keep before applying.",
+            temp.SaamanProfileManaged
+                ? "Changed SAAMAN profile entries receive a private recovery copy before modification. The other controller-profile changes do not create recovery copies."
+                : "This profile action does not create a recovery copy. Make a copy of any custom profiles you want to keep before applying.",
             "Passwords are saved in Windows Credential Manager and also written into the profile files. The preview is read-only; return to the profile form to save and apply.");
         var previewWindow = new ProfilePreviewWindow(summary, maskedText,
             () => ProfileService.GeneratePreview(temp, VatsimPasswordValue, HoppieCodeValue, _euroscopeDataPath, showCredentials: true))
@@ -165,6 +177,10 @@ public partial class AppConfigWindow : Window
             VatisExePath      = Settings.VatisExePath,
             VatEfsPath        = Settings.VatEfsPath,
             PatchVatEfs       = PatchVatEfsBox.IsChecked == true,
+            SaamanDllPath     = Settings.SaamanDllPath,
+            SaamanProfilePath = Settings.SaamanProfilePath,
+            PatchSaaman       = PatchSaamanBox.IsChecked == true,
+            SaamanProfileManaged = Settings.SaamanProfileManaged || Settings.PatchSaaman || PatchSaamanBox.IsChecked == true,
             VatsimName        = NameBox.Text.Trim(),
             VatsimRating      = rating,
             VatsimCid         = CidBox.Text.Trim(),
@@ -192,6 +208,7 @@ public partial class AppConfigWindow : Window
         }
 
         var built = BuildSettingsFromForm();
+        if (_canApplyProfile && !ValidateSaamanChoice(built, requireClosed: true)) return;
         try
         {
             CredentialManagerService.Save(CredentialManagerService.TargetVatsim, VatsimPasswordValue);
@@ -211,6 +228,8 @@ public partial class AppConfigWindow : Window
         Settings.VatsimCid    = built.VatsimCid;
         Settings.ObsCallsign  = built.ObsCallsign;
         Settings.PatchVatEfs  = built.PatchVatEfs;
+        Settings.PatchSaaman = built.PatchSaaman;
+        Settings.SaamanProfileManaged = built.SaamanProfileManaged;
 
         // Follow the action shown in the dialog: a folder appearing later must not turn
         // "Save profile" into permission to write files. Apply itself rechecks a disappearing folder.
@@ -218,7 +237,10 @@ public partial class AppConfigWindow : Window
         {
             try
             {
-                ProfileService.Apply(Settings, _euroscopeDataPath);
+                var recovery = ProfileService.Apply(Settings, _euroscopeDataPath);
+                if (recovery is not null)
+                    MessageBox.Show(this, "Controller profile applied. The original APP/ACC profile is saved at:\n\n" + recovery,
+                        "SAAMAN profile recovery", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (Exception ex)
             {
@@ -236,4 +258,80 @@ public partial class AppConfigWindow : Window
     }
 
     private void Cancel_Click(object sender, RoutedEventArgs e) => DialogResult = false;
+
+    private bool ValidateSaamanChoice(AppSettings settings, bool requireClosed = false)
+    {
+        try
+        {
+            var policy = SaamanProfileService.Capture(settings, _euroscopeDataPath);
+            if (policy is not null)
+            {
+                SaamanProfileService.BuildPlan(policy, _euroscopeDataPath);
+                if (requireClosed) EuroScopeProcessGuard.RequireClosed();
+            }
+            return true;
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Review SAAMAN configuration", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return false;
+        }
+    }
+
+    private SaamanProfileChange? SaamanPlanFromForm()
+    {
+        if (!_canApplyProfile) throw new InvalidOperationException("Set an existing EuroScope data folder before applying SAAMAN.");
+        var policy = SaamanProfileService.Capture(BuildSettingsFromForm(), _euroscopeDataPath);
+        if (policy is null)
+        {
+            MessageBox.Show(this, "SAAMAN is not managed in this profile. Check the option to enable it; leaving it unchecked keeps any manual configuration unchanged.",
+                "SAAMAN is optional", MessageBoxButton.OK, MessageBoxImage.Information);
+            return null;
+        }
+        return SaamanProfileService.BuildPlan(policy, _euroscopeDataPath);
+    }
+
+    private void PreviewSaaman_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var plan = SaamanPlanFromForm();
+            if (plan is null) return;
+            var text = SaamanProfileService.GeneratePreview(plan);
+            var preview = new ProfilePreviewWindow(plan.Summary + "\n\nProfile: " + plan.Policy.ProfilePath +
+                "\n\nOnly plugin entries change. Controller identity and credentials stay unchanged. A private recovery copy is made before a changed profile is written.",
+                text, () => text) { Owner = this, Title = "SAAMAN — preview APP/ACC profile" };
+            if (preview.FindName("ToggleCredentialsButton") is System.Windows.Controls.Button reveal) reveal.Visibility = Visibility.Collapsed;
+            if (preview.FindName("ProfileDetails") is System.Windows.Controls.Expander details)
+            { details.Header = "Plugin entries"; details.IsExpanded = true; }
+            preview.ShowDialog();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "SAAMAN preview unavailable", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    private void ApplySaaman_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var plan = SaamanPlanFromForm();
+            if (plan is null) return;
+            if (MessageBox.Show(this, plan.Summary + "\n\nProfile: " + plan.Policy.ProfilePath +
+                "\n\nApply this plugin choice only? The other fields on this form will not be saved. A recovery copy is made before changing this profile.",
+                "Apply SAAMAN profile choice", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) != MessageBoxResult.Yes) return;
+            var recovery = SaamanProfileService.Apply(plan);
+            Settings.PatchSaaman = plan.Policy.Enabled;
+            Settings.SaamanProfileManaged = true;
+            if (recovery is not null)
+                MessageBox.Show(this, "SAAMAN profile choice applied. The original profile is saved at:\n\n" + recovery,
+                    "SAAMAN profile recovery", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogResult = true;
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "SAAMAN profile was not saved", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
 }

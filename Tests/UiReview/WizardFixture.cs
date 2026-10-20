@@ -95,6 +95,9 @@ public partial class SetupWizardWindow : Window
                 : "The chosen program file was not found. You can review an installation; setup will first check for remaining program folders and settings.";
         }
         ProfileButton.IsEnabled = !_restartRequired;
+        SaamanButton.IsEnabled = !_restartRequired;
+        SaamanPathText.Text = UiFixture.Blank ? "No DLL chosen. Install SAAMAN or choose your existing copy."
+            : @"Chosen DLL: C:\Synthetic\EuroScope\ESAA\Plugins\SAAMAN\SAAMAN.dll";
         GngButton.IsEnabled = !_restartRequired;
         GngPath.Text = UiFixture.Blank ? "No data folder chosen. Find your existing GNG, or install it below." : @"Recognised GNG folder: C:\Synthetic\EuroScope data";
         FontsInstallButton.IsEnabled = false;
@@ -128,6 +131,7 @@ public partial class SetupWizardWindow : Window
     private void EuroScope_Click(object sender, RoutedEventArgs e) => SyntheticAction("EuroScope setup review");
     private void Software_Click(object sender, RoutedEventArgs e) => SyntheticAction((sender as Button)?.Tag + " setup review");
     private void Profile_Click(object sender, RoutedEventArgs e) => SyntheticAction("Controller profile review");
+    private void Saaman_Click(object sender, RoutedEventArgs e) => SyntheticAction("SAAMAN setup handoff");
     private void Guide_Click(object sender, RoutedEventArgs e) => SyntheticAction("Guide " + (sender as FrameworkElement)?.Tag);
     private void BrowseLocation_Click(object sender, RoutedEventArgs e) => SyntheticAction("Browse application location");
     private void UseCopy_Click(object sender, RoutedEventArgs e) => SyntheticAction("Use discovered location");

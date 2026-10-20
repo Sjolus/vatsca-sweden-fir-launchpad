@@ -360,6 +360,27 @@ public static partial class GngUpdateService
         foreach (var dependency in selected.Dependencies)
         {
             var path = CanonicalPath(dependency.Path);
+            if (plan.SaamanPolicy is { } saaman &&
+                Paths.Equals(Contained(root, selected.RelativePath), saaman.ProfilePath) &&
+                saaman.StateDependency is { } state && Paths.Equals(path, state.Path))
+            {
+                if (dependency.Hash != state.Hash || dependency.Length != state.Length ||
+                    !Paths.Equals(path, dependency.Path) || dependency.Length is < 0 or > 1024 * 1024 ||
+                    (dependency.Hash is not null && !ValidHash(dependency.Hash)) ||
+                    (dependency.Hash is null && (dependency.Length != 0 || File.Exists(path) || Directory.Exists(path))))
+                    throw new InvalidOperationException("The saved MAESTRO restoration information changed after review. Create a new installation review.");
+                continue;
+            }
+            if (plan.SaamanPolicy is { } pluginPolicy &&
+                Paths.Equals(Contained(root, selected.RelativePath), pluginPolicy.ProfilePath) &&
+                (pluginPolicy.Enabled ? Paths.Equals(path, pluginPolicy.DllPath) :
+                    SaamanProfileService.GetMaestroDllPaths(pluginPolicy, root).Contains(path, Paths)))
+            {
+                if (!Paths.Equals(path, dependency.Path) || dependency.Length is <= 0 or > MaxFile ||
+                    dependency.Hash is null || !ValidHash(dependency.Hash))
+                    throw new InvalidOperationException("The SAAMAN dependency review is incomplete. Create a new installation review.");
+                continue;
+            }
             RequireLayoutPath(root, path, plan.ProtectedPaths, selected.RelativePath);
             if (!Paths.Equals(path, dependency.Path) || dependency.Length is < 0 or > ListLayoutByteLimit ||
                 (dependency.Hash is not null && !ValidHash(dependency.Hash)))

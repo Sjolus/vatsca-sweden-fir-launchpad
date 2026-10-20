@@ -169,6 +169,20 @@
 
                 <StackPanel x:Name="PreferencesPage" Visibility="Collapsed">
                     <TextBlock Text="Controller profile and preferences" FontSize="{DynamicResource TextSize18}" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryText}" Margin="0,0,0,10"/>
+                    <Border Background="{DynamicResource RowBg}" Padding="10,8" Margin="0,0,0,14">
+                        <StackPanel>
+                            <DockPanel>
+                                <CheckBox x:Name="SaamanNotUsed" Content="Not used" Tag="SAAMAN" Checked="NotUsed_Changed" Unchecked="NotUsed_Changed"
+                                          DockPanel.Dock="Right" Margin="10,0,0,0" Foreground="{DynamicResource SecondaryText}" AutomationProperties.Name="Mark SAAMAN as not used"/>
+                                <TextBlock Text="SAAMAN — optional arrival manager" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryText}"/>
+                            </DockPanel>
+                            <TextBlock Text="{x:Static models:ApplicationDescriptions.Saaman}" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,4,0,0"/>
+                            <TextBlock x:Name="SaamanPathText" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,4,0,8"/>
+                            <Button x:Name="SaamanButton" Content="Set up / update SAAMAN…" Click="Saaman_Click" HorizontalAlignment="Left" Padding="10,6"/>
+                            <TextBlock Text="Then enable SAAMAN in Controller profile below. It replaces MAESTRO in APP/ACC only, and goes first in the plugin list."
+                                       TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,8,0,0"/>
+                        </StackPanel>
+                    </Border>
                     <TextBlock Text="Controller profile — optional" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryText}" Margin="0,0,0,6"/>
                     <TextBlock Text="Review your VATSIM details after GNG is in place. In Controller profile, choose Preview to inspect the file changes, then Save &amp; apply to save your details and update your Swedish EuroScope profiles. Keep your current configuration by choosing Next."
                                TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,10"/>
