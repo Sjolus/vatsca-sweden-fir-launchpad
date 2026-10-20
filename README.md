@@ -4,7 +4,7 @@ A Windows desktop app for [VATSIM Scandinavia](https://vatsca.org) controllers. 
 
 Launchpad supports reviewed installation and updates, optional controller-profile changes, and local recovery history. Downloads, installations and application launches always require an explicit action.
 
-Latest release: **2.5.1** — 21 October 2026. See the [changelog](CHANGELOG.md) for what's new.
+Latest release: **2.5.2** — 21 October 2026. See the [changelog](CHANGELOG.md) for what's new.
 
 ![Launchpad's compact application list with TrackAudio selected and its update status shown below](Assets/screenshot.png)
 
