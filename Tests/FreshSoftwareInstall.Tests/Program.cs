@@ -293,7 +293,7 @@ sealed class Fixture : IDisposable
         string version = app == SoftwareApp.Vacs ? "2.8.0" : app == SoftwareApp.TrackAudio ? "1.4.0" : app == SoftwareApp.VatEfs ? "0.0.15" : "4.1.0-beta.19";
         string fileName = app == SoftwareApp.Vacs ? "vacs_2.8.0_x64-setup.exe" : app == SoftwareApp.TrackAudio ? "trackaudio-1.4.0-x64-setup.exe" : app == SoftwareApp.VatEfs ? "vatefs-0.0.15.msi" : "org.vatsim.vatis-4.1.0-beta.19-full.nupkg";
         string uri = app == SoftwareApp.Vacs ? "https://github.com/vacs-project/vacs/releases/download/vacs-client-v2.8.0/" + fileName :
-            app == SoftwareApp.TrackAudio ? "https://github.com/pierr3/TrackAudio/releases/download/1.4.0/" + fileName : app == SoftwareApp.VatEfs ? "https://github.com/minsulander/vatefs/releases/download/v0.0.15/" + fileName : "https://vatis.app/updates/windows/" + fileName;
+            app == SoftwareApp.TrackAudio ? "https://github.com/pierr3/TrackAudio/releases/download/1.4.0/" + fileName : app == SoftwareApp.VatEfs ? "https://github.com/minsulander/vatefs/releases/download/v0.0.15/" + fileName : "https://vatis.app/downloads/windows/" + fileName;
         Bytes = app == SoftwareApp.Vatis ? Package() : Encoding.UTF8.GetBytes("Synthetic inert installer " + app);
         Release = new(app, version, new(uri), fileName, Convert.ToHexString(SHA256.HashData(Bytes)), Bytes.Length) { IsPrerelease = app == SoftwareApp.VatEfs };
         _http = new(new Handler(async (request, token) =>

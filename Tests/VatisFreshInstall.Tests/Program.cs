@@ -103,7 +103,7 @@ internal static class Program
             using var http = new HttpClient(new ThrowingHandler());
             var installer = new VatisFreshInstaller(http);
             var release = new SoftwareRelease(SoftwareApp.Vatis, VatisFreshInstaller.ReviewedVersion,
-                new("https://vatis.app/updates/windows/org.vatsim.vatis-4.1.0-beta.19-full.nupkg"),
+                new("https://vatis.app/downloads/windows/org.vatsim.vatis-4.1.0-beta.19-full.nupkg"),
                 "org.vatsim.vatis-4.1.0-beta.19-full.nupkg", VatisFreshInstaller.PackageSha256, VatisFreshInstaller.PackageSize);
             await using var input = new FileStream(args[1], FileMode.Open, FileAccess.Read, FileShare.Read);
             await installer.VerifySetupAsync(args[1], input, release, default);
@@ -158,7 +158,7 @@ internal static class Program
             }
             byte[] package = File.ReadAllBytes(PackagePath);
             Release = new(SoftwareApp.Vatis, VatisFreshInstaller.ReviewedVersion,
-                new("https://vatis.app/updates/windows/org.vatsim.vatis-4.1.0-beta.19-full.nupkg"),
+                new("https://vatis.app/downloads/windows/org.vatsim.vatis-4.1.0-beta.19-full.nupkg"),
                 "org.vatsim.vatis-4.1.0-beta.19-full.nupkg", Hash(package), package.Length);
             Setup = new byte[96 + package.Length];
             BinaryPrimitives.WriteInt64LittleEndian(Setup.AsSpan(16), 96);

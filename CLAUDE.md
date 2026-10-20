@@ -61,6 +61,8 @@ Windows use code-behind intentionally; do not introduce a DI container or MVVM f
 
 `SoftwareReleaseSource` reads official VACS/TrackAudio/VatEFS GitHub metadata and vATIS's Windows feed. `SoftwareVersion` retains full prerelease ordering. `SoftwareUpdateService` coordinates explicit checks versus updates; neither construction nor checking installs anything. `SoftwareInstaller` recognizes existing installations and invokes each vendor's silent/no-restart route. The vATIS adapter must never use Setup over an existing root: that can delete profiles. Its installed helper requires a recoverable backup outside the root.
 
+vATIS uses `https://vatis.app/downloads/windows/releases.win.json` and matching package URLs. Do not infer a published release from its source changelog. A verified vATIS executable and matching package manifest can supply the installed version even when its updater helper is unsupported; checking still shows the available version, but background updates remain disabled. Unrecognized or untrusted application identity cannot supply this fallback.
+
 Registered and executable versions must agree before a VACS/TrackAudio update. A trailing zero fourth version component is normalized (`1.4.0.0` matches `1.4.0`); genuinely different versions retain the manual fallback and its message names both values. A product-identity mismatch has a separate explanation. Checking never rewrites Windows registration to make a mismatch disappear.
 
 `MainWindow.SoftwareUpdates.cs` binds per-row progress and serializes software updates against settings/profile dialogs and Launchpad self-updates. Download/preparation cancellation is allowed; applying is not interrupted and closing is blocked until completion. No application auto-launch is requested. Unknown layouts use a vendor-download fallback. Vendor elevation/prerequisite prompts remain possible. The synthetic `Tests/SoftwareUpdate.Tests` harness must not launch processes or read real client data; run it in CI alongside the existing self-updater harness.
@@ -284,7 +286,7 @@ Development keys are non-exportable and stored in `CurrentUser\My`; only the pub
 |---|---|
 | `api.github.com` | Official VACS/TrackAudio release catalogs and Launchpad stable releases |
 | `files.aero-nav.com/ESAA` | GNG version scrape and explicit authenticated package download; website sign-in may visit its identity providers |
-| `vatis.app/updates/windows/` | vATIS release feed, packages and reviewed fresh Setup |
+| `vatis.app/downloads/windows/` and `hub.vatis.app/download/windows` | vATIS release feed/packages and reviewed fresh Setup |
 | `euroscope.hu` | Exact pinned EuroScope MSI; no latest-version lookup |
 | Microsoft download hosts | Explicit verified runtime preparation |
 | Windows Credential Manager | Launchpad's saved passwords and Hoppie code |

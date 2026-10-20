@@ -30,6 +30,53 @@ var tests = new (string Name, Func<Task> Body)[]
         using var f = new Fixture(); f.Installer.Current = f.Installer.Current with { CanUpdate = false, Reason = "Portable copy" };
         Equal(SoftwareUpdatePhase.Unavailable, (await f.Check()).Phase); Equal(0, f.Source.Calls);
     }),
+    ("manual-only vATIS reports verified installed and latest versions but cannot update", async () =>
+    {
+        foreach (var version in new[] { "4.0.0", "4.1.0-beta.18" })
+        {
+            using var f = new Fixture(SoftwareApp.Vatis);
+            f.Installer.Current = f.Installer.Current with { CanUpdate = false, Version = version, Reason = "Update vATIS manually: unsupported helper." };
+            f.Source.Release = f.Source.Release! with
+            {
+                Version = "4.2.0", FileName = "org.vatsim.vatis-4.2.0-full.nupkg",
+                DownloadUri = new Uri("https://vatis.app/downloads/windows/org.vatsim.vatis-4.2.0-full.nupkg")
+            };
+            var state = await f.Check();
+            Equal(SoftwareUpdatePhase.Unavailable, state.Phase); Equal(version, state.InstalledVersion);
+            Equal(f.Source.Release!.Version, state.LatestVersion); Equal(version, f.Source.LastInstalledVersion);
+            Equal(1, f.Source.Calls); True(!state.CanUpdate && state.Message.Contains("manually"));
+            Equal(SoftwareUpdatePhase.Error, (await f.Update()).Phase);
+            Equal(0, f.Handler.Calls); Equal(0, f.Installer.Installs); Equal(0, f.Installer.Backups);
+        }
+    }),
+    ("manual-only vATIS without a valid installed version never contacts the catalog", async () =>
+    {
+        foreach (var version in new[] { "", "unknown", "4.1.0-beta.018" })
+        {
+            using var f = new Fixture(SoftwareApp.Vatis);
+            f.Installer.Current = f.Installer.Current with { CanUpdate = false, Version = version, Reason = "Unverified client" };
+            var state = await f.Check();
+            Equal(SoftwareUpdatePhase.Unavailable, state.Phase); Equal(0, f.Source.Calls);
+            True(state.Release is null && !state.CanUpdate);
+        }
+    }),
+    ("manual-only vATIS keeps installed version through catalog errors and cancellation", async () =>
+    {
+        foreach (var cancel in new[] { false, true })
+        {
+            using var f = new Fixture(SoftwareApp.Vatis);
+            f.Installer.Current = f.Installer.Current with { CanUpdate = false, Reason = "Unsupported helper" };
+            f.Source.OnGet = _ =>
+            {
+                if (cancel) { f.Service.Cancel(SoftwareApp.Vatis); return Task.CompletedTask; }
+                throw new IOException("Synthetic catalog failure");
+            };
+            var state = await f.Check();
+            Equal(cancel ? SoftwareUpdatePhase.Cancelled : SoftwareUpdatePhase.Error, state.Phase);
+            Equal(f.Installer.Current.Version, state.InstalledVersion); True(state.Release is null && !state.CanUpdate);
+            Equal(0, f.Handler.Calls); Equal(0, f.Installer.Installs);
+        }
+    }),
     ("unknown installed version fails closed", async () =>
     {
         using var f = new Fixture(); f.Installer.Current = f.Installer.Current with { Version = "unknown" };
@@ -325,7 +372,7 @@ sealed class Fixture : IDisposable
         App = app; Directory.CreateDirectory(Root);
         var version = "1.4.0";
         var fileName = app switch { SoftwareApp.Vacs => $"vacs_{version}_x64-setup.exe", SoftwareApp.Vatis => $"org.vatsim.vatis-{version}-full.nupkg", SoftwareApp.VatEfs => $"vatefs-{version}.msi", _ => $"trackaudio-{version}-x64-setup.exe" };
-        var url = app switch { SoftwareApp.Vacs => $"https://github.com/vacs-project/vacs/releases/download/vacs-client-v{version}/{fileName}", SoftwareApp.Vatis => $"https://vatis.app/updates/windows/{fileName}", SoftwareApp.VatEfs => $"https://github.com/minsulander/vatefs/releases/download/v{version}/{fileName}", _ => $"https://github.com/pierr3/TrackAudio/releases/download/{version}/{fileName}" };
+        var url = app switch { SoftwareApp.Vacs => $"https://github.com/vacs-project/vacs/releases/download/vacs-client-v{version}/{fileName}", SoftwareApp.Vatis => $"https://vatis.app/downloads/windows/{fileName}", SoftwareApp.VatEfs => $"https://github.com/minsulander/vatefs/releases/download/v{version}/{fileName}", _ => $"https://github.com/pierr3/TrackAudio/releases/download/{version}/{fileName}" };
         Source = new FakeSource(new(app, version, new Uri(url), fileName, Convert.ToHexString(SHA256.HashData(Payload)), Payload.Length));
         Installer = new FakeInstaller(new(app, Path.Combine(Root, "fake-tool.exe"), "1.3.0", Root, "user", null, true, null), Path.Combine(Root, "backup"));
         Handler = new FakeHandler { Respond = (_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(Payload) }) };
@@ -349,9 +396,10 @@ sealed class FakeSource(SoftwareRelease release) : ISoftwareReleaseSource
 {
     public SoftwareRelease? Release = release;
     public int Calls;
+    public string? LastInstalledVersion;
     public Func<CancellationToken, Task>? OnGet;
     public async Task<SoftwareRelease?> GetLatestAsync(SoftwareApp app, string installedVersion, CancellationToken token)
-    { Calls++; if (OnGet != null) await OnGet(token); return Release; }
+    { Calls++; LastInstalledVersion = installedVersion; if (OnGet != null) await OnGet(token); return Release; }
 }
 
 sealed class FakeInstaller(SoftwareInstallation installation, string backupPath) : ISoftwareInstaller

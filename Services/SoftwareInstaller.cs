@@ -86,16 +86,28 @@ public sealed class SoftwareInstaller : ISoftwareInstaller
             throw new InvalidDataException("Only vATIS's standard per-user Velopack installation is supported.");
         RequireFile(main);
         var updater = Path.Combine(root, "Update.exe");
-        RequireFile(updater);
         var manifest = ReadManifestFile(Path.Combine(root, "current", "sq.version"));
         var binary = _environment.ReadBinary(main);
-        var helper = _environment.ReadBinary(updater);
         RequireVatisManifest(manifest, NormalizeVersion(binary.ProductVersion));
         if (!binary.ProductName.Equals("vATIS", StringComparison.OrdinalIgnoreCase) ||
-            NormalizeVersion(helper.ProductVersion) != "0.0.1251")
-            throw new InvalidDataException("This vATIS executable or updater version has not been verified for background upgrades.");
+            !SoftwareVersion.TryParse(manifest.Version, out _))
+            throw new InvalidDataException("The installed vATIS product identity or version is not recognized.");
         _environment.VerifyPublisher(main, "Justin Shannon");
-        _environment.VerifyPublisher(updater, "Justin Shannon");
+        // A verified client version can still be checked when its updater is not
+        // eligible for managed installation. Helper trust never becomes optional.
+        try
+        {
+            RequireFile(updater);
+            var helper = _environment.ReadBinary(updater);
+            if (NormalizeVersion(helper.ProductVersion) != "0.0.1251")
+                throw new InvalidDataException("This vATIS updater version has not been verified for background upgrades.");
+            _environment.VerifyPublisher(updater, "Justin Shannon");
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException or System.Security.SecurityException or InvalidOperationException or CryptographicException)
+        {
+            return new(SoftwareApp.Vatis, configuredExe, manifest.Version, root, "CurrentUser", null, false,
+                "Update vATIS manually. Its installed version was verified, but its updater is unavailable: " + ex.Message);
+        }
         return new(SoftwareApp.Vatis, configuredExe, manifest.Version, root, "CurrentUser", updater, true, null);
     }
 
@@ -334,7 +346,7 @@ public sealed class SoftwareInstaller : ISoftwareInstaller
             throw new InvalidDataException("Unexpected official installer filename.");
         var expectedPrefix = release.App switch
         {
-            SoftwareApp.Vatis => "https://vatis.app/updates/windows/",
+            SoftwareApp.Vatis => "https://vatis.app/downloads/windows/",
             SoftwareApp.TrackAudio => "https://github.com/pierr3/TrackAudio/releases/download/",
             _ => "https://github.com/vacs-project/vacs/releases/download/"
         };
