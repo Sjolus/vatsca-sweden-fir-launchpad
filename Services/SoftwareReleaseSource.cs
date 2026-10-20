@@ -9,11 +9,11 @@ namespace VatscaUpdateChecker.Services;
 /// <summary>Reads the vendors' official catalogs; never downloads or runs an installer.</summary>
 public sealed class SoftwareReleaseSource : ISoftwareReleaseSource
 {
-    public const string VatisFeedUrl = "https://vatis.app/updates/windows/releases.win.json";
+    public const string VatisFeedUrl = "https://vatis.app/downloads/windows/releases.win.json";
     public const long MaximumPackageSize = 1024L * 1024 * 1024;
     private const int MaximumMetadataSize = 8 * 1024 * 1024;
     private const string VatisPackageId = "org.vatsim.vatis";
-    private const string VatisDownloadBase = "https://vatis.app/updates/windows/";
+    private const string VatisDownloadBase = "https://vatis.app/downloads/windows/";
     private readonly HttpClient _httpClient;
     private readonly TimeSpan _metadataTimeout;
 

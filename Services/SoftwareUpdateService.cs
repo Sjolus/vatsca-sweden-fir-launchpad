@@ -89,9 +89,13 @@ public sealed class SoftwareUpdateService
             SetState(new(app, SoftwareUpdatePhase.Checking, "Checking release…", installation));
             if (!installation.CanUpdate)
             {
-                // Missing/custom VatEFS copies still need its current release and fresh-install route.
-                var available = app == SoftwareApp.VatEfs
+                // A verified vATIS client version remains useful when only its
+                // updater is unsupported. Keep the operation manual-only.
+                // Missing/custom VatEFS copies also need their fresh-install route.
+                var available = app == SoftwareApp.VatEfs || app == SoftwareApp.Vatis &&
+                    SoftwareVersion.TryParse(installation.Version, out _)
                     ? await _source.GetLatestAsync(app, installation.Version, token).ConfigureAwait(false) : null;
+                token.ThrowIfCancellationRequested();
                 if (available is not null) ValidateRelease(app, available);
                 return SetState(new(app, SoftwareUpdatePhase.Unavailable,
                     installation.Reason ?? "This installation cannot be updated in Launchpad.", installation, available));

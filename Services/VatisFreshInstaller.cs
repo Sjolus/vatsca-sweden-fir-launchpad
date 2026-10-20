@@ -55,7 +55,7 @@ public sealed class VatisFreshInstaller
     {
         var name = $"{SoftwareInstaller.VatisId}-{_pin.Version}-full.nupkg";
         if (release.App != SoftwareApp.Vatis || release.Version != _pin.Version || release.FileName != name ||
-            release.DownloadUri.AbsoluteUri != "https://vatis.app/updates/windows/" + name ||
+            release.DownloadUri.AbsoluteUri != "https://vatis.app/downloads/windows/" + name ||
             release.Size != _pin.PackageSize || !release.Sha256.Equals(_pin.PackageSha256, StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException("This vATIS release has not been reviewed for installation without starting the client. Use the official installer manually.");
     }

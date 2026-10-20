@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.5.1] — 2026-10-21
+
+- Restore vATIS update checks and package downloads after its Windows feed moved to a new address.
+- Keep showing verified vATIS versions when its updater is unsupported, with the manual-update option retained.
+
 ## [2.5.0] — 2026-10-20
 
 - Install and update SAAMAN from its latest stable GitHub release, or adopt an existing plugin. Show its version alongside the other applications.

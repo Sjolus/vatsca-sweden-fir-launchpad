@@ -179,8 +179,31 @@ public static class SourceTests
             var delta = VatisAsset("4.1.0-beta.20"); delta["Type"] = "Delta";
             var release = await Latest(SoftwareApp.Vatis, Vatis(VatisAsset("4.1.0-beta.2"), delta, unrelated, VatisAsset("4.1.0-beta.19")), "4.1.0-beta.18");
             Assert(release is { Version: "4.1.0-beta.19", FileName: "org.vatsim.vatis-4.1.0-beta.19-full.nupkg" }, "Wrong vATIS package");
-            Assert(release!.DownloadUri.AbsoluteUri == "https://vatis.app/updates/windows/org.vatsim.vatis-4.1.0-beta.19-full.nupkg", "Wrong vATIS origin");
+            Assert(release!.DownloadUri.AbsoluteUri == "https://vatis.app/downloads/windows/org.vatsim.vatis-4.1.0-beta.19-full.nupkg", "Wrong vATIS origin");
             Assert(!SoftwareReleaseSource.IsAllowedDownloadUri(release, new Uri("https://objects.githubusercontent.com/asset"), true), "vATIS must stay on vendor host");
+        });
+        await Run("vATIS checks the current downloads feed for updates and fresh installs", async () =>
+        {
+            int calls = 0;
+            using var client = Client((request, _) =>
+            {
+                calls++;
+                Assert(request.RequestUri!.AbsoluteUri == "https://vatis.app/downloads/windows/releases.win.json", "Obsolete vATIS feed requested");
+                return Task.FromResult(Response(Vatis(VatisAsset("4.1.0-beta.19")), request));
+            });
+            var source = new SoftwareReleaseSource(client);
+            var release = await source.GetLatestAsync(SoftwareApp.Vatis, "4.1.0-beta.18", default);
+            Assert(release is { Version: "4.1.0-beta.19" }, "Published beta missing from current feed");
+            Assert(await source.GetLatestFreshAsync(SoftwareApp.Vatis, true) == release, "Fresh/update feeds differ");
+            Assert(await source.GetLatestFreshAsync(SoftwareApp.Vatis, false) is null, "Fresh installation silently opted into beta");
+            Assert(calls == 3, "Unexpected feed requests");
+            foreach (string url in new[] {
+                "https://vatis.app/updates/windows/" + release!.FileName,
+                "https://vatis.app/downloads/macos/" + release.FileName,
+                "https://vatis.app.evil.test/downloads/windows/" + release.FileName,
+                release.DownloadUri.AbsoluteUri + "?redirect=1"
+            })
+                Assert(!SoftwareReleaseSource.IsAllowedDownloadUri(release, new Uri(url), true), "Unreviewed vATIS download address accepted");
         });
         await Run("stable vATIS installations do not opt into beta", async () =>
         {

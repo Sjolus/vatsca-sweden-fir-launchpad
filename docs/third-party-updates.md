@@ -12,7 +12,7 @@ Launchpad downloads and verifies the official package, applies the reviewed chan
 | TrackAudio | Registered current-user installations. Updates come from official [stable releases](https://github.com/pierr3/TrackAudio/releases). Machine-wide copies are not supported. |
 | vATIS | Its standard per-user installation with the supported updater. Updates use the official Windows feed. Stable installations stay on stable releases; existing beta installations may update to beta or stable. |
 
-For VACS and TrackAudio, the executable and Windows registration must agree on the version and location. If they differ, Launchpad explains the mismatch and asks you to repair or reinstall through the vendor. vATIS is checked against its package metadata and installed updater. Portable, custom or unsupported installations use the download-page fallback.
+For VACS and TrackAudio, the executable and Windows registration must agree on the version and location. If they differ, Launchpad explains the mismatch and asks you to repair or reinstall through the vendor. vATIS is checked against its package metadata and installed updater. If the vATIS application can be verified but its updater is unsupported, Launchpad still shows the installed and available versions and offers the official download page. Portable, custom or unsupported installations use the download-page fallback.
 
 For a missing application, see [setup](product-onboarding.md). EuroScope has separate [supported-version management](euroscope-management.md). Swedish GNG has a separate [download and installation workflow](gng-updates.md).
 
