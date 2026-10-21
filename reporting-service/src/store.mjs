@@ -274,7 +274,12 @@ export function createStore({path,limits:requestedLimits,now = Date.now,freeSpac
   function groupedErrors(input = {}) {
     const f = filters(input);
     // Groups are computed from capped raw rows: no unbounded fingerprint or label table.
-    return db.prepare(`SELECT application,error_code,operation,stage,launchpad_version,COUNT(*) count,MAX(received_at) last_seen FROM events WHERE stream='errors' AND ${f.sql} GROUP BY application,error_code,operation,stage,launchpad_version ORDER BY count DESC LIMIT ?`).all(...f.params,safeLimit(input.limit));
+    return db.prepare(`SELECT application,error_code,operation,stage,launchpad_version,
+      json_extract(payload,'$.reason') reason,json_extract(payload,'$.service') service,json_extract(payload,'$.http_status') http_status,
+      COUNT(*) count,COUNT(DISTINCT support_id) affected_installations,MIN(received_at) first_seen,MAX(received_at) last_seen
+      FROM events WHERE stream='errors' AND expires_at>? AND ${f.sql}
+      GROUP BY application,error_code,operation,stage,launchpad_version,reason,service,http_status
+      ORDER BY affected_installations DESC,count DESC,last_seen DESC,application,error_code,operation,stage,launchpad_version,reason,service,http_status LIMIT ?`).all(now(),...f.params,safeLimit(input.limit));
   }
   function lookupSupport(id) {
     id = uuid(id);

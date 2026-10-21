@@ -143,3 +143,5 @@ button{white-space:nowrap}.dialog-heading h2{min-width:0;overflow-wrap:anywhere}
   .inventory-section-heading { align-items: start; }
   .inventory-section-count { font-size: .7rem; }
 }
+.task-outcomes{display:flex;flex-wrap:wrap;gap:.5rem;margin:.9rem 0}.task-outcome{border-left:3px solid currentColor;background:#0a2131;padding:.45rem .7rem;min-width:7rem}.task-outcome strong{display:block;font-size:1.5rem;line-height:1.2}.task-outcome span{font-size:.8rem}.task-completed{color:#89e7cc}.task-partial,.task-blocked{color:#f6c668}.task-failed{color:#ffaaa0}.task-cancelled,.task-unknown,.task-incomplete{color:#aac0cb}.task-result-row{display:flex;flex-wrap:wrap;gap:.3rem .75rem}.task-result{font-size:.8rem}.legacy-setup{margin:1rem 0}.inventory-age{display:flex;flex-wrap:wrap;gap:.4rem 1rem;font-size:.8rem;color:var(--muted);margin:.7rem 0}.inventory-age strong{color:var(--text)}.inventory-session-note{font-size:.8rem;color:var(--amber)}
+.error-context{display:flex;flex-direction:column;gap:.15rem}.error-context small{font-size:.75rem;color:var(--muted)}.error-service{white-space:nowrap;min-width:5rem}
