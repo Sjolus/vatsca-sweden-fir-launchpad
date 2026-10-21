@@ -141,7 +141,8 @@ async function load() {
       $('pagination').hidden = false; $('previous').disabled = offset === 0; $('next').disabled = data.length < 50; $('page-label').textContent = `Page ${offset / 50 + 1}`;
     } else if (currentView === 'errors') {
       const data = await request(`/api/admin/errors?${query}`);
-      fragment.append(table(data, [{ key: 'application', label: 'Application' }, { key: 'error_code', label: 'Error code' }, { key: 'operation', label: 'Operation' }, { key: 'stage', label: 'Stage' }, { key: 'launchpad_version', label: 'Launchpad' }, { key: 'count', label: 'Records' }, { key: 'last_seen', label: 'Last seen · UTC', render: time }]));
+      fragment.append(element('p', 'Counts describe error-reporting installations. They are separate from usage and are not failure rates.', 'scope-note'));
+      fragment.append(renderErrorGroups(data));
     } else if (currentView === 'health') {
       const data = await request('/api/admin/health');
       fragment.append(cards([['Storage admission', data.ok ? 'Ready' : 'Needs attention'], ['Database size', bytes(data.physical_bytes)], ['Database ceiling', bytes(data.max_db_bytes)], ['Free disk space', bytes(data.free_bytes)]]));

@@ -8,19 +8,22 @@ export const VERSION = /^[0-9]{1,6}(?:\.[0-9]{1,6}){1,3}(?:-(?:alpha|beta|rc|pre
 // Public VATCAN/ALB registration formats, not general free-form build suffixes.
 const DLL_VENDOR_VERSION = /^[0-9]{1,6}(?:\.[0-9]{1,6}){1,3}(?:-(?:19|20)[0-9]{2}wb|T)$/;
 export const FEATURES = Object.freeze(['check_updates','controller_profile_review','gng_package_review','gng_cleanup_review','gng_restore_review','setup_guide','install_or_update','adopt','font_check']);
+export const VIEWS = Object.freeze(['apps','setup_applications','setup_gng','controller_profile','preferences','activity_recovery']);
 export const INVENTORY = Object.freeze({euroscope:'configured_app',gng:'package_metadata',trackaudio:'configured_app',vacs:'configured_app',vatis:'configured_app',vatefs:'registered_msi',topsky:'plugin_file',rdf:'plugin_file',vatefs_plugin:'plugin_file',afv_euroscope_bridge:'plugin_file'});
 export const INVENTORY_STATUSES = Object.freeze(['known','unknown','absent','unavailable']);
 export const DLL_PRODUCTS = Object.freeze(['unknown','topsky','rdf','vatefs','afv_euroscope_bridge','arrival_load_balancer','cdm','ground_radar','maestro','vatiris','vch','vatcan_bookings','saaman']);
 export const ENUMS = Object.freeze({
   application: ['launchpad','euroscope','gng','trackaudio','vacs','vatis','vatefs','vatiris','maintenance','saaman'],
-  operation: ['install','update','repair','replace','remove','cleanup','restore','restore_cleanup','prerequisite','setup','adopt','check','save','download','launch'],
-  outcome: ['completed','cancelled','blocked','failed','unknown'],
+  operation: ['install','update','repair','replace','remove','cleanup','restore','restore_cleanup','prerequisite','setup','adopt','check','save','download','launch','configure_sign_in','configure_sweden_profile','configure_plugin_profile'],
+  outcome: ['completed','cancelled','blocked','failed','unknown','partial'],
   stage: ['start','check','prepare','download','verify','apply','finish','welcome','applications','gng','profile','fonts','preferences'],
-  error_code: ['unknown','download_timeout','network_unavailable','package_invalid','installation_failed','installation_identity_mismatch','settings_save_failed','browser_process_failed','operation_stopped','unexpected_error'],
+  error_code: ['unknown','download_timeout','network_unavailable','package_invalid','installation_failed','installation_identity_mismatch','settings_save_failed','browser_process_failed','operation_stopped','unexpected_error','rate_limited','access_denied'],
+  reason: ['already_configured','client_running','busy','missing_configuration','unsupported_installation','conflict','rate_limited','access_denied','timeout','network_unavailable','save_failed','verification_failed','unexpected'],
+  service: ['github','aero_nav','vatis'],
   duration_bucket: ['under_1s','under_10s','under_1m','under_5m','over_5m'],
   source: ['cache','download','import','discovery','browse','compact','expanded','standard','larger','largest','existing','fresh','preferences'],
 });
-const USAGE = ['session_started','setup_step','operation_started','operation_finished','gng_package_obtained','preference_changed','application_opened','feature_used','preferences_snapshot'];
+const USAGE = ['session_started','setup_step','operation_started','operation_finished','gng_package_obtained','preference_changed','application_opened','feature_used','preferences_snapshot','view_opened'];
 const ERRORS = ['operation_failed','unhandled_error'];
 const REQUIRED = ['event_id','support_id','session_id','occurred_at','launchpad_version','event_name'];
 const OPTIONAL = ['operation_id',...Object.keys(ENUMS),'package_version','previous_version','restart_required','recovery_available'];
@@ -45,7 +48,7 @@ function timestamp(value,now,allowExpired = false) {
 }
 export function validateEvent(value, stream, now = Date.now(),allowExpired = false) {
   if(stream==='inventory')return validateInventory(value,now);
-  const extra=value?.event_name==='feature_used'?['feature']:value?.event_name==='preferences_snapshot'?['compact_layout','text_scale','always_on_top','theme']:[];
+  const extra=value?.event_name==='feature_used'?['feature']:value?.event_name==='view_opened'?['view']:value?.event_name==='preferences_snapshot'?['compact_layout','text_scale','always_on_top','theme']:ERRORS.includes(value?.event_name)?['http_status']:[];
   keys(value,REQUIRED,[...OPTIONAL,...extra]);
   valid(stream === 'usage' || stream === 'errors' || stream === 'context');
   valid((stream === 'usage' ? USAGE : stream === 'errors' ? ERRORS : [...USAGE,...ERRORS]).includes(value.event_name));
@@ -55,10 +58,14 @@ export function validateEvent(value, stream, now = Date.now(),allowExpired = fal
   };
   if (own(value,'operation_id')) result.operation_id = uuid(value.operation_id);
   for (const key of Object.keys(ENUMS)) if (own(value,key)) result[key] = enumeration(key,value[key]);
+  if(own(value,'reason'))valid(value.event_name==='operation_finished' || ERRORS.includes(value.event_name));
+  if(own(value,'service'))valid(ERRORS.includes(value.event_name));
   for (const key of ['package_version','previous_version']) if (own(value,key)) result[key] = version(value[key]);
   for (const key of ['restart_required','recovery_available']) if (own(value,key)) { valid(typeof value[key] === 'boolean'); result[key] = value[key]; }
   if(value.event_name==='application_opened')valid(['euroscope','trackaudio','vacs','vatis','vatefs','vatiris'].includes(value.application));
   if(value.event_name==='feature_used') {valid(FEATURES.includes(value.feature));result.feature=value.feature;}
+  if(value.event_name==='view_opened') {valid(VIEWS.includes(value.view));result.view=value.view;}
+  if(own(value,'http_status')) {valid(Number.isInteger(value.http_status) && value.http_status>=100 && value.http_status<=599);result.http_status=value.http_status;}
   if(value.event_name==='preferences_snapshot') {
     valid(typeof value.compact_layout==='boolean' && typeof value.always_on_top==='boolean' && ['standard','larger','largest'].includes(value.text_scale));
     result.compact_layout=value.compact_layout;result.text_scale=value.text_scale;result.always_on_top=value.always_on_top;

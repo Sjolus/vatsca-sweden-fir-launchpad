@@ -1,4 +1,5 @@
-import {ENUMS,FEATURES,INVENTORY,VERSION,IntakeError} from './schema.mjs';
+import {ENUMS,FEATURES,VIEWS,INVENTORY,VERSION,IntakeError} from './schema.mjs';
+import {taskAnalytics} from './task-analytics.mjs';
 
 const DAY=86400000;
 const iso=value=>new Date(value).toISOString();
@@ -64,6 +65,8 @@ export function createUsageAnalytics({db,now,limits}) {
     // every retained JSON body into each temporary cohort query.
     const payload='(SELECT payload FROM events WHERE events.event_id=scoped.event_id)';
     const features=all(`SELECT json_extract(${payload},'$.feature') feature,COUNT(*) uses,COUNT(DISTINCT support_id) installations FROM scoped WHERE event_name='feature_used' GROUP BY feature ORDER BY uses DESC,feature`).filter(row=>FEATURES.includes(row.feature));
+    const views=all(`SELECT json_extract(${payload},'$.view') view,COUNT(*) opens,COUNT(DISTINCT support_id) installations FROM scoped WHERE event_name='view_opened' GROUP BY view ORDER BY opens DESC,view`).filter(row=>VIEWS.includes(row.view));
+    const tasks=taskAnalytics({one,payload,application});
     const setupRoutes=all(`,steps AS (SELECT support_id,json_extract(${payload},'$.source') source,ROW_NUMBER() OVER(PARTITION BY support_id,json_extract(${payload},'$.operation_id') ORDER BY occurred_at DESC,received_at DESC,event_id DESC) rn FROM scoped WHERE event_name='setup_step' AND json_extract(${payload},'$.operation_id') IS NOT NULL)
       SELECT CASE WHEN source IN ('fresh','existing','preferences') THEN source ELSE 'unknown' END route,COUNT(*) attempts,COUNT(DISTINCT support_id) installations FROM steps WHERE rn=1 GROUP BY route ORDER BY attempts DESC,route`);
     const gngSources=all(`SELECT CASE WHEN json_extract(${payload},'$.source') IN ('cache','download','import') THEN json_extract(${payload},'$.source') ELSE 'unknown' END source,COUNT(*) packages,COUNT(DISTINCT support_id) installations FROM scoped WHERE event_name='gng_package_obtained' GROUP BY source ORDER BY packages DESC,source`);
@@ -72,7 +75,7 @@ export function createUsageAnalytics({db,now,limits}) {
     const display={responding_installations:responding,missing_installations:active-responding};
     for(const field of ['compact_layout','text_scale','always_on_top','theme']) {
       display[field]=all(prefs+`SELECT COALESCE(json_extract(payload,'$.${field}'),'unknown') value,COUNT(*) installations FROM preferences WHERE rn=1 GROUP BY value ORDER BY installations DESC,value`)
-        .map(row=>({...row,value:['compact_layout','always_on_top'].includes(field)?row.value===1:row.value}));
+        .map(row=>({...row,value:['compact_layout','always_on_top'].includes(field) && row.value!=='unknown'?row.value===1:row.value}));
     }
     const inventoryParams=[start,end,clock,...(release?[release]:[])];
     const latestInventory=`WITH ordered AS (SELECT event_id,occurred_at,ROW_NUMBER() OVER(PARTITION BY support_id ORDER BY occurred_at DESC,received_at DESC,event_id DESC) rn FROM events WHERE stream='usage' AND event_name='inventory_snapshot' AND occurred_at>=? AND occurred_at<? AND expires_at>?${release?' AND launchpad_version=?':''}),latest AS (SELECT e.support_id,e.payload,o.occurred_at FROM ordered o JOIN events e ON e.event_id=o.event_id WHERE rn=1),items AS (
@@ -80,6 +83,8 @@ export function createUsageAnalytics({db,now,limits}) {
     )`;
     const invQuery=suffix=>db.prepare(latestInventory+' '+suffix).all(...inventoryParams);
     const inventoryTotals=db.prepare(latestInventory+' SELECT COUNT(*) installations,MAX(occurred_at) latest_at FROM latest').get(...inventoryParams);
+    const freshness=invQuery(`SELECT CASE WHEN occurred_at>=${clock-DAY} THEN 'last_24h' WHEN occurred_at>=${clock-7*DAY} THEN 'one_to_seven_days' ELSE 'older_than_seven_days' END age,COUNT(*) installations FROM latest GROUP BY age`)
+      .map(row=>({...row}));
     const counts=invQuery('SELECT component,status,COUNT(*) installations FROM items GROUP BY component,status');
     const versions=invQuery(`,counts AS (SELECT component,version,COUNT(*) installations FROM items WHERE status='known' GROUP BY component,version),ranked AS (SELECT *,ROW_NUMBER() OVER(PARTITION BY component ORDER BY installations DESC,version) rank FROM counts)
       SELECT component,CASE WHEN rank<50 THEN version ELSE 'other' END version,SUM(installations) installations FROM ranked GROUP BY component,CASE WHEN rank<50 THEN version ELSE 'other' END ORDER BY component,installations DESC,version`);
@@ -91,8 +96,8 @@ export function createUsageAnalytics({db,now,limits}) {
     const dlls=dllInventory(invQuery,application);
     return {window:{days,start:iso(start),end_exclusive:iso(end),as_of:iso(clock),timezone:'UTC',complete_days:false,partial_day:date(today),previous_start:iso(previousStart),previous_end_exclusive:iso(previousEnd),raw_retention_days:limits.eventTtlDays,coverage_start:iso(availableSince),coverage_complete:start>=availableSince},filters:{application,launchpad_version:release},
       cohort:{active_installations:active,sessions,app_launches:launches.launches,app_launch_installations:launches.installations,returning_installations:returning,returning_available:returningAvailable,returning_reason:returningAvailable?'available':previousStart<clock-limits.eventTtlDays*DAY?'retention':'coverage'},
-      daily:[...daily.values()],releases,applications,features,setup_routes:setupRoutes,gng_sources:gngSources,display_preferences:display,
-      inventory:{snapshot_installations:inventoryTotals.installations,latest_snapshot_at:inventoryTotals.latest_at===null?null:iso(inventoryTotals.latest_at),cohort:'inventory_snapshots',components,...(dlls?{dll_inventory:dlls}:{})}};
+      daily:[...daily.values()],releases,applications,features,views,tasks,setup_routes:setupRoutes,gng_sources:gngSources,display_preferences:display,
+      inventory:{snapshot_installations:inventoryTotals.installations,latest_snapshot_at:inventoryTotals.latest_at===null?null:iso(inventoryTotals.latest_at),freshness,cohort:'inventory_snapshots',components,...(dlls?{dll_inventory:dlls}:{})}};
   };
 }
 

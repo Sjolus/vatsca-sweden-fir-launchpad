@@ -3,14 +3,22 @@
 const usageNames = {
   launchpad: 'Launchpad', euroscope: 'EuroScope', gng: 'Swedish GNG', trackaudio: 'TrackAudio', vacs: 'VACS', vatis: 'vATIS', vatefs: 'VatEFS', vatiris: 'VATIRIS', maintenance: 'Maintenance', saaman: 'SAAMAN',
   topsky: 'TopSky', rdf: 'RDF', vatefs_plugin: 'VatEFS plugin', euroscope_topsky: 'TopSky', euroscope_rdf: 'RDF', euroscope_vatefs: 'VatEFS plugin',
-  afv_euroscope_bridge: 'AFV EuroScope Bridge', check_updates: 'Check for updates', controller_profile_review: 'Controller-profile review', gng_package_review: 'GNG package review', gng_cleanup_review: 'GNG cleanup review', gng_restore_review: 'GNG restore review', setup_guide: 'Setup guide', install_or_update: 'Install or update tools', adopt: 'Adopt existing paths', font_check: 'Font check',
-  update_check: 'Check for updates', gng_review: 'GNG package review', profile_review: 'Controller-profile review', software_management: 'Install or update tools', setup: 'Setup guide', cleanup: 'GNG cleanup review',
+  afv_euroscope_bridge: 'AFV EuroScope Bridge', check_updates: 'Check for updates', controller_profile_review: 'Review controller settings', gng_package_review: 'Review GNG package', gng_cleanup_review: 'Review GNG cleanup', gng_restore_review: 'Review GNG recovery', setup_guide: 'Open setup', install_or_update: 'Install or update tools', adopt: 'Use existing apps', font_check: 'Check fonts',
+  update_check: 'Check for updates', gng_review: 'GNG package review', profile_review: 'Controller-profile review', software_management: 'Install or update tools', setup: 'Setup', cleanup: 'Cleanup',
   cached: 'Cached package', cache: 'Cached package', download: 'AeroNav download', downloaded: 'AeroNav download', import: 'Imported ZIP', imported: 'Imported ZIP',
   existing: 'Use existing installations', fresh: 'Start with a fresh setup', undecided: 'Not chosen',
   file_version: 'File version', product_version: 'Product version', registered_msi: 'Registered MSI', msi: 'Registered MSI', package: 'Package metadata',
   configured_app: 'Configured application', package_metadata: 'Package metadata', plugin_file: 'Plugin file', standard: 'Standard', larger: 'Larger', largest: 'Largest', dark: 'Dark', light: 'Light',
   arrival_load_balancer: 'Arrival Load Balancer', cdm: 'CDM', ground_radar: 'Ground Radar', maestro: 'MAESTRO', vch: 'VCH', vatcan_bookings: 'VATCAN Bookings',
   preferences: 'Preferences only', other: 'Other observed versions',
+  apps: 'Apps', setup_applications: 'Setup · Applications', setup_gng: 'Setup · GNG', controller_profile: 'Controller settings', activity_recovery: 'Activity & recovery',
+  configure_sign_in: 'Configure sign-in', configure_sweden_profile: 'Configure Swedish profile', configure_plugin_profile: 'Configure plugin profile',
+  install: 'Install', update: 'Update', repair: 'Repair', replace: 'Replace', remove: 'Remove', restore: 'Restore', restore_cleanup: 'Restore cleanup', prerequisite: 'Install prerequisite', save: 'Save settings', check: 'Check', launch: 'Launch',
+  completed: 'Completed', partial: 'Partly completed', blocked: 'Blocked', failed: 'Failed', cancelled: 'Cancelled', unknown: 'Result unknown', incomplete: 'No result received',
+  already_configured: 'Already configured', client_running: 'Client running', busy: 'Another task is running', missing_configuration: 'Configuration missing', unsupported_installation: 'Unsupported installation', conflict: 'Conflicting configuration',
+  rate_limited: 'Rate limited', access_denied: 'Access denied', timeout: 'Timed out', network_unavailable: 'Network unavailable', save_failed: 'Could not save', verification_failed: 'Verification failed', unexpected: 'Unexpected problem',
+  github: 'GitHub', aero_nav: 'AeroNav', under_1s: 'Under 1 second', under_10s: '1–10 seconds', under_1m: '10–60 seconds', under_5m: '1–5 minutes', over_5m: '5 minutes or more',
+  last_24h: 'Last 24 hours', one_to_seven_days: '1–7 days old', older_than_seven_days: 'Over 7 days old',
 };
 const usageLabel = value => usageNames[value] ?? title(value);
 const number = value => Number.isFinite(value) ? value.toLocaleString('en-GB') : '—';
@@ -32,7 +40,7 @@ function usageWindow(data, inventory = false) {
   const end = asOf ? String(asOf).slice(0, 10) : '—', updated = asOf ? `${String(asOf).slice(11, 16)} UTC` : 'the latest refresh';
   note.append(element('span', `${start} – ${end} · ${window.days ?? '—'} UTC days, including today. Today is partial; updated ${updated}.`));
   if (!window.coverage_complete) note.append(element('strong', 'Partial coverage: the service does not have observations for the entire selected period.', 'coverage-warning'));
-  if (data.filters?.application && !inventory) note.append(element('span', `Usage cohort: installations with ${usageLabel(data.filters.application)} activity. Sessions, features and preferences describe those installations; launch counts describe the selected application.`));
+  if (data.filters?.application && !inventory) note.append(element('span', `Usage cohort: installations with ${usageLabel(data.filters.application)} activity. Sessions, views and preferences describe those installations; launches and tasks describe the selected application.`));
   if (data.filters?.launchpad_version) note.append(element('span', `Only observations from Launchpad ${data.filters.launchpad_version} are included.`));
   return note;
 }
@@ -76,34 +84,80 @@ function preferencePanel(data) {
   panel.append(grid);
   return panel;
 }
-function inventorySummary(data) {
-  const inventory = data.inventory ?? {}, panel = usagePanel('Software & plugin observations', 'Separate inventory consent. This sample includes installations that do not share usage.');
-  panel.append(element('strong', number(inventory.snapshot_installations), 'summary-number'), element('p', 'installations shared a software inventory in this period', 'muted'));
-  panel.append(element('p', inventory.latest_snapshot_at ? `Latest snapshot: ${time(inventory.latest_snapshot_at)} UTC.` : 'No inventory snapshots received for this selection.', 'panel-note'));
-  const button = element('button', 'View software & plugin versions'); button.addEventListener('click', () => document.querySelector('[data-view="inventory"]').click()); panel.append(button);
-  return panel;
+const taskOutcomes = ['completed', 'partial', 'blocked', 'failed', 'cancelled', 'unknown', 'incomplete'];
+function taskResults(tasks) {
+  const data = tasks ?? {}, summary = data.summary ?? {}, panel = usagePanel('What gets done', 'Recorded results of setup, configuration, updates and other requested tasks.');
+  if (!summary.started) {
+    panel.append(element('p', 'No correlated task starts in this selection. Older clients may report results without a matching start.', 'empty'));
+  } else {
+    const counts = new Map((data.outcomes ?? []).map(row => [row.outcome, row.attempts])), strip = element('div', undefined, 'task-outcomes');
+    for (const outcome of taskOutcomes) {
+      const count = counts.get(outcome) ?? 0;
+      if (!count) continue;
+      const item = element('div', undefined, `task-outcome task-${outcome}`);
+      item.append(element('strong', number(count)), element('span', usageLabel(outcome))); strip.append(item);
+    }
+    panel.append(strip, element('p', `${number(summary.started)} task starts from ${number(summary.installations)} installations · ${number(summary.matched)} have a matched result.`, 'panel-note'));
+    panel.append(table(data.by_task, [
+      { key: 'operation', label: 'Task', render: (value, row) => `${usageLabel(row.application)} · ${usageLabel(value)}` },
+      { key: 'started', label: 'Started', render: number },
+      { key: 'installations', label: 'Installations', render: number },
+      { key: 'completed', label: 'Results', render: (_, row) => {
+        const result = element('div', undefined, 'task-result-row');
+        for (const outcome of taskOutcomes) if (row[outcome]) result.append(element('span', `${number(row[outcome])} ${usageLabel(outcome).toLowerCase()}`, `task-result task-${outcome}`));
+        return result;
+      } },
+    ]));
+  }
+  const coverage = element('details');
+  coverage.append(element('summary', 'Coverage and timing'), element('p', `${number(summary.incomplete ?? 0)} starts have no matching result. ${number(summary.unmatched_finishes ?? 0)} results have no matching start. ${number(summary.unlinked_records ?? 0)} records lack correlation fields.`, 'panel-note'),
+    element('p', 'A missing result can mean an unfinished task, delayed reporting or a window boundary. It is not counted as a failure. Only usage records within these filters are paired; automatic errors are a separate sample.', 'panel-note'));
+  if (data.durations?.length) coverage.append(table(data.durations, [{ key: 'duration_bucket', label: 'Time to result', render: usageLabel }, { key: 'attempts', label: 'Matched tasks', render: number }]));
+  if (data.reasons?.length) coverage.append(table(data.reasons, [{ key: 'reason', label: 'Reason', render: usageLabel }, { key: 'outcome', label: 'Result', render: usageLabel }, { key: 'attempts', label: 'Matched tasks', render: number }]));
+  panel.append(coverage); return panel;
+}
+function renderErrorGroups(rows) {
+  const stack=(first,second,className='')=>{
+    const node=element('div',undefined,`error-context ${className}`.trim());node.append(element('span',first));
+    if(second)node.append(element('small',second));return node;
+  };
+  return table(rows,[
+    {key:'application',label:'Application',render:usageLabel},
+    {key:'error_code',label:'Problem',render:(value,row)=>stack(usageLabel(value),row.reason && row.reason!==value?usageLabel(row.reason):null)},
+    {key:'operation',label:'Context',render:(value,row)=>stack(title(value),row.stage && row.stage!==value?title(row.stage):null)},
+    {key:'service',label:'Service',render:(value,row)=>stack(value?usageLabel(value):'Not reported',row.http_status?`HTTP ${row.http_status}`:null,'error-service')},
+    {key:'launchpad_version',label:'Launchpad'},
+    {key:'affected_installations',label:'Installations',render:number},
+    {key:'count',label:'Records',render:number},
+    {key:'last_seen',label:'Seen · UTC',render:(value,row)=>stack(`Last ${time(value)}`,row.first_seen && row.first_seen!==value?`First ${time(row.first_seen)}`:null)},
+  ]);
 }
 function renderUsageDashboard(data) {
   const fragment = document.createDocumentFragment(), cohort = data.cohort ?? {}, total = cohort.active_installations ?? 0;
   fragment.append(usageWindow(data));
   const headline = element('div', undefined, 'cards usage-cards');
   const returnNote = cohort.returning_available ? `Also seen in the preceding ${data.window.days} complete UTC days.` : cohort.returning_reason === 'retention' ? 'The preceding period falls outside raw-data retention. Use 7 days.' : 'A full preceding period is not available yet.';
-  headline.append(usageCard('Active installations', number(total), 'Distinct support IDs with recorded usage.'), usageCard('Recorded sessions', number(cohort.sessions), 'Distinct sessions with activity in this period, not app starts or running time.'), usageCard('Returning installations', cohort.returning_available ? share(cohort.returning_installations, total) : 'Unavailable', returnNote), usageCard('Application launch actions', number(cohort.app_launches), `${number(cohort.app_launch_installations)} installations used Launchpad to open a tool.`));
+  headline.append(usageCard('Active installations', number(total), 'Distinct support IDs with recorded usage.'), usageCard('Recorded sessions', number(cohort.sessions), 'Distinct sessions with activity in this period, not app starts or running time.'), usageCard('Returning installations', cohort.returning_available ? share(cohort.returning_installations, total) : 'Unavailable', returnNote), usageCard('Application start requests', number(cohort.app_launches), `${number(cohort.app_launch_installations)} installations requested a tool to start.`));
   fragment.append(headline);
   if (!total) fragment.append(element('p', 'No usage observations for this selection. Inventory may still be available separately. No observations does not mean nobody uses Launchpad.', 'notice'));
   const first = element('div', undefined, 'usage-grid'); first.append(dailyUsage(data.daily));
   const releases = usagePanel('Launchpad versions in use', 'Latest observed version per active installation within these filters. This does not identify the latest published release.'); releases.append(distribution(data.releases, 'version', total)); first.append(releases); fragment.append(first);
+  fragment.append(taskResults(data.tasks));
   const second = element('div', undefined, 'usage-grid equal');
-  const apps = usagePanel('Applications opened through Launchpad', 'Explicit launch actions only. Running time and network connections are not measured.');
-  apps.append(table(data.applications, [{ key: 'application', label: 'Application', render: usageLabel }, { key: 'launches', label: 'Launch actions', render: number }, { key: 'installations', label: `Installations · of ${number(total)}`, render: value => share(value, total) }], { empty: 'No application launch observations yet.' }));
-  const features = usagePanel('Which features get used?', 'Installations count once per feature. Uses count recorded actions, not completed outcomes.');
-  features.append(table(data.features, [{ key: 'feature', label: 'Feature', render: usageLabel }, { key: 'uses', label: 'Uses', render: number }, { key: 'installations', label: `Installations · of ${number(total)}`, render: value => share(value, total) }], { empty: 'No feature observations yet.' })); second.append(apps, features); fragment.append(second);
-  const third = element('div', undefined, 'usage-grid thirds');
+  const apps = usagePanel('Applications started from Launchpad', 'Start requests recorded. Running or connected status is not verified.');
+  apps.append(table(data.applications, [{ key: 'application', label: 'Application', render: usageLabel }, { key: 'launches', label: 'Start requests', render: number }, { key: 'installations', label: `Installations · of ${number(total)}`, render: value => share(value, total) }], { empty: 'No application start observations yet.' }));
+  const views = usagePanel('Where people go', 'Page opens, counted once per navigation. Opening a page is not a completed task.');
+  views.append(table(data.views ?? [], [{ key: 'view', label: 'Page', render: value => value === 'preferences' ? 'App settings' : usageLabel(value) }, { key: 'opens', label: 'Opens', render: number }, { key: 'installations', label: 'Installations', render: number }], { empty: 'No navigation observations yet. These arrive from newer clients.' })); second.append(apps, views); fragment.append(second);
+  const third = element('div', undefined, 'usage-grid equal');
+  const features = usagePanel('Actions used', 'Review and check actions. These counts do not imply completion.');
+  features.append(table(data.features, [{ key: 'feature', label: 'Action', render: usageLabel }, { key: 'uses', label: 'Uses', render: number }, { key: 'installations', label: `Installations · of ${number(total)}`, render: value => share(value, total) }], { empty: 'No feature observations yet.' }));
   const gng = usagePanel('GNG package sources', 'How packages reached review. Preparation is separate from installation.');
   gng.append(table(data.gng_sources, [{ key: 'source', label: 'Source', render: usageLabel }, { key: 'packages', label: 'Prepared', render: number }, { key: 'installations', label: 'Installations', render: number }], { empty: 'No package preparation observations yet.' }));
-  const setup = usagePanel('Setup choices', 'Chosen routes, including unfinished guides. A choice is not a completed installation.');
-  setup.append(table(data.setup_routes, [{ key: 'route', label: 'Route', render: usageLabel }, { key: 'attempts', label: 'Choices', render: number }, { key: 'installations', label: 'Installations', render: number }], { empty: 'No setup route observations yet.' }));
-  third.append(gng, setup); if (data.inventory) third.append(inventorySummary(data)); fragment.append(third, preferencePanel(data));
+  third.append(features, gng); fragment.append(third, preferencePanel(data));
+  if (data.setup_routes?.length) {
+    const setup = element('details', undefined, 'legacy-setup');
+    setup.append(element('summary', 'Earlier setup-guide choices'), element('p', 'Routes reported by the earlier wizard. These are choices, not completed setups.', 'panel-note'), table(data.setup_routes, [{ key: 'route', label: 'Route', render: usageLabel }, { key: 'attempts', label: 'Choices', render: number }, { key: 'installations', label: 'Installations', render: number }])); fragment.append(setup);
+  }
   fragment.append(element('p', 'Usage is optional and may be sampled or delayed. Support IDs approximate installations, not individual people. Public submissions are unverified.', 'scope-note'));
   return fragment;
 }
@@ -228,6 +282,15 @@ function renderInventory(data) {
   const help = element('details', undefined, 'inventory-help');
   help.append(element('summary', 'How to read these observations'), element('p', 'This is an independent opt-in sample, including inventory-only installations. Each installation contributes its latest snapshot in the selected period. Software presence does not prove it is enabled, running or being used.'),
     element('p', 'Version unknown means detected without a readable version; it does not establish age. Not detected means no matching component was found in the checked locations. Unavailable means presence could not be determined; it is not absence. Optional detailed DLL observations include unidentified files as fingerprints, with no filenames, paths or file contents. Versions are ranked by frequency, not by release date.'));
+  context.append(element('p', 'Not a live session view: snapshots do not report whether EuroScope is running or connected.', 'inventory-session-note'));
+  if (inventory.freshness?.length) {
+    const freshness = element('div', undefined, 'inventory-age');
+    for (const age of ['last_24h', 'one_to_seven_days', 'older_than_seven_days']) {
+      const count = inventory.freshness.find(row => row.age === age)?.installations ?? 0;
+      const item = element('span'); item.append(element('strong', number(count)), document.createTextNode(` ${usageLabel(age)}`)); freshness.append(item);
+    }
+    context.append(freshness);
+  }
   context.append(help); hero.append(sample, context); fragment.append(hero);
   if (data.filters?.application) fragment.append(element('p', `Showing components for ${usageLabel(data.filters.application)}. The inventory denominator still includes every matching snapshot, including explicit absence and unavailable observations.`, 'scope-note'));
   if (!total || (!components.length && !inventory.dll_inventory)) { fragment.append(element('div', total ? 'The selected application has no component in the fixed software inventory. Choose All applications to view the available observations.' : 'No software or plugin observations for this selection. Try a wider period or different filters.', 'empty')); return fragment; }
