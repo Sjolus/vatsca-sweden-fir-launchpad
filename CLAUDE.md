@@ -194,6 +194,8 @@ The user-access matrix submits only changed rows to `/api/admin/users/access`, i
 
 Verified passkey sessions bypass public request-rate admission for recognized dashboard pages/assets, admin API requests, session checks and logout. Session validation precedes that exemption; a cookie alone is insufficient. Public reporting and passkey ceremonies retain their limits even with a signed-in cookie. Request/body limits, session expiry, origin checks and fresh authentication for deletion remain enforced. The dashboard must still work after the shared anonymous request budget is exhausted.
 
+The dashboard accepts additive navigation, task-outcome and fixed service/HTTP diagnostics from newer clients. Deploy this schema before those clients. Task outcomes match usage starts and finishes by installation and operation; unmatched records remain incomplete coverage. Error reports and inventory keep their independent consent and sample sizes. Inventory freshness describes the latest snapshot, not plugin loading or VATSIM connectivity.
+
 The reporting CI publishes full-commit GHCR images after tests on main or an explicit publish dispatch; deployment uses an immutable digest. `reporting-service/deploy/production` owns only Launchpad's namespace, dedicated Longhorn class and bounded data/backup volumes. Its separate ArgoCD bootstrap uses manual sync and the `enrollment` overlay, which excludes intake until operational checks finish. Daily SQLite snapshots and an independent hourly expiry/freshness check share a lock; backup jobs never enroll the owner. Do not change shared cluster services as part of an application rollout.
 
 ---
