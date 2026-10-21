@@ -9,6 +9,8 @@ public class AppSettings
     public bool SetupWizardDismissed { get; set; }
     public int SetupWizardStep { get; set; }
     public string SetupWizardRoute { get; set; } = "Existing";
+    public bool SetupGuideActive { get; set; }
+    public string SetupGuideSection { get; set; } = "Applications";
     public string NotUsedApplications { get; set; } = string.Empty;
     public double TextScale { get; set; } = 1;
     public bool AlwaysOnTop { get; set; }

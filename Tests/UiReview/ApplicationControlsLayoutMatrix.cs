@@ -9,7 +9,7 @@ namespace VatscaUpdateChecker;
 
 internal static partial class LayoutMatrix
 {
-    internal static string RunApplicationControlsOnly()
+    internal static string RunApplicationControlsOnly(bool includeMainPresentation = false)
     {
         LayoutValidation.CheckProgressBindingSource();
         int errorsBefore = UiFixture.ErrorCount;
@@ -27,10 +27,31 @@ internal static partial class LayoutMatrix
                 CheckCompactDensity();
                 cases++;
                 cases += CheckApplicationControlsLayouts();
+                if (includeMainPresentation)
+                {
+                    cases += CheckTextSizeLayouts(mainOnly: true);
+                    CheckRestartNotice();
+                    cases++;
+                    foreach (bool blank in new[] { false, true })
+                    foreach (bool minimum in new[] { false, true })
+                    {
+                        UiFixture.Blank = blank;
+                        UiFixture.Minimum = minimum;
+                        var main = new MainWindow();
+                        try
+                        {
+                            LayoutValidation.CheckWindowContent(main);
+                            CheckFooter(main); CheckRowReadability(main); CheckFirstRunActions(main);
+                            CheckSoftwareStates(main); CheckLongStatusWidth(main);
+                            cases++;
+                        }
+                        finally { main.Close(); }
+                    }
+                }
             }
             Require(trace.Errors.Count == 0, "WPF binding errors: " + string.Join(" | ", trace.Errors));
             Require(UiFixture.ErrorCount == errorsBefore, "An unhandled fixture exception was logged.");
-            return $"PASS: {cases} hidden application-control layouts; both themes, 100/125/150% text, compact/expanded, default/minimum sizes, stopped/mixed/running/busy/browser-only/restart-required states. No windows shown or processes controlled.";
+            return $"PASS: {cases} hidden {(includeMainPresentation ? "main-window" : "application-control")} layouts; both themes, 100/125/150% text, compact/expanded, default/minimum sizes, stopped/mixed/running/busy/browser-only/restart-required states. No windows shown or processes controlled.";
         }
         finally { source.Listeners.Remove(trace); source.Switch.Level = priorLevel; }
     }
@@ -51,7 +72,6 @@ internal static partial class LayoutMatrix
                 var window = new MainWindow { Tag = density };
                 try
                 {
-                    window.RefreshSyntheticDetailsLayout();
                     foreach (var state in Enum.GetValues<RunningFixtureState>())
                     {
                         UiFixture.SetRunningScenario(window, state);
@@ -89,9 +109,9 @@ internal static partial class LayoutMatrix
         foreach (var row in list.Items.Cast<CheckResult>())
         {
             var buttons = LayoutValidation.Descendants(list).OfType<Button>().Where(button => ReferenceEquals(button.DataContext, row)).ToArray();
-            var details = buttons.Single(button => button.Name == "RowDetailsButton");
-            details.BringIntoView(); DrainBindings(); LayoutValidation.CheckWindowContent(window);
-            CheckControlBounds(details, content);
+            var status = RowStatus(window, row);
+            status.BringIntoView(); DrainBindings(); LayoutValidation.CheckWindowContent(window);
+            CheckControlBounds(status, content);
             var show = buttons.Single(button => button.Name == "RowShowButton");
             var close = buttons.Single(button => button.Name == "RowCloseButton");
             Require(IsPresented(show) == row.ShowRunningActions && IsPresented(close) == row.ShowRunningActions,

@@ -47,7 +47,7 @@
                 <StackPanel>
                     <TextBlock x:Name="DownloadStageText" FontSize="{DynamicResource TextSize15}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,0,3"
                                Visibility="Collapsed" AutomationProperties.Name="Current GNG operation"/>
-                    <TextBox x:Name="StatusText" Text="Choose Download Swedish GNG or Import ZIP to begin. Opening this window does not start a download."
+                    <TextBox x:Name="StatusText" Text="Get the package, then review its changes before installing."
                              IsReadOnly="True" IsReadOnlyCaretVisible="True" TextWrapping="Wrap" MaxHeight="75" VerticalScrollBarVisibility="Auto" Background="Transparent" BorderThickness="0"
                              Foreground="{DynamicResource PrimaryText}" Padding="0" AutomationProperties.Name="GNG operation status" AutomationProperties.LiveSetting="Polite"/>
                     <ProgressBar x:Name="Activity" Height="7" Minimum="0" Maximum="100" Visibility="Collapsed" Margin="0,7,0,0"
@@ -81,23 +81,28 @@
                     <Border x:Name="StartPanel" Grid.Row="1" Background="{DynamicResource RowBg}" Padding="20">
                         <ScrollViewer VerticalScrollBarVisibility="Auto">
                             <StackPanel VerticalAlignment="Center" MaxWidth="650">
-                                <TextBlock x:Name="StartHeading" Text="Get your GNG package" FontSize="{DynamicResource TextSize21}" FontWeight="SemiBold" TextWrapping="Wrap"/>
-                                <TextBlock x:Name="StartExplanation" Text="Launchpad checks AeroNav's current version and matching saved packages first, then downloads what is missing. Sign in if asked. You review the changes before installing; your website sign-in stays in this browser."
+                                <TextBlock x:Name="StartHeading" Text="Get Swedish GNG" FontSize="{DynamicResource TextSize21}" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                <TextBlock x:Name="StartExplanation" Text="Use the latest package from AeroNav. Saved copies are reused; sign in only if needed."
                                            TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,10,0,12"/>
                                 <TextBlock x:Name="PackageKindText" TextWrapping="Wrap" Margin="0,0,0,12" FontWeight="SemiBold"/>
                                 <WrapPanel>
                                     <Button x:Name="StartBrowserButton" Content="Download Swedish GNG" Click="StartBrowser_Click" Margin="0,0,8,8"
                                             ToolTip="Check AeroNav's current version and reuse matching saved packages first. Download missing packages, then review before installing."/>
-                                    <Button x:Name="FreshDownloadButton" Content="Download fresh copies" Click="FreshDownload_Click" Margin="0,0,8,8"
-                                            FontSize="{DynamicResource TextSize11}" Padding="10,5" Foreground="{DynamicResource SecondaryText}"
-                                            ToolTip="Ignore saved packages and download fresh copies from AeroNav. Installation still requires your review."/>
                                     <Button x:Name="RuntimeInstallButton" Content="Install WebView2…" Click="InstallRuntime_Click" Visibility="Collapsed" Margin="0,0,8,8"/>
                                     <Button x:Name="RuntimeInfoButton" Content="Runtime information ↗" Click="RuntimeInfo_Click" Visibility="Collapsed" Margin="0,0,0,8"/>
                                 </WrapPanel>
-                                <TextBlock Text="Launchpad checks the package against your data folder before showing the installation review. Nothing is installed automatically."
-                                           TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,8,0,0"/>
-                                <TextBlock Text="Already downloaded it? Choose Import ZIP below. Keep the original AeroNav filename. If sign-in does not work here, use your normal browser and import the ZIP."
-                                           TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,12,0,0"/>
+                                <TextBlock Text="Already have the ZIP? Use Import ZIP below."
+                                           TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,4,0,0"/>
+                                <Expander x:Name="StartOptions" Header="Download options" Foreground="{DynamicResource PrimaryText}" Margin="0,12,0,0">
+                                    <StackPanel Margin="0,8,0,0">
+                                        <TextBlock Text="Matching saved packages are normally reused. Download fresh copies only if you need to replace them. Your AeroNav sign-in is kept in this browser."
+                                                   TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,8"/>
+                                        <Button x:Name="FreshDownloadButton" Content="Download fresh copies" Click="FreshDownload_Click" HorizontalAlignment="Left" Margin="0,0,0,8"
+                                                ToolTip="Ignore saved packages and download fresh copies from AeroNav. Installation still requires your review."/>
+                                        <TextBlock Text="For manual downloads, keep the original AeroNav ZIP filename. If sign-in fails here, open AeroNav from Other options below and import the downloaded ZIP."
+                                                   TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}"/>
+                                    </StackPanel>
+                                </Expander>
                             </StackPanel>
                         </ScrollViewer>
                     </Border>
@@ -215,14 +220,22 @@
             <TextBlock x:Name="EuroScopeNotice" Visibility="Collapsed" TextWrapping="Wrap" Margin="0,0,0,8"
                        Foreground="{DynamicResource PrimaryText}" FontWeight="SemiBold"
                        AutomationProperties.Name="EuroScope must be closed" AutomationProperties.LiveSetting="Polite"/>
-            <WrapPanel HorizontalAlignment="Right">
-                <Button x:Name="StartOverButton" Content="Start over" Click="StartOver_Click" Visibility="Collapsed" Margin="0,0,8,0"/>
-                <Button x:Name="ImportButton" Content="Import ZIP…" Click="Import_Click" Margin="0,0,8,0"/>
-                <Button x:Name="ExternalBrowserButton" Content="Open in browser ↗" Click="ExternalBrowser_Click" Margin="0,0,8,0"/>
-                <Button x:Name="RestoreButton" Content="Restore backup…" Click="Restore_Click" Margin="0,0,8,0"/>
-                <Button x:Name="InstallButton" Content="Install reviewed package" Click="Install_Click" IsEnabled="False" Visibility="Collapsed" Margin="0,0,8,0"/>
-                <Button x:Name="CloseButton" Content="Close" Click="Close_Click" IsCancel="True"/>
-            </WrapPanel>
+            <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="2*"/></Grid.ColumnDefinitions>
+                <Expander x:Name="OtherOptions" Header="Other options" Foreground="{DynamicResource PrimaryText}" VerticalAlignment="Top" Margin="0,0,12,0"
+                          ToolTip="Open AeroNav in your normal browser or restore a saved installation backup.">
+                    <WrapPanel Margin="0,8,0,0">
+                        <Button x:Name="ExternalBrowserButton" Content="Open in browser ↗" Click="ExternalBrowser_Click" Margin="0,0,8,6"/>
+                        <Button x:Name="RestoreButton" Content="Restore backup…" Click="Restore_Click" Margin="0,0,8,6"/>
+                    </WrapPanel>
+                </Expander>
+                <WrapPanel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Top">
+                    <Button x:Name="StartOverButton" Content="Start over" Click="StartOver_Click" Visibility="Collapsed" Margin="0,0,8,0"/>
+                    <Button x:Name="ImportButton" Content="Import ZIP…" Click="Import_Click" Margin="0,0,8,0"/>
+                    <Button x:Name="InstallButton" Content="Install reviewed package" Click="Install_Click" IsEnabled="False" Visibility="Collapsed" Margin="0,0,8,0"/>
+                    <Button x:Name="CloseButton" Content="Close" Click="Close_Click" IsCancel="True"/>
+                </WrapPanel>
+            </Grid>
         </StackPanel>
     </Grid>
 </Window>

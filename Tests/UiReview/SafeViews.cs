@@ -1,4 +1,4 @@
-// Exact production XAML and presentation-only details selection; no production services.
+// Exact production XAML and inert action handlers; no production services.
 using System.Windows;
 namespace VatscaUpdateChecker;
 public partial class App : Application { }
@@ -6,14 +6,7 @@ public partial class MainWindow : Window
 {
     private void Help_Click(object sender, RoutedEventArgs e) { }
     private void ReportProblem_Click(object sender, RoutedEventArgs e) { }
-    private void Pin_Click(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "Pin_Click");
-    private void Activity_Click(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "Activity_Click");
-    private void DetailsResize_DragDelta(object sender, System.Windows.Controls.Primitives.DragDeltaEventArgs e) => ApplicationDetails.Height = Math.Clamp(ApplicationDetails.Height - e.VerticalChange, 100, 240);
-    private void DetailsSize_Click(object sender, RoutedEventArgs e)
-    {
-        ApplicationDetails.Height = ApplicationDetails.Height > 150 ? 100 : Math.Min(240, Height * .48);
-        DetailsSizeButton.Content = ApplicationDetails.Height > 150 ? "Less space" : "More space";
-    }
+    private void Activity_Click(object sender, RoutedEventArgs e) => ShowSyntheticWorkspace("Activity");
     private void RunningActions_Click(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "RunningActions_Click");
     private void ShowRunning_Click(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "ShowRunning_Click");
     private void CloseApplication_Click(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "CloseApplication_Click");
@@ -23,10 +16,30 @@ public partial class MainWindow : Window
     {
         if (sender is FrameworkElement { DataContext: Models.CheckResult row }) row.IsNotUsed = !row.IsNotUsed;
     }
-    public MainWindow() { InitializeComponent(); UiFixture.Initialize(this); InitializeApplicationDetails(); }
-    internal void SelectSyntheticDetails(Models.CheckResult row) => SelectApplicationDetails(row);
-    internal void RefreshSyntheticDetailsLayout() => UpdateApplicationDetailsLayout();
-    internal void ResetSyntheticDetails() { _expandedDetailsOpen = false; InitializeApplicationDetails(); }
+    public MainWindow() { InitializeComponent(); UiFixture.Initialize(this); InitializeSyntheticWorkspaces(); }
+    internal IReadOnlyList<Models.CheckResult> SyntheticRows { get; private set; } = [];
+    internal void SetSyntheticApplicationRows(IEnumerable<Models.CheckResult> rows)
+    {
+        SyntheticRows = rows.ToArray();
+        PresentApplicationRows(SyntheticRows);
+    }
+    internal void RefreshSyntheticApplicationRows() => PresentApplicationRows(SyntheticRows);
+    internal void FocusSyntheticRow(Models.CheckResult row)
+    {
+        if (AppList.ItemContainerGenerator.ContainerFromItem(row) is FrameworkElement container) container.BringIntoView();
+    }
+    private void RowAction_Click(object sender, RoutedEventArgs e) { }
+    internal Models.CheckResult? RequestedStatusCopy { get; private set; }
+    private void CopyApplicationStatus_CanExecute(object sender, System.Windows.Input.CanExecuteRoutedEventArgs e)
+    {
+        e.CanExecute = sender is FrameworkElement { DataContext: Models.CheckResult };
+        e.Handled = true;
+    }
+    private void CopyApplicationStatus_Executed(object sender, System.Windows.Input.ExecutedRoutedEventArgs e)
+    {
+        RequestedStatusCopy = (sender as FrameworkElement)?.DataContext as Models.CheckResult;
+        e.Handled = true;
+    }
     internal void SetSyntheticRestart(bool required)
     {
         UiFixture.RestartRequired = required;
@@ -35,12 +48,7 @@ public partial class MainWindow : Window
     private void Window_Loaded(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "Window_Loaded");
     private void Header_MouseLeftButtonDown(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "Header_MouseLeftButtonDown");
     private void ThemeToggle_Click(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "ThemeToggle_Click");
-    private void DensityToggle_Click(object sender, RoutedEventArgs e)
-    {
-        UiFixture.Handle(this, sender, e, "DensityToggle_Click");
-        UpdateApplicationDetailsLayout();
-    }
-    private void SetupWizard_Click(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "SetupWizard_Click");
+    private void SetupWizard_Click(object sender, RoutedEventArgs e) => ShowSyntheticWorkspace("Setup");
     private void AppConfig_Click(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "AppConfig_Click");
     private void Settings_Click(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "Settings_Click");
     private void Minimize_Click(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "Minimize_Click");
@@ -62,6 +70,7 @@ public partial class MainWindow : Window
     private void SoftwareCancel_Click(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "SoftwareCancel_Click");
     private void SoftwareDownloads_Click(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "SoftwareDownloads_Click");
     private void SoftwareInstall_Click(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "SoftwareInstall_Click");
+    private void SoftwareLocation_Click(object sender, RoutedEventArgs e) => ShowSyntheticWorkspace("Setup");
     private void SelfUpdate_Click(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "SelfUpdate_Click");
 }
 public partial class SettingsWindow : Window
@@ -79,14 +88,8 @@ public partial class SettingsWindow : Window
 }
 public partial class AppConfigWindow : Window
 {
-    private void PreviewSaaman_Click(object sender, RoutedEventArgs e) { }
-    private void ApplySaaman_Click(object sender, RoutedEventArgs e) { }
     public AppConfigWindow() { InitializeComponent(); UiFixture.Initialize(this); }
-    private void Preview_Click(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "Preview_Click");
-    private void Save_Click(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "Save_Click");
     private void Cancel_Click(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "Cancel_Click");
-    private void TogglePassword_Click(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "TogglePassword_Click");
-    private void ToggleHoppie_Click(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "ToggleHoppie_Click");
 }
 
 public partial class MaintenanceWindow : Window
@@ -107,6 +110,7 @@ public partial class MaintenanceWindow : Window
 public partial class InstallationDiscoveryWindow : Window
 {
     public InstallationDiscoveryWindow() { InitializeComponent(); UiFixture.Initialize(this); }
+    private void Choose_Click(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "Choose_Click");
     private void Cancel_Click(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "Cancel_Click");
     private void Use_Click(object sender, RoutedEventArgs e) => UiFixture.Handle(this, sender, e, "Use_Click");
 }

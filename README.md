@@ -1,14 +1,14 @@
 # VATSCA Launchpad
 
-A Windows desktop app for [VATSIM Scandinavia](https://vatsca.org) controllers. Check versions, launch configured ATC tools, manage supported installations and apply your controller details to EuroScope profiles.
+A Windows desktop app for [VATSIM Scandinavia](https://vatsca.org) controllers. Check versions, launch configured ATC tools, manage supported installations and share your saved controller details with EuroScope, vATIS and TrackAudio.
 
 Launchpad supports reviewed installation and updates, optional controller-profile changes, and local recovery history. Downloads, installations and application launches always require an explicit action.
 
-Latest release: **2.5.2** — 21 October 2026. See the [changelog](CHANGELOG.md) for what's new.
+Latest release: **2.6.0** — 21 October 2026. See the [changelog](CHANGELOG.md) for what's new.
 
-![Launchpad's compact application list with TrackAudio selected and its update status shown below](Assets/screenshot.png)
+![Launchpad's compact application list](Assets/screenshot.png)
 
-*Compact view with application details, shown in a development build.*
+*Screenshot from an earlier version.*
 
 ## Install Launchpad
 
@@ -18,29 +18,30 @@ The release packages use a self-signed development certificate. Windows may show
 
 ## Set up your tools
 
-The optional setup guide opens when no settings have been saved. Existing users can open **Setup guide…** from the main window. Every application is optional.
+Open **Setup** to manage your applications, Swedish GNG package and controller profile. First launch shows a short guide in this same view, with a next step for each section. It resumes after restarting until you choose **Finish setup** or **Later**. Reopen it from **? → Getting started…**. Existing setups keep their saved locations; install only what you need.
 
-1. **Choose applications:** find installed copies directly in the guide, choose a custom location, or review installing a missing application. **Use this copy** checks and saves that location without changing its configuration. Mark optional tools **Not used** to leave them out of the attention count while keeping their paths and data.
-2. **Set up Swedish GNG:** keep an existing data folder or open the download and installation review. A completed installation returns you to the guide's controller-profile step.
-3. **Review your controller profile:** check the target folder and choose **Preview** before **Save & apply**. Without an available target folder, **Save profile** saves details in Launchpad only. This step also offers theme, row density and startup-check preferences.
-4. **Check fonts**, then **Finish**. Missing or older fonts have an explicit Windows preview action; choose Install in each preview if needed.
+1. **Applications:** find installed copies, change a location, or install a missing application. Saving a location keeps its existing configuration.
+2. **Swedish GNG:** choose your data folder, get or update the package, and check fonts. File changes are reviewed before installation.
+3. **Controller profile:** enter your details once. **Save & apply** uses them for configured EuroScope, vATIS and TrackAudio copies. It also adds the latest Swedish vATIS profile when no automatic Swedish profile is present. Close the clients before applying; unsupported versions are left unchanged.
 
-The guide remembers your place. **Continue later** keeps completed actions and selected paths; unfinished appearance preferences are saved only on **Finish**. Existing configurations can be kept without using profile sync. Next moves through the guide without installing or starting anything.
+Fresh vATIS and TrackAudio installations reuse your saved controller details. TrackAudio still needs audio devices and PTT configured. vATIS updates the Swedish airport profile from its official source afterward; custom profiles are kept. Opening Setup alone changes nothing.
 
-Settings checks program identity and expected folder contents without starting anything. Wrong or missing new selections must be corrected or cleared; unrecognised custom locations need your confirmation. Existing saved choices can stay while you change other preferences. These checks do not confirm client configuration or support for automatic updates/removal.
+The **Apps** and **Setup** tabs stay visible. Preferences and Activity & recovery are sections in the same Setup sidebar. **Applications I don't use** in Preferences hides those tools from Apps and update reminders. Their paths, data and plugin choices stay unchanged; clear a checkbox to show a tool again. GNG, VatEFS and SAAMAN are grouped under EuroScope. The **?** in the title bar opens help, reporting and privacy controls.
 
-The final page links to relevant VATSCA guides for EuroScope/GNG, TrackAudio and Sweden's vATIS profile. See [setup choices](docs/product-onboarding.md) for supported layouts and limitations.
+Choosing a location checks program identity and expected folder contents without starting anything. Wrong or missing new selections must be corrected or cleared; unrecognised custom locations need your confirmation. Existing saved choices can stay while you change other preferences. These checks do not confirm client configuration or support for automatic updates/removal.
+
+See [setup choices](docs/product-onboarding.md) for supported layouts and limitations.
 
 ## Everyday use
 
 - **Check for Updates** checks versions. Downloads, installations and application launches require a separate action.
 - Use **Launch** to start a configured tool. Running rows offer **Show** immediately and **Close…** with confirmation. **Start all…** and **Close all…** let you review and select applications first. Starting skips tools already running or marked Not used; closing sends normal requests so applications can ask you to save or disconnect. The EuroScope row shows the selected launch profile.
-- **Details… → Running app… → Force stop…** remains a separate, confirmed action for an unresponsive application.
-- Choose **Details…** beside an application for its explanation, update, setup and configuration actions. The panel names the selected application; long messages can be scrolled and copied.
-- **Compact** keeps equal-height rows with details below. **Expanded** adds a short explanation to every row. Text size is a separate setting, and the details panel can be resized or expanded for longer messages.
-- **Pin** keeps Launchpad on top. Its window size, position, monitor and maximized state are remembered.
-- **Activity** shows recent installation, update, removal and recovery outcomes, with the relevant recovery folders. GNG recovery still requires its normal review and confirmation.
-- Use **Controller profile → Preview** to inspect proposed profile changes before applying them. The **ⓘ** buttons explain each option; open them with the mouse or keyboard.
+- Each row shows the relevant action, such as updating, retrying or opening setup. Progress stays beside the application.
+- Hover over a status to read the full message, or focus it with the keyboard and press **Ctrl+C** to copy it. Use **? → Report a problem…** to send a report.
+- **Setup → Preferences** controls compact layout, text size and whether Launchpad stays on top of other windows. Choices save as you change them. Compact keeps equal-height rows; expanded layout adds a short explanation to every row.
+- Window size, position, monitor and maximized state are remembered.
+- **Setup → Activity & recovery** shows recent installation, update, removal and recovery outcomes, with the relevant recovery folders. A recent-operation notice also links here. GNG recovery still requires its normal review and confirmation.
+- Edit your details under **Setup → Controller profile**, then choose **Save & apply**. VatEFS and SAAMAN switches are under **Setup → Applications**. The **ⓘ** buttons explain each option; open them with the mouse or keyboard.
 
 The profile sync indicator checks only the first matching `ES*.prf`. A blank Hoppie code leaves existing Hoppie files unchanged; the preview says so.
 
@@ -48,11 +49,11 @@ The profile sync indicator checks only the first matching `ES*.prf`. A blank Hop
 
 | Application | Supported route |
 | --- | --- |
-| EuroScope | Open **Details… → Set up…** for a missing copy or **Manage…** for an existing one. Install, repair or switch to the pinned **3.2.3.2** token-authentication build. Existing installations need a recovery folder; switching from a higher version is a downgrade. |
+| EuroScope | Open **Setup → Applications**, then **Install…** for a missing copy or **Manage…** for an existing one. Install, repair or switch to the pinned **3.2.3.2** token-authentication build. Existing installations need a recovery folder; switching from a higher version is a downgrade. |
 | VACS | Update recognized 2.x NSIS installations; fresh setup uses an all-users installation. A per-user installer that requires elevation must be handled manually. |
 | TrackAudio | Install or update a recognized current-user installation. |
 | vATIS | Update the recognized standard per-user layout, with a complete recovery backup. Fresh setup supports the reviewed beta.19 package only after explicit beta opt-in, and refuses an existing installation/data folder. |
-| Swedish GNG package | Choose **Details… → Set up / update…** to sign in on AeroNav, download or import a ZIP, review the changes and install. |
+| Swedish GNG package | Choose **Setup → Swedish GNG → Get / update package…** to sign in on AeroNav, download or import a ZIP, review the changes and install. |
 | VatEFS | Install missing copies and update recognized all-users MSI installations in Program Files, including official prereleases. Close EuroScope and the VatEFS backend first. The browser launch stays available when its local service is running. |
 | SAAMAN | Install or update the latest stable Arlanda arrival-manager plugin, or choose an existing `SAAMAN.dll`. Optional profile integration puts it first in APP/ACC and replaces MAESTRO's entry. Close EuroScope before making changes. |
 | Other custom tools | Configure their paths; installation remains manual. |
@@ -67,13 +68,15 @@ Read [client update support](docs/third-party-updates.md) and [EuroScope managem
 
 ### SAAMAN in APP/ACC
 
-Choose **SAAMAN → Details… → Set up / update…** to install the plugin or select an existing copy. Then open **Profile options…**, select **Use SAAMAN in the APP/ACC profile**, and use **Preview SAAMAN** before **Apply SAAMAN only**. The option starts unchecked. Applying it places SAAMAN first, removes the old MAESTRO entry and preserves the other plugins and their display settings. This action changes only the selected profile, which defaults to `ESAA APP ACC.prf`; a renamed APP/ACC profile can be selected explicitly.
+Under **Setup → Applications**, switch on **Use in APP / ACC** beside SAAMAN. Launchpad installs the latest stable DLL if needed, then enables it in `ESAA APP ACC.prf`. SAAMAN loads first and replaces MAESTRO's entry. Other plugins and display settings stay in place. The option starts off; an existing custom profile selection is retained.
+
+Use **Location…** to select a moved DLL; its profile reference follows the new location. **Use existing…** selects a copy if none is configured. Switch SAAMAN off to restore MAESTRO, without a download. **Update** installs a newer stable release. Previous DLLs can be restored from **Setup → Activity & recovery**. See the [SAAMAN controller guide](https://github.com/Kaskobiii/SAAMAN/blob/main/docs/controller-guide.md) for using the plugin.
 
 The profile-only action does not save controller credentials. GNG updates retain the chosen integration in their review. Turning it off removes SAAMAN and restores the original MAESTRO entry, order and display permissions when Launchpad replaced it. Other profile changes stay in place; this does not roll back the whole profile or create a MAESTRO entry if none existed. Leaving the option untouched preserves independently configured plugins. DLL updates and profile changes keep separate recovery copies; SAAMAN's own preferences stay in place.
 
 ## Remove applications or reset data
 
-Open **Remove / reset…**. Select application removal and settings/data deletion separately, review the paths, then confirm. A private recovery export is enabled by default and is required for some preservation choices. Windows uninstall preselects Launchpad itself; other removal choices start unchecked.
+Open **Setup → Activity & recovery → Remove / reset…**. Select application removal and settings/data deletion separately, review the paths, then confirm. A private recovery export is enabled by default and is required for some preservation choices. Windows uninstall preselects Launchpad itself; other removal choices start unchecked.
 
 Keeping vATIS or GNG settings when removing the application/package means saving an external export and restoring it manually. GNG reset removes the reviewed package and its personal files. VatEFS removal covers the configured DLL; its profile references need manual repair. Follow the export's `RESTORE.txt` if recovery is needed.
 
@@ -83,15 +86,15 @@ See [removal and recovery](docs/uninstallation.md) before a clean reinstall.
 
 ### Install GNG and clean up old files
 
-Choose **Swedish GNG package → Details… → Set up / update… → Download Swedish GNG**. Launchpad chooses Update Only for a recognized existing installation, or Full Package for setup or repair, then downloads the newest matching ZIP after AeroNav sign-in. You can also import an original ZIP downloaded through your browser. Review the destination, replacements and preservation notes before confirming installation. Launchpad backs up replaced files, keeps supported personal settings, and promotes staged plugin DLLs while EuroScope is closed. Read [GNG installation and recovery](docs/gng-updates.md) before your first update.
+Choose **Setup → Swedish GNG → Get / update package… → Download Swedish GNG**. Launchpad chooses Update Only for a recognized existing installation, or Full Package for setup or repair, then downloads the newest matching ZIP after AeroNav sign-in. You can also import an original ZIP downloaded through your browser. Review the destination, replacements and preservation notes before confirming installation. Launchpad backs up replaced files, keeps supported personal settings, and promotes staged plugin DLLs while EuroScope is closed. Read [GNG installation and recovery](docs/gng-updates.md) before your first update.
 
 Unchanged files are hidden by default, and file comparisons show the expected result before installation. The comparison view highlights additions and removals and offers **Next change**. **Keep my list positions and visibility** is enabled by default; list items, columns and sorting still come from the new package. Validated cached packages are reused when the current AIRAC and revision match, without another download or sign-in.
 
-Managed updates also download a matching complete ZIP as a cleanup reference, without installing its extra files. The result offers optional cleanup using the saved old and new complete ZIPs, subject to verification against installed files. The first managed installation may still need your original old ZIP. Review and select eligible files to move into a dated backup; nothing is selected or moved automatically. Cleanup is also available through **Details… → Clean up…** after a manual update. Modified and referenced files are kept. This is separate from removing the whole GNG package; see [cleanup and recovery](docs/gng-cleanup.md).
+Managed updates also download a matching complete ZIP as a cleanup reference, without installing its extra files. The result offers optional cleanup using the saved old and new complete ZIPs, subject to verification against installed files. The first managed installation may still need your original old ZIP. Review and select eligible files to move into a dated backup; nothing is selected or moved automatically. **Setup → Swedish GNG** also offers **Check fonts…** and **Clean up old files…**. Modified and referenced files are kept. This is separate from removing the whole GNG package; see [cleanup and recovery](docs/gng-cleanup.md).
 
 ## Update Launchpad
 
-Installed copies use the **Sweden FIR Launchpad** row: open **Details…**, choose **Download update**, then **Restart to update**. The app follows this repository's stable Windows feed. A staged update is not applied automatically at startup; reopen Launchpad and check again to recover its ready state.
+Installed copies use the action beside the **Sweden FIR Launchpad** row to download an update, then restart to apply it. The app follows this repository's stable Windows feed. A staged update is not applied automatically at startup; reopen Launchpad and check again to recover its ready state.
 
 Portable and standalone copies use the [release-page download](https://github.com/Sjolus/vatsca-sweden-fir-launchpad/releases) instead. Use that page if no compatible feed is published or an in-app update cannot proceed. Close other dialogs and finish maintenance before restarting to update.
 
@@ -99,7 +102,7 @@ Portable and standalone copies use the [release-page download](https://github.co
 
 Reporting has three independent choices: **usage statistics**, **software and plugin versions**, and **automatic error reports**. Both existing and new users are asked when no choice has been saved. The switches are selected initially, but nothing is sent until you choose **Save choices**. Saving all three off is remembered and stops the prompt from returning. **Not now**, Escape or closing the dialog leaves the choice for a later launch and sends nothing. **Help → Privacy and support ID…** lets you change those choices, copy your support ID, generate a new ID or clear unsent reports. Existing reporting preferences do not automatically enable the new version-sharing category.
 
-The random support ID stays the same across updates. Usage covers Launchpad sessions and version, feature use, application launch actions and display preferences; it does not measure time spent controlling or network activity. Optional inventory covers configured ATC application versions, GNG revision and recognised EuroScope plugins. Plugin presence does not establish that it is enabled or running, and missing version metadata stays unknown. Errors contain fixed technical categories and include application-version context only when version sharing is enabled.
+The random support ID stays the same across updates. Usage covers Launchpad sessions and version, screens visited, setup and maintenance results, application start requests and display preferences. It does not measure time spent controlling or VATSIM connectivity. Optional inventory covers configured ATC application versions, GNG revision and recognised EuroScope plugins. Plugin presence does not establish that it is enabled or running, and missing version metadata stays unknown. Errors contain fixed categories, the online service involved and its HTTP status where available. Application-version context requires version sharing.
 
 Reports exclude names, CID, credentials, file paths, profile contents and browser sign-ins. Plugin collection reads metadata without loading DLLs; neither DLL contents nor arbitrary filenames are uploaded. Changing the support ID clears queued reports, saved sent copies and local context; already received reports remain under the old ID until they expire.
 

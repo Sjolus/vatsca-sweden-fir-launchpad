@@ -7,6 +7,8 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="..\..\Services\ProfileService.cs" Link="ProfileService.cs" />
+    <Compile Include="..\..\Services\ProfileService.VatEfs.cs" Link="ProfileService.VatEfs.cs" />
+    <Compile Include="..\..\Services\VatEfsProfileService.cs" Link="VatEfsProfileService.cs" />
     <Compile Include="..\..\Services\SaamanProfileService.cs" Link="SaamanProfileService.cs" />
     <Compile Include="..\..\Services\SaamanProfileService.RestoreState.cs" Link="SaamanProfileService.RestoreState.cs" />
     <Compile Include="..\..\Services\SaamanFileSafety.cs" Link="SaamanFileSafety.cs" />

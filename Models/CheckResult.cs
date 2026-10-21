@@ -8,6 +8,12 @@ namespace VatscaUpdateChecker.Models;
 
 public enum CheckStatus { Unknown, Checking, UpToDate, UpdateAvailable, Unsupported, NotConfigured, Error, WebApp, Installed }
 
+public enum CheckRowAction
+{
+    None, Setup, SoftwareUpdate, SoftwareCancel, SoftwareCheck, Downloads,
+    SelfUpdate, GngUpdate, Fonts, SaamanManage, EuroScopeManage
+}
+
 public class CheckResult : INotifyPropertyChanged
 {
     private ProfileOption? _selectedProfile;
@@ -25,8 +31,10 @@ public class CheckResult : INotifyPropertyChanged
     public bool IsNotUsed
     {
         get => _isNotUsed;
-        set { if (_isNotUsed == value) return; _isNotUsed = value; OnPropertyChanged(nameof(IsNotUsed)); NotifyPresentation(); }
+        set { if (_isNotUsed == value) return; _isNotUsed = value; OnPropertyChanged(nameof(IsNotUsed)); OnPropertyChanged(nameof(IsVisibleInApplications)); NotifyPresentation(); }
     }
+    public bool IsVisibleInApplications => !IsNotUsed || HasSelfUpdate;
+    public bool IsEuroScopeChild => HasFontsCheck || HasSaamanManagement || SoftwareApp == global::VatscaUpdateChecker.Models.SoftwareApp.VatEfs;
     public bool CanChooseUsage => !HasSelfUpdate;
     public string UsageActionText => IsNotUsed ? "Use this application" : "I don't use this";
 
@@ -88,7 +96,7 @@ public class CheckResult : INotifyPropertyChanged
                     SoftwareUpdatePhase.Unavailable => "Needs review",
                     SoftwareUpdatePhase.Cancelled => "Update cancelled",
                     SoftwareUpdatePhase.Error => "Needs attention",
-                    _ => "Not checked"
+                    _ => Status == CheckStatus.Installed ? "Installed" : "Not checked"
                 };
             }
             if (HasSelfUpdate)
@@ -128,7 +136,7 @@ public class CheckResult : INotifyPropertyChanged
                     SoftwareUpdatePhase.Unavailable or SoftwareUpdatePhase.Error or SoftwareUpdatePhase.Cancelled => "Warning",
                     SoftwareUpdatePhase.Available => "Update",
                     SoftwareUpdatePhase.Current or SoftwareUpdatePhase.Completed => "Success",
-                    _ => "Neutral"
+                    _ => Status == CheckStatus.Installed ? "Success" : "Neutral"
                 };
             if (HasSelfUpdate && SelfUpdateSummary is "Restart failed" or "Update check failed") return "Warning";
             if (HasFontsCheck && FontsState == FontsState.NeedsAction && Status is CheckStatus.UpToDate or CheckStatus.Installed or CheckStatus.Unknown)
@@ -183,7 +191,7 @@ public class CheckResult : INotifyPropertyChanged
                     SoftwareUpdatePhase.Unavailable => "Review this installation",
                     SoftwareUpdatePhase.Cancelled => "Check again when ready",
                     SoftwareUpdatePhase.Error => "Review the error and recovery steps",
-                    _ => "Check this installation for updates"
+                    _ => Status == CheckStatus.Installed ? "Installation verified" : "Check this installation for updates"
                 };
             }
             if (HasSelfUpdate)
@@ -230,7 +238,7 @@ public class CheckResult : INotifyPropertyChanged
             if (HasSoftwareUpdate) AddDetail(paragraphs, SoftwareUpdate?.Message);
             if (HasSoftwareUpdate) AddDetail(paragraphs, SoftwareBlockingReason);
             if (HasSoftwareUpdate && IsLocalUrl && LatestIsPrerelease) AddDetail(paragraphs, "This is an official VatEFS prerelease. Review the release notes before updating.");
-            if (HasSoftwareUpdate && IsLocalUrl) AddDetail(paragraphs, "After installation, use Controller profile to enable the VatEFS plugin. The browser opens when its local service is running.");
+            if (HasSoftwareUpdate && IsLocalUrl) AddDetail(paragraphs, "Enable the VatEFS plugin with Use in EuroScope under Setup → Applications. The browser opens when its local service is running.");
             if (SoftwareUpdate?.BackupFolder is { Length: > 0 } backup)
                 AddDetail(paragraphs, "Recovery copy: " + backup);
             if (IsVersionDiagnostic(InstalledVersion)) AddDetail(paragraphs, "Installed version check: " + InstalledVersion);
@@ -240,7 +248,7 @@ public class CheckResult : INotifyPropertyChanged
                     ? "Required GNG fonts need attention. Choose Fonts to review them."
                     : FontsTooltip);
             if (HasFontsCheck && Status == CheckStatus.UpdateAvailable)
-                AddDetail(paragraphs, "Choose Set up / update to sign in on AeroNav, download a GNG package and review its installation. Nothing installs without your confirmation.");
+                AddDetail(paragraphs, "Choose Update, or open Setup → Swedish GNG, to download and review the package before installing.");
             if (SoftwareNeedsSetup && !SoftwareUpdateBusy) AddDetail(paragraphs, RowExplanation);
             if (paragraphs.Count == 0)
             {
@@ -255,7 +263,96 @@ public class CheckResult : INotifyPropertyChanged
 
     public string LaunchActionText => IsFolder ? "Folder" : IsRunning ? "Show" : IsWebApp ? "Open" : "Launch";
     public string SelectedProfileCaption => HasProfiles ? (IsRunning ? "Next launch: " : "Launch profile: ") + (SelectedProfile?.DisplayName ?? "No profile") : "";
-    public string RowOptionsText => "Details…";
+    public bool CanOpenSetup => HasSoftwareUpdate || HasEuroScopeManagement || HasFontsCheck || HasSaamanManagement;
+
+    // Select one useful shortcut; the operation itself still performs its existing checks.
+    public CheckRowAction RowAction
+    {
+        get
+        {
+            if (HasSoftwareUpdate && SoftwareCanCancel) return CheckRowAction.SoftwareCancel;
+            if (SoftwareUpdateBusy || SelfUpdateBusy) return CheckRowAction.None;
+            if (HasSelfUpdate) return ShowSelfUpdateAction ? CheckRowAction.SelfUpdate : CheckRowAction.None;
+            if (Status == CheckStatus.Checking) return CheckRowAction.None;
+            if (IsNotUsed) return !IsRunning && CanOpenSetup ? CheckRowAction.Setup : CheckRowAction.None;
+            if (HasSoftwareUpdate)
+            {
+                if (SoftwareNeedsSetup) return CheckRowAction.Setup;
+                return SoftwareUpdate?.Phase switch
+                {
+                    SoftwareUpdatePhase.Available => CheckRowAction.SoftwareUpdate,
+                    SoftwareUpdatePhase.Current or SoftwareUpdatePhase.Completed => CheckRowAction.None,
+                    SoftwareUpdatePhase.Unavailable => CheckRowAction.Downloads,
+                    _ => CheckRowAction.SoftwareCheck
+                };
+            }
+            if (HasFontsCheck)
+            {
+                if (Status == CheckStatus.NotConfigured || ShowConfigure) return CheckRowAction.Setup;
+                if (Status == CheckStatus.UpdateAvailable) return CheckRowAction.GngUpdate;
+                return FontsState == FontsState.NeedsAction ? CheckRowAction.Fonts : CheckRowAction.None;
+            }
+            if (HasSaamanManagement) return Status switch
+            {
+                CheckStatus.UpdateAvailable => CheckRowAction.SaamanManage,
+                CheckStatus.NotConfigured or CheckStatus.Error => CheckRowAction.Setup,
+                _ => CheckRowAction.None
+            };
+            if (HasEuroScopeManagement)
+            {
+                if (Status == CheckStatus.NotConfigured || string.IsNullOrWhiteSpace(LaunchPath)) return CheckRowAction.Setup;
+                if (Status is CheckStatus.Unsupported or CheckStatus.Error) return CheckRowAction.EuroScopeManage;
+            }
+            return CheckRowAction.None;
+        }
+    }
+
+    public string RowActionText => RowAction switch
+    {
+        CheckRowAction.Setup => "Set up",
+        CheckRowAction.SoftwareUpdate or CheckRowAction.GngUpdate or CheckRowAction.SaamanManage => "Update",
+        CheckRowAction.SoftwareCancel => "Cancel",
+        CheckRowAction.SoftwareCheck => SoftwareUpdate?.Phase is SoftwareUpdatePhase.Error or SoftwareUpdatePhase.Cancelled ? "Retry" : "Check",
+        CheckRowAction.Downloads => "Downloads",
+        CheckRowAction.Fonts => "Fonts",
+        CheckRowAction.EuroScopeManage => "Manage",
+        CheckRowAction.SelfUpdate => SelfUpdateActionText switch
+        {
+            "Download update" => "Download",
+            "Restart to update" => "Restart",
+            "Open downloads ↗" => "Downloads",
+            "Retry update check" => "Retry",
+            "Check for updates" => "Check",
+            _ => SelfUpdateActionText
+        },
+        _ => ""
+    };
+
+    public bool ShowRowAction => RowAction != CheckRowAction.None;
+    public bool RowActionEnabled => RowAction switch
+    {
+        CheckRowAction.None => false,
+        CheckRowAction.SoftwareCancel => SoftwareCanCancel,
+        CheckRowAction.SelfUpdate => SelfUpdateActionEnabled,
+        CheckRowAction.SoftwareUpdate => SoftwareActionEnabled,
+        CheckRowAction.Setup => SoftwareActionsAllowed && ApplicationActionsAllowed && !IsRunning,
+        _ => SoftwareActionsAllowed && ApplicationActionsAllowed
+    };
+    public string RowActionTooltip => RowAction switch
+    {
+        CheckRowAction.Setup => HasFontsCheck ? "Choose the data folder or get a package in Setup → Swedish GNG." :
+            HasSaamanManagement ? "Enable SAAMAN or choose its DLL in Setup → Applications." :
+            "Choose or install the program in Setup → Applications.",
+        CheckRowAction.SoftwareCancel => "Cancel the current check or download.",
+        CheckRowAction.SoftwareUpdate => !SoftwareActionEnabled ? SoftwareSummary : SoftwareActionText,
+        CheckRowAction.SoftwareCheck or CheckRowAction.Downloads => SoftwareActionText,
+        CheckRowAction.SelfUpdate => SelfUpdateActionText,
+        CheckRowAction.GngUpdate => "Review and install the GNG package update.",
+        CheckRowAction.Fonts => "Check the required GNG fonts.",
+        CheckRowAction.SaamanManage => "Install the latest stable SAAMAN update.",
+        CheckRowAction.EuroScopeManage => "Review the supported EuroScope installation.",
+        _ => ""
+    };
 
     private static bool IsEmptyVersion(string? value) => string.IsNullOrWhiteSpace(value) ||
         value is "—" or "-" or "N/A" or "unknown" or "vunknown";
@@ -308,8 +405,8 @@ public class CheckResult : INotifyPropertyChanged
         (IsLocalUrl && !HasSoftwareUpdate && Status is CheckStatus.Unknown or CheckStatus.NotConfigured);
     public bool ShowGngMaintenance => HasFontsCheck && !string.IsNullOrWhiteSpace(LaunchPath);
     public string ConfigureTooltip => HasFontsCheck
-        ? "Choose an existing GNG package folder in App settings → Program files and data folders. To install a missing package, use Set up / update."
-        : "Optional EuroScope plugin: choose the folder containing VatEFS.dll in App settings → Program files and data folders, then enable it in Controller profile.";
+        ? "Open Setup → Swedish GNG to choose the data folder or get a package."
+        : "Open Setup → Applications and turn on Use in EuroScope for VatEFS.";
     public SoftwareApp? SoftwareApp { get; init; }
     public bool HasSoftwareUpdate => SoftwareApp.HasValue;
     public bool ShowStandardStatus => !HasSelfUpdate && !HasSoftwareUpdate;
@@ -378,9 +475,9 @@ public class CheckResult : INotifyPropertyChanged
         catch (ArgumentException) { return false; }
     }
     public bool ShowSoftwareSetup => HasSoftwareUpdate && !SoftwareUpdateBusy;
-    public string SoftwareSetupText => SoftwareNeedsSetup ? "Install…" : "Manage…";
+    public string SoftwareSetupText => SoftwareNeedsSetup ? "Install…" : "Change location…";
     public string SoftwareDetail => SoftwareNeedsSetup && SoftwareUpdate?.Phase is null or SoftwareUpdatePhase.Idle or SoftwareUpdatePhase.Unavailable
-        ? "Use Install to find an existing copy or review installing this app."
+        ? "Open Setup → Applications to choose an existing copy or install this app."
         : StatusMessage;
     public bool HasSoftwareDetail => !string.IsNullOrWhiteSpace(SoftwareDetail);
     public bool ShowSoftwareDownloads => !SoftwareNeedsSetup && SoftwareUpdate?.Phase == SoftwareUpdatePhase.Error;
@@ -419,6 +516,7 @@ public class CheckResult : INotifyPropertyChanged
             nameof(SoftwareActionEnabled), nameof(ShowSoftwareAction), nameof(ShowSoftwareDownloads), nameof(SoftwareActionText), nameof(SoftwareSummary),
             nameof(SoftwareNeedsSetup), nameof(ShowSoftwareSetup), nameof(SoftwareSetupText), nameof(SoftwareDetail), nameof(HasSoftwareDetail) })
             OnPropertyChanged(name);
+        NotifyRowAction();
     }
 
     private string _selfUpdateSummary = "Not checked";
@@ -653,6 +751,14 @@ public class CheckResult : INotifyPropertyChanged
             nameof(LatestVersionCaption), nameof(RowStatusText), nameof(RowStatusKind), nameof(RowStatusSymbol),
             nameof(RowExplanation), nameof(DetailHeading), nameof(DetailText), nameof(LaunchActionText),
             nameof(UsageActionText), nameof(SelectedProfileCaption), nameof(ShowLaunch), nameof(ShowSimpleLaunch), nameof(ShowSplitLaunch), nameof(ShowRunningActions) })
+            OnPropertyChanged(name);
+        NotifyRowAction();
+    }
+
+    private void NotifyRowAction()
+    {
+        foreach (var name in new[] { nameof(RowAction), nameof(RowActionText), nameof(ShowRowAction),
+            nameof(RowActionEnabled), nameof(RowActionTooltip) })
             OnPropertyChanged(name);
     }
 

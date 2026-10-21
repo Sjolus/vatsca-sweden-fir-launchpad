@@ -162,6 +162,69 @@ internal static class SaamanProfileTests
             Require(!metadata.Contains("SYNTHETIC-ONLY") && !metadata.Contains("LastSession") && !metadata.Contains("keep me"),
                 "The plugin-only snapshot copied unrelated fields.");
         });
+        Test("moving the enabled DLL updates one profile and retains the original MAESTRO baseline", () =>
+        {
+            using var f = new SaamanFixture(source);
+            var first = f.Enable();
+            var baseline = File.ReadAllBytes(first.Policy.StateDependency!.Path);
+            var relocated = Path.Combine(f.Base, "Moved", "SAAMAN.dll");
+            Directory.CreateDirectory(Path.GetDirectoryName(relocated)!);
+            File.Move(f.Dll, relocated);
+            var before = File.ReadAllBytes(f.Profile);
+            var plan = SaamanProfileService.BuildRelocationPlan(f.Policy, relocated, f.Data);
+            Require(plan.HasChanges && plan.Policy.Enabled, "Relocation disabled the plugin or omitted its change.");
+            var recovery = SaamanProfileService.Apply(plan, new(f.Recovery, () => {}));
+            Require(f.Read().Contains("Plugin0\t" + relocated) && !f.Read().Contains("MAESTRO.dll"), "The enabled reference was not relocated.");
+            Require(File.ReadAllBytes(first.Policy.StateDependency.Path).SequenceEqual(baseline), "Relocation replaced the original MAESTRO baseline.");
+            Require(recovery is not null && File.ReadAllBytes(Path.Combine(recovery, Path.GetFileName(f.Profile))).SequenceEqual(before),
+                "Relocation did not preserve the exact previous profile.");
+            var off = SaamanProfileService.BuildPlan(f.Policy with { DllPath = relocated, Enabled = false }, f.Data);
+            SaamanProfileService.Apply(off, new(f.Recovery, () => {}));
+            Require(f.Read().Contains("Plugin1\tESAA\\Plugins\\MAESTRO.dll") &&
+                f.Read().Contains("Plugin1Display3\tCustom APP screen") && !f.Read().Contains("SAAMAN.dll"),
+                "Disabling after relocation did not restore the original MAESTRO group.");
+        });
+        Test("relocation rejects missing baseline and profiles that no longer use the saved DLL", () =>
+        {
+            using var f = new SaamanFixture(source);
+            var first = f.Enable();
+            var relocated = Path.Combine(f.Base, "Moved", "SAAMAN.dll");
+            Directory.CreateDirectory(Path.GetDirectoryName(relocated)!);
+            File.Copy(f.Dll, relocated);
+            var original = f.Read();
+            f.Write(original.Replace(f.Dll, relocated));
+            Reject(() => SaamanProfileService.BuildRelocationPlan(f.Policy, relocated, f.Data));
+            f.Write(original);
+            File.Delete(first.Policy.StateDependency!.Path);
+            Reject(() => SaamanProfileService.BuildRelocationPlan(f.Policy, relocated, f.Data));
+            Require(f.Read() == original, "Rejected relocation changed the profile.");
+        });
+        Test("relocation rechecks new DLL profile and MAESTRO state before writing", () =>
+        {
+            using var f = new SaamanFixture(source);
+            f.Enable();
+            var relocated = Path.Combine(f.Base, "Moved", "SAAMAN.dll");
+            Directory.CreateDirectory(Path.GetDirectoryName(relocated)!);
+            File.Copy(f.Dll, relocated);
+            var before = File.ReadAllBytes(f.Profile);
+            var plan = SaamanProfileService.BuildRelocationPlan(f.Policy, relocated, f.Data);
+            File.AppendAllText(relocated, "changed after review");
+            Reject(() => SaamanProfileService.Apply(plan, new(f.Recovery, () => {})));
+            Require(File.ReadAllBytes(f.Profile).SequenceEqual(before), "Changed DLL was applied.");
+            File.Copy(f.Dll, relocated, overwrite: true);
+            plan = SaamanProfileService.BuildRelocationPlan(f.Policy, relocated, f.Data);
+            Reject(() => SaamanProfileService.Apply(plan, new(f.Recovery, () => throw new InvalidOperationException("Synthetic running EuroScope"))));
+            var state = plan.Policy.StateDependency!;
+            File.AppendAllText(state.Path, " ");
+            Reject(() => SaamanProfileService.Apply(plan, new(f.Recovery, () => {})));
+            Require(File.ReadAllBytes(f.Profile).SequenceEqual(before), "Changed restoration state was applied.");
+            File.WriteAllBytes(state.Path, plan.Policy.StateAfterBytes!);
+            plan = SaamanProfileService.BuildRelocationPlan(f.Policy, relocated, f.Data);
+            f.Write(f.Read() + "; later edit\r\n");
+            var edited = File.ReadAllBytes(f.Profile);
+            Reject(() => SaamanProfileService.Apply(plan, new(f.Recovery, () => {})));
+            Require(File.ReadAllBytes(f.Profile).SequenceEqual(edited), "A stale relocation replaced later edits.");
+        });
         Test("a new enable after disable captures the user's changed MAESTRO configuration", () =>
         {
             using var f = new SaamanFixture(source);

@@ -5,7 +5,7 @@ using VatscaUpdateChecker.Models;
 
 namespace VatscaUpdateChecker.Services;
 
-public static class ProfileService
+public static partial class ProfileService
 {
     // EuroScope .prf files are written in Windows-1252; use the same encoding to avoid
     // mangling non-ASCII characters (e.g. Swedish letters like ö, å, ä).
@@ -81,19 +81,19 @@ public static class ProfileService
     // Apply stored settings to EuroScope files
     // -------------------------------------------------------------------------
 
-    public static string? Apply(AppSettings s, string euroscopeDataPath, Action? saamanApplied = null) =>
+    public static string? Apply(AppSettings s, string euroscopeDataPath, Action? saamanApplied = null, bool includePluginChoices = true) =>
         Apply(s, euroscopeDataPath, saamanApplied, policy =>
-            SaamanProfileService.Apply(SaamanProfileService.BuildPlan(policy, euroscopeDataPath)));
+            SaamanProfileService.Apply(SaamanProfileService.BuildPlan(policy, euroscopeDataPath)), includePluginChoices);
 
     internal static string? Apply(AppSettings s, string euroscopeDataPath, Action? saamanApplied,
-        Func<SaamanProfilePolicy, string?> applySaaman)
+        Func<SaamanProfilePolicy, string?> applySaaman, bool includePluginChoices = true)
     {
         if (!Directory.Exists(euroscopeDataPath))
             throw new DirectoryNotFoundException("The EuroScope data folder is unavailable. No profile files were updated.");
 
         // Validate and recoverably apply the optional plugin change before any of
         // the existing controller-identity writes. An untouched option is a no-op.
-        var saamanPolicy = SaamanProfileService.Capture(s, euroscopeDataPath);
+        var saamanPolicy = includePluginChoices ? SaamanProfileService.Capture(s, euroscopeDataPath) : null;
         string? saamanRecovery = null;
         if (saamanPolicy is not null)
         {
@@ -137,7 +137,7 @@ public static class ProfileService
                 s.ObsCallsign.ToUpper());
 
         // VatEFS plugin — only managed when a path is configured. Empty path = untracked.
-        if (!string.IsNullOrWhiteSpace(s.VatEfsPath))
+        if (includePluginChoices && !string.IsNullOrWhiteSpace(s.VatEfsPath))
         {
             var dll = Path.Combine(s.VatEfsPath, VatEfsDllName);
             if (s.PatchVatEfs)
@@ -174,7 +174,7 @@ public static class ProfileService
     /// </summary>
     public static string GeneratePreview(
         AppSettings s, string vatsimPassword, string hoppieCode,
-        string euroscopeDataPath, bool showCredentials = false)
+        string euroscopeDataPath, bool showCredentials = false, bool includePluginChoices = true)
     {
         var sb          = new StringBuilder();
         var ratingLabel = Ratings.FirstOrDefault(r => r.Value == s.VatsimRating).Label
@@ -328,7 +328,7 @@ public static class ProfileService
 
         // SAAMAN is applied before VatEFS. Preview the same sequence so its
         // renumbering is reflected in the later VatEFS slot calculations.
-        var saamanPolicy = SaamanProfileService.Capture(s, euroscopeDataPath);
+        var saamanPolicy = includePluginChoices ? SaamanProfileService.Capture(s, euroscopeDataPath) : null;
         if (saamanPolicy is not null)
         {
             var saamanPlan = SaamanProfileService.BuildPlan(saamanPolicy, euroscopeDataPath);
@@ -340,7 +340,7 @@ public static class ProfileService
 
         // ── VatEFS plugin (per .prf) ─────────────────────────────────────────────
 
-        if (!string.IsNullOrWhiteSpace(euroscopeDataPath) && !string.IsNullOrWhiteSpace(s.VatEfsPath))
+        if (includePluginChoices && !string.IsNullOrWhiteSpace(euroscopeDataPath) && !string.IsNullOrWhiteSpace(s.VatEfsPath))
         {
             var dll      = Path.Combine(s.VatEfsPath, VatEfsDllName);
             var prfFiles = Directory.Exists(euroscopeDataPath)
@@ -349,89 +349,29 @@ public static class ProfileService
 
             foreach (var prf in prfFiles)
             {
-                var lines     = File.ReadAllLines(prf, PrfEncoding);
+                string text = File.ReadAllText(prf, PrfEncoding);
                 if (saamanPolicy is not null && string.Equals(SaamanFileSafety.Canonical(prf), saamanPolicy.ProfilePath, StringComparison.OrdinalIgnoreCase))
-                    lines = SaamanProfileService.Transform(string.Join("\r\n", lines), saamanPolicy).Split("\r\n");
-                int existing  = -1;
-                string? curDll = null;
-                var existingDisplays = new SortedSet<int>();
-
-                foreach (var line in lines)
-                {
-                    var p = line.Split('\t');
-                    if (p.Length < 3 || p[0] != "Plugins") continue;
-                    var mm = Regex.Match(p[1], @"^Plugin(\d+)$");
-                    if (mm.Success && IsVatEfsPluginPath(p[2]))
-                    {
-                        existing = int.Parse(mm.Groups[1].Value);
-                        curDll   = p[2];
-                    }
-                }
-                if (existing >= 0)
-                {
-                    foreach (var line in lines)
-                    {
-                        var p = line.Split('\t');
-                        if (p.Length < 3 || p[0] != "Plugins") continue;
-                        var mm = Regex.Match(p[1], $@"^Plugin{existing}Display(\d+)$");
-                        if (mm.Success && int.TryParse(mm.Groups[1].Value, out var k))
-                            existingDisplays.Add(k);
-                    }
-                }
-
-                var screens = DiscoverDisplayScreens(lines);
+                    text = SaamanProfileService.Transform(text, saamanPolicy);
                 var note    = s.PatchVatEfs ? "manage: ON — ensuring present"
                                             : "manage: OFF — ensuring absent";
                 SectionHeader(prf, note);
-
-                if (s.PatchVatEfs)
+                if (s.PatchVatEfs && !File.Exists(dll))
                 {
-                    if (!File.Exists(dll))
-                    {
-                        sb.AppendLine($"  (DLL not found at {dll} — patch will be skipped)");
-                        continue;
-                    }
-
-                    int slot = existing >= 0 ? existing : MaxPluginIndex(lines) + 1;
-                    var mainTag = existing < 0
-                        ? "(will be added)"
-                        : string.Equals(curDll, dll, StringComparison.OrdinalIgnoreCase)
-                            ? "(unchanged)" : "← path will change";
-                    var mainCur = existing < 0 ? "(not present)" : $"Plugins\tPlugin{slot}\t{curDll}";
-                    var mainNew = $"Plugins\tPlugin{slot}\t{dll}";
-                    sb.AppendLine($"  {mainCur,-55}  →  {mainNew,-55}  {mainTag}");
-
-                    for (int k = 0; k < screens.Count; k++)
-                    {
-                        var dispCur = existingDisplays.Contains(k)
-                            ? $"Plugins\tPlugin{slot}Display{k}\t{screens[k]}"
-                            : "(not present)";
-                        var dispNew = $"Plugins\tPlugin{slot}Display{k}\t{screens[k]}";
-                        var dispTag = existingDisplays.Contains(k) ? "(unchanged)" : "(will be added)";
-                        sb.AppendLine($"  {dispCur,-55}  →  {dispNew,-55}  {dispTag}");
-                    }
+                    sb.AppendLine($"  (DLL not found at {dll} — patch will be skipped)");
+                    continue;
                 }
-                else
+                string after = TransformVatEfs(text, dll, s.PatchVatEfs);
+                if (after == text)
                 {
-                    if (existing < 0)
-                    {
-                        sb.AppendLine("  (no VatEFS entry present — nothing to remove)");
-                        continue;
-                    }
-                    sb.AppendLine($"  Plugins\tPlugin{existing}\t{curDll}  ← will be removed");
-                    foreach (var k in existingDisplays)
-                        sb.AppendLine($"  Plugins\tPlugin{existing}Display{k}\t...  ← will be removed");
-
-                    int higher = lines.Count(l =>
-                    {
-                        var p = l.Split('\t');
-                        if (p.Length < 3 || p[0] != "Plugins") return false;
-                        var mm = Regex.Match(p[1], @"^Plugin(\d+)");
-                        return mm.Success && int.Parse(mm.Groups[1].Value) > existing;
-                    });
-                    if (higher > 0)
-                        sb.AppendLine($"  (and {higher} higher-indexed plugin line(s) will be renumbered down by 1)");
+                    sb.AppendLine("  (no VatEFS plugin changes)");
+                    continue;
                 }
+                var beforeRows = text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+                    .Where(line => line.StartsWith("Plugins\t", StringComparison.Ordinal)).ToArray();
+                var afterRows = after.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+                    .Where(line => line.StartsWith("Plugins\t", StringComparison.Ordinal)).ToArray();
+                foreach (var line in beforeRows.Except(afterRows, StringComparer.Ordinal)) sb.AppendLine("  − " + line);
+                foreach (var line in afterRows.Except(beforeRows, StringComparer.Ordinal)) sb.AppendLine("  + " + line);
             }
         }
 
@@ -655,167 +595,18 @@ public static class ProfileService
         return screens;
     }
 
-    private static void EnsureVatEfsInPrf(string prfPath, string dllPath)
+    private static void EnsureVatEfsInPrf(string prfPath, string dllPath) =>
+        ApplyVatEfsToFile(prfPath, dllPath, true);
+
+    private static void RemoveVatEfsFromPrf(string prfPath) =>
+        ApplyVatEfsToFile(prfPath, "", false);
+
+    private static void ApplyVatEfsToFile(string prfPath, string dllPath, bool enabled)
     {
-        var lines        = File.ReadAllLines(prfPath, PrfEncoding).ToList();
-        int slot         = -1;       // existing VatEFS slot, -1 if none
-        int slotMainAt   = -1;       // line index of the slot's main entry
-        int maxIndex     = -1;
-        int lastPluginAt = -1;
-        string? curPath  = null;
-
-        for (int i = 0; i < lines.Count; i++)
-        {
-            var p = lines[i].Split('\t');
-            if (p.Length < 3 || p[0] != "Plugins") continue;
-            lastPluginAt = i;
-
-            var m = Regex.Match(p[1], @"^Plugin(\d+)$");
-            if (!m.Success) continue;   // skip Display rows for index tracking
-
-            var n = int.Parse(m.Groups[1].Value);
-            if (n > maxIndex) maxIndex = n;
-
-            if (IsVatEfsPluginPath(p[2]))
-            {
-                slot       = n;
-                slotMainAt = i;
-                curPath    = p[2];
-            }
-        }
-
-        var screens = DiscoverDisplayScreens(lines);
-        bool changed = false;
-
-        if (slot < 0)
-        {
-            // Fresh insert at end of Plugins block.
-            slot = maxIndex + 1;
-            var block = new List<string> { $"Plugins\tPlugin{slot}\t{dllPath}" };
-            for (int k = 0; k < screens.Count; k++)
-                block.Add($"Plugins\tPlugin{slot}Display{k}\t{screens[k]}");
-
-            var insertAt = lastPluginAt >= 0 ? lastPluginAt + 1 : lines.Count;
-            lines.InsertRange(insertAt, block);
-            Logger.Log("APPLY", $"VatEFS added to {prfPath} as Plugin{slot} with {screens.Count} display perm(s)");
-            changed = true;
-        }
-        else
-        {
-            // Update path if it has drifted (manual install, different folder, etc.).
-            if (!string.Equals(curPath, dllPath, StringComparison.OrdinalIgnoreCase))
-            {
-                lines[slotMainAt] = $"Plugins\tPlugin{slot}\t{dllPath}";
-                Logger.Log("APPLY", $"VatEFS path updated in {prfPath} (slot Plugin{slot}): \"{curPath}\" → \"{dllPath}\"");
-                changed = true;
-            }
-
-            // Ensure each required Display row exists for this slot.
-            var have = new HashSet<int>();
-            int slotLastAt = slotMainAt;
-            for (int i = 0; i < lines.Count; i++)
-            {
-                var p = lines[i].Split('\t');
-                if (p.Length < 3 || p[0] != "Plugins") continue;
-                var m = Regex.Match(p[1], $@"^Plugin{slot}Display(\d+)$");
-                if (!m.Success) continue;
-                if (int.TryParse(m.Groups[1].Value, out var k))
-                {
-                    have.Add(k);
-                    if (i > slotLastAt) slotLastAt = i;
-                }
-            }
-
-            int added = 0;
-            for (int k = 0; k < screens.Count; k++)
-            {
-                if (have.Contains(k)) continue;
-                slotLastAt++;
-                lines.Insert(slotLastAt, $"Plugins\tPlugin{slot}Display{k}\t{screens[k]}");
-                added++;
-            }
-            if (added > 0)
-            {
-                Logger.Log("APPLY", $"VatEFS in {prfPath} (slot Plugin{slot}) — added {added} missing display perm(s)");
-                changed = true;
-            }
-        }
-
-        if (changed)
-            File.WriteAllLines(prfPath, lines, PrfEncoding);
-        else
-            Logger.Log("APPLY", $"VatEFS already complete in {prfPath} (slot Plugin{slot}) — no change");
-    }
-
-    private static void RemoveVatEfsFromPrf(string prfPath)
-    {
-        var lines = File.ReadAllLines(prfPath, PrfEncoding).ToList();
-
-        // Find every VatEFS slot index (defensive — usually 0 or 1, but tolerate corruption).
-        var slotsToRemove = new SortedSet<int>();
-        foreach (var line in lines)
-        {
-            var p = line.Split('\t');
-            if (p.Length < 3 || p[0] != "Plugins") continue;
-            var m = Regex.Match(p[1], @"^Plugin(\d+)$");
-            if (m.Success && IsVatEfsPluginPath(p[2]))
-                slotsToRemove.Add(int.Parse(m.Groups[1].Value));
-        }
-
-        if (slotsToRemove.Count == 0)
-        {
-            Logger.Log("APPLY", $"VatEFS not present in {prfPath} — nothing to remove");
-            return;
-        }
-
-        // Renumber surviving plugin indices to keep Plugin0..PluginM dense. For a slot K,
-        // its new index is K minus the count of removed slots strictly less than K.
-        int Renumber(int original)
-        {
-            int shift = 0;
-            foreach (var rs in slotsToRemove)
-            {
-                if (rs < original) shift++;
-                else break;
-            }
-            return original - shift;
-        }
-
-        var output = new List<string>(lines.Count);
-        int removedLines = 0;
-
-        foreach (var line in lines)
-        {
-            var p = line.Split('\t');
-            if (p.Length < 3 || p[0] != "Plugins") { output.Add(line); continue; }
-
-            var mainMatch = Regex.Match(p[1], @"^Plugin(\d+)$");
-            if (mainMatch.Success)
-            {
-                var n = int.Parse(mainMatch.Groups[1].Value);
-                if (slotsToRemove.Contains(n)) { removedLines++; continue; }
-                var renum = Renumber(n);
-                output.Add(renum == n ? line : $"Plugins\tPlugin{renum}\t{p[2]}");
-                continue;
-            }
-
-            var dispMatch = Regex.Match(p[1], @"^Plugin(\d+)Display(\d+)$");
-            if (dispMatch.Success)
-            {
-                var n = int.Parse(dispMatch.Groups[1].Value);
-                if (slotsToRemove.Contains(n)) { removedLines++; continue; }
-                var renum = Renumber(n);
-                var k     = dispMatch.Groups[2].Value;
-                output.Add(renum == n ? line : $"Plugins\tPlugin{renum}Display{k}\t{p[2]}");
-                continue;
-            }
-
-            // Unknown Plugins\t key — leave alone.
-            output.Add(line);
-        }
-
-        File.WriteAllLines(prfPath, output, PrfEncoding);
-        var slotList = string.Join(", ", slotsToRemove.Select(s => $"Plugin{s}"));
-        Logger.Log("APPLY", $"VatEFS removed from {prfPath} (slot(s) {slotList}, {removedLines} line(s)); subsequent slots renumbered");
+        var before = File.ReadAllText(prfPath, PrfEncoding);
+        var after = TransformVatEfs(before, dllPath, enabled);
+        if (before == after) return;
+        File.WriteAllText(prfPath, after, PrfEncoding);
+        Logger.Log("APPLY", "VatEFS plugin entries updated in " + prfPath);
     }
 }

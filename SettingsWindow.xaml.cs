@@ -17,16 +17,6 @@ public partial class SettingsWindow : Window
     private readonly ConfiguredPathValidationService _pathValidator = new();
     private readonly DispatcherTimer _validationTimer = new() { Interval = TimeSpan.FromMilliseconds(350) };
 
-    private static readonly Dictionary<string, string> StandardPaths = new()
-    {
-        ["EuroScope"]    = @"C:\Program Files (x86)\EuroScope\EuroScope.exe",
-        ["EuroscopeData"] = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "EuroScope"),
-        ["TrackAudio"]   = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"Programs\trackaudio\trackaudio.exe"),
-        ["VACS"]         = @"C:\Program Files\vacs\vacs-client.exe",
-        ["vATIS"]        = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"org.vatsim.vatis\current\vATIS.exe"),
-        ["VatEFS"]       = @"C:\Program Files\VatEFS",
-    };
-
     public SettingsWindow(AppSettings current, bool discoverOnLoad = false, bool showApplicationPaths = false)
     {
         _original = current.Copy();
@@ -42,6 +32,7 @@ public partial class SettingsWindow : Window
         CheckOnStartup.IsChecked  = Settings.CheckOnStartup;
         TextSizeChoice.SelectedIndex = Settings.TextScale >= 1.5 ? 2 : Settings.TextScale >= 1.25 ? 1 : 0;
         AlwaysOnTopChoice.IsChecked = Settings.AlwaysOnTop;
+        CompactLayoutChoice.IsChecked = Settings.CompactLayout;
         foreach (var name in ApplicationPreferences.OptionalApplications)
         {
             var choice = new CheckBox { Content = name == "EuroScope (GNG Pack)" ? "Swedish GNG package" : name,
@@ -175,6 +166,7 @@ public partial class SettingsWindow : Window
         draft.CheckOnStartup = CheckOnStartup.IsChecked == true;
         draft.TextScale = TextSizeChoice.SelectedIndex switch { 1 => 1.25, 2 => 1.5, _ => 1 };
         draft.AlwaysOnTop = AlwaysOnTopChoice.IsChecked == true;
+        draft.CompactLayout = CompactLayoutChoice.IsChecked == true;
         foreach (var choice in NotUsedChoices.Children.OfType<CheckBox>())
             ApplicationPreferences.SetNotUsed(draft, (string)choice.Tag, choice.IsChecked == true);
         draft.EuroscopeExePath = EuroscopeExePath.Text.Trim();
@@ -255,14 +247,7 @@ public partial class SettingsWindow : Window
     {
         FindInstallationsButton.IsEnabled = SaveButton.IsEnabled = !_saving && !_discovering;
         ApplicationPaths.IsEnabled = CheckOnStartup.IsEnabled = !_saving;
-        TextSizeChoice.IsEnabled = AlwaysOnTopChoice.IsEnabled = NotUsedChoices.IsEnabled = !_saving;
-    }
-
-    private void InsertDefault_Click(object sender, RoutedEventArgs e)
-    {
-        var key = (sender as FrameworkElement)?.Tag?.ToString() ?? "";
-        if (!StandardPaths.TryGetValue(key, out var path)) return;
-        TextBoxFor(key).Text = path;
+        TextSizeChoice.IsEnabled = AlwaysOnTopChoice.IsEnabled = CompactLayoutChoice.IsEnabled = NotUsedChoices.IsEnabled = !_saving;
     }
 
     private void Clear_Click(object sender, RoutedEventArgs e)
@@ -291,15 +276,16 @@ public partial class SettingsWindow : Window
     {
         if (_discovering || _saving) return;
         _discovering = true;
+        ApplicationPaths.IsExpanded = true;
         SetBusyState();
-        DiscoveryStatus.Text = "Looking for installed EuroScope, TrackAudio, VACS and vATIS programs, plus Swedish GNG and VatEFS folders…";
+        DiscoveryStatus.Text = "Looking for installed applications…";
         try
         {
             var candidates = await Task.Run(() => new InstallationDiscoveryService().Discover());
             if (!IsVisible) return;
-            var review = new InstallationDiscoveryWindow(candidates) { Owner = this };
+            var review = new InstallationDiscoveryWindow(candidates, ReadFields()) { Owner = this };
             if (review.ShowDialog() != true) { DiscoveryStatus.Text = "No paths changed."; return; }
-            int imported = 0, retained = 0;
+            int imported = 0;
             foreach (var candidate in review.SelectedCandidates)
             {
                 var (box, value) = candidate.Id switch
@@ -313,11 +299,11 @@ public partial class SettingsWindow : Window
                     _ => (null, "")
                 };
                 if (box == null || string.IsNullOrWhiteSpace(value)) continue;
-                if (!review.ReplaceExisting && !string.IsNullOrWhiteSpace(box.Text)) { retained++; continue; }
                 box.Text = value;
                 imported++;
             }
-            DiscoveryStatus.Text = $"Locations added: {imported}. Existing choices kept: {retained}. Check the results below, then Save to use these locations in Launchpad.";
+            DiscoveryStatus.Text = imported == 0 ? "Your current locations are kept."
+                : $"{imported} location{(imported == 1 ? "" : "s")} changed. Save to keep your choices.";
             ApplicationPaths.IsExpanded = true;
             ApplicationPaths.BringIntoView();
         }

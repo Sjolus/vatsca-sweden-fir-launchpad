@@ -4,13 +4,13 @@ Launchpad uses **EuroScope 3.2.3.2**, the token-authentication build recommended
 
 ## Install, repair or change versions
 
-Open EuroScope's **Details…**, then **Set up…** for a missing copy or **Manage…** for an existing one. You can install the supported build, repair it, or replace another version. Switching from a newer version is shown as a downgrade.
+Open **Setup → Applications**, then **Install…** beside EuroScope for a missing copy or **Manage…** for an existing one. You can install the supported build, repair it, or replace another version. Switching from a newer version is shown as a downgrade.
 
-For an existing copy, first select its location in Settings. Launchpad needs a matching Windows Installer registration; portable or unfamiliar installations require manual handling.
+For an existing copy, first select its location under **Setup → Applications**. Launchpad needs a matching Windows Installer registration; portable or unfamiliar installations require manual handling.
 
 Choose a private recovery folder, select **Review change**, then confirm **Apply reviewed change**. Windows may ask for administrator permission. Downloads and backup preparation can be cancelled; let an installer finish once it has started. EuroScope does not open automatically afterward.
 
-If removing the old version requires a restart, replacement stops before installing the supported build. Restart Windows, then return to review the remaining installation. You may need to update or clear the old executable path in Settings.
+If removing the old version requires a restart, replacement stops before installing the supported build. Restart Windows, then return to review the remaining installation. You may need to update or clear the old executable path under **Setup → Applications**.
 
 ## Settings and recovery
 

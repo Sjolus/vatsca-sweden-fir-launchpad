@@ -73,12 +73,13 @@ internal static partial class UiFixture
     internal static void PopulateDiscoveryVerification(InstallationDiscoveryWindow window)
     {
         Brush Color(string key) => (Brush)Application.Current.FindResource(key);
-        Text(window, "ResultText", "Choose at most one synthetic copy per program or folder. Invalid results cannot be selected; nothing is imported by this fixture.");
+        Text(window, "ResultText", "Your current locations are kept. Choose a different copy only if you want to change one.");
         Find<ItemsControl>(window, "CandidatesList")!.ItemsSource = new[]
         {
             new DiscoveryRow
             {
                 Candidate = new("EuroScope", "Recognized Windows Installer copy (synthetic).", "Current user"),
+                StateLabel = "Current location", ActionText = "Keep current", CanSelect = false,
                 Path = FakePath("EuroScope/EuroScope.exe"), LocationKind = "Program executable", ScopeLabel = "Current user (synthetic)",
                 VerificationText = "EuroScope 3.2.3.2 verified (synthetic).", VerificationBrush = Color("SuccessFg")
             },

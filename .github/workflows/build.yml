@@ -74,8 +74,20 @@ jobs:
       - name: Test controller profiles
         run: dotnet run --project Tests/Profile.Tests/Profile.Tests.csproj -c Release
 
+      - name: Test saved controller details in clients
+        run: dotnet run --project Tests/ClientConfiguration.Tests/ClientConfiguration.Tests.csproj -c Release
+
+      - name: Test Swedish vATIS profile setup
+        run: dotnet run --project Tests/VatisSwedenProfile.Tests/VatisSwedenProfile.Tests.csproj -c Release
+
+      - name: Test client setup flow
+        run: dotnet run --project Tests/ClientSetupFlow.Tests/ClientSetupFlow.Tests.csproj -c Release
+
       - name: Test setup wizard
         run: dotnet run --project Tests/SetupWizard.Tests/SetupWizard.Tests.csproj -c Release
+
+      - name: Test fresh GNG destination
+        run: dotnet run --project Tests/GngSetupDestination.Tests/GngSetupDestination.Tests.csproj -c Release
 
       - name: Test configured paths
         run: dotnet run --project Tests/ConfiguredPath.Tests/ConfiguredPath.Tests.csproj -c Release
@@ -119,6 +131,9 @@ jobs:
       - name: Test SAAMAN releases, installation and recovery
         run: dotnet run --project Tests/Saaman.Tests/Saaman.Tests.csproj -c Release
 
+      - name: Test inline SAAMAN setup
+        run: dotnet run --project Tests/SaamanSetupFlow.Tests/SaamanSetupFlow.Tests.csproj -c Release
+
       - name: Test GNG cleanup and restore
         run: dotnet run --project Tests/GngCleanup.Tests/GngCleanup.Tests.csproj -c Release -- --archive
 
@@ -139,6 +154,9 @@ jobs:
 
       - name: Check SAAMAN layouts
         run: dotnet Tests/UiReview/bin/Release/net9.0-windows/Launchpad.UiReview.dll --check-saaman
+
+      - name: Check embedded Setup layouts
+        run: dotnet Tests/UiReview/bin/Release/net9.0-windows/Launchpad.UiReview.dll --check-workspaces
 
   package:
     needs: build

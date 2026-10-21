@@ -48,6 +48,8 @@ internal static class ReportingWire
         ValidEnum(details.Application) && ValidEnum(details.Operation) && ValidEnum(details.Outcome) &&
         ValidEnum(details.Stage) && ValidEnum(details.ErrorCode) && ValidEnum(details.DurationBucket) && ValidEnum(details.Source) &&
         ValidEnum(details.Feature) && ValidEnum(details.TextScale) && ValidEnum(details.Theme) &&
+        ValidEnum(details.Reason) && ValidEnum(details.View) && ValidEnum(details.Service) &&
+        (details.HttpStatus is null || details.HttpStatus is >= 100 and <= 599) &&
         (details.PackageVersion is null || Version(details.PackageVersion)) &&
         (details.PreviousVersion is null || Version(details.PreviousVersion));
     private static bool ValidEnum<T>(T? value) where T : struct, Enum => value is null || Enum.IsDefined(value.Value);
@@ -88,8 +90,12 @@ internal static class ReportingWire
         (!checkAge || (entry.OccurredAt >= utcNow.AddDays(-7) && entry.OccurredAt <= utcNow.AddMinutes(5))) &&
         ValidDetails(new(entry.OperationId, entry.Application, entry.Operation, entry.Outcome, entry.Stage,
             entry.ErrorCode, entry.DurationBucket, entry.PackageVersion, entry.PreviousVersion, entry.Source, entry.RestartRequired, entry.RecoveryAvailable,
-            entry.Feature, entry.CompactLayout, entry.TextScale, entry.AlwaysOnTop, entry.Theme)) &&
+            entry.Feature, entry.CompactLayout, entry.TextScale, entry.AlwaysOnTop, entry.Theme,
+            entry.Reason, entry.View, entry.Service, entry.HttpStatus)) &&
         (IsError(entry.EventName) || entry.ErrorCode is null) &&
+        (IsError(entry.EventName) || entry.Service is null && entry.HttpStatus is null) &&
+        (entry.Reason is null || IsError(entry.EventName) || entry.EventName == ReportingEventName.OperationFinished) &&
+        (entry.EventName == ReportingEventName.ViewOpened ? entry.View is not null : entry.View is null) &&
         (entry.EventName != ReportingEventName.ApplicationOpened || entry.Application is ReportingApplication.Euroscope or ReportingApplication.Trackaudio or
             ReportingApplication.Vacs or ReportingApplication.Vatis or ReportingApplication.Vatefs or ReportingApplication.Vatiris) &&
         (entry.EventName == ReportingEventName.FeatureUsed ? entry.Feature is not null : entry.Feature is null) &&
@@ -99,6 +105,7 @@ internal static class ReportingWire
             entry.OperationId is null && entry.Application is null && entry.Operation is null &&
             entry.Outcome is null && entry.Stage is null && entry.ErrorCode is null && entry.DurationBucket is null && entry.PackageVersion is null &&
             entry.PreviousVersion is null && entry.Source is null && entry.RestartRequired is null && entry.RecoveryAvailable is null && entry.Feature is null &&
-            entry.CompactLayout is null && entry.TextScale is null && entry.AlwaysOnTop is null && entry.Theme is null : entry.Items is null && entry.DllInventory is null) &&
+            entry.CompactLayout is null && entry.TextScale is null && entry.AlwaysOnTop is null && entry.Theme is null &&
+            entry.Reason is null && entry.View is null && entry.Service is null && entry.HttpStatus is null : entry.Items is null && entry.DllInventory is null) &&
         Bytes(entry).Length <= (IsError(entry.EventName) || IsInventory(entry.EventName) ? 8 * 1024 : 2 * 1024);
 }

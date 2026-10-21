@@ -15,6 +15,19 @@ public partial class MainWindow
     private void Maintenance_Click(object sender, RoutedEventArgs e)
     {
         if (!CanRunSoftwareAction() || !CanRunSelfUpdateAction()) return;
+        if (SaamanNeedsSaveRetry || _vatEfsNeedsSaveRetry)
+        {
+            if (!SettingsService.TrySave(_settings))
+            {
+                SetupWorkspace.ShowSection("Applications");
+                ShowWorkspace("Setup");
+                SetupWorkspace.ShowNotice("Plugin changes are applied, but their choices have not been saved. Retry saving before removing or resetting applications.");
+                return;
+            }
+            if (SaamanNeedsSaveRetry) _pluginFeedback.Remove("SAAMAN");
+            if (_vatEfsNeedsSaveRetry) _pluginFeedback.Remove("VatEFS");
+            SaamanNeedsSaveRetry = _vatEfsNeedsSaveRetry = false;
+        }
         _processTimer.Stop();
         try
         {
@@ -25,11 +38,14 @@ public partial class MainWindow
             {
                 // Reload after reset so a subsequent preference write cannot resurrect removed settings.
                 _settings = SettingsService.Load();
+                _pluginFeedback.Clear();
+                _vatEfsNeedsSaveRetry = SaamanNeedsSaveRetry = SaamanNeedsRuntime = false;
+                if (window.ControllerProfileReset) DiscardControllerProfileDraft();
                 RefreshActivityNotice();
                 _isDarkMode = _settings.IsDarkMode;
                 ApplyDensity();
-                ApplyPresentationPreferences();
                 App.SetTheme(_isDarkMode);
+                ApplyPresentationPreferences();
                 ThemeToggleButton.Content = _isDarkMode ? "☀" : "☽";
                 ApplyLaunchPaths();
                 RefreshEuroscopeProfiles();

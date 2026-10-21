@@ -100,7 +100,7 @@ internal static partial class LayoutMatrix
             }
             Require(UiFixture.ErrorCount == errorsBefore, "An unhandled fixture exception was logged.");
             Require(trace.Errors.Count == 0, "WPF binding errors: " + string.Join(" | ", trace.Errors));
-            return $"PASS: {layouts} hidden layout cases; both themes, blank/mixed paths, default/minimum sizes, independent 100/125/150% text size and compact/expanded density, compact nine-row fit, selected application details and profile, pin/detail controls, activity/recovery layouts, persistent restart notice, profile and six-step wizard scrolling/footer reachability, explicit GNG setup, inert GNG start/sign-in/download/cancel/review/completion/runtime fallback, production changes-only review filter/counts/reset/empty state, warning/input contrast, read-only progress bindings, missing/stale paths and update/cancellation states. No windows shown.";
+            return $"PASS: {layouts} hidden layout cases; both themes, blank/mixed paths, default/minimum sizes, independent 100/125/150% text size and compact/expanded density, compact nine-row fit, direct application actions and selectable diagnostics, Apps/Setup tabs, compact/topmost preferences, activity/recovery layouts, persistent restart notice, profile and six-step wizard scrolling/footer reachability, explicit GNG setup, inert GNG start/sign-in/download/cancel/review/completion/runtime fallback, production changes-only review filter/counts/reset/empty state, warning/input contrast, read-only progress bindings, missing/stale paths and update/cancellation states. No windows shown.";
         }
         finally
         {
@@ -141,9 +141,17 @@ internal static partial class LayoutMatrix
     private static void CheckFooter(Window window)
     {
         var content = (FrameworkElement)window.Content;
+        var gngOptions = window is GngUpdateWindow ? Required<Expander>(window, "OtherOptions") : null;
+        bool gngOptionsWasExpanded = gngOptions?.IsExpanded == true;
+        if (gngOptions is not null)
+        {
+            Require(IsPresented(gngOptions), "GNG alternative download and recovery options must remain reachable.");
+            gngOptions.IsExpanded = true;
+            DrainBindings(); content.UpdateLayout();
+        }
         var names = window switch
         {
-            MainWindow => new[] { "CheckButton", "SetupButton", "MaintenanceButton", "ActivityButton" },
+            MainWindow => new[] { "CheckButton", "StartAllButton", "CloseAllButton" },
             SettingsWindow => new[] { "SaveButton" },
             ReportingPreferencesWindow => new[] { "SaveChoices", "DismissButton" },
             ReportingHistoryWindow => new[] { "RefreshButton", "CloseButton" },
@@ -167,6 +175,11 @@ internal static partial class LayoutMatrix
             Require(rectangle.Left >= -.5 && rectangle.Top >= -.5 &&
                 rectangle.Right <= content.ActualWidth + .5 && rectangle.Bottom <= content.ActualHeight + .5,
                 name + " extends beyond the available content area.");
+        }
+        if (gngOptions is not null)
+        {
+            gngOptions.IsExpanded = gngOptionsWasExpanded;
+            DrainBindings(); content.UpdateLayout();
         }
     }
 
@@ -380,7 +393,7 @@ internal static partial class LayoutMatrix
         var content = (FrameworkElement)window.Content;
         var scroll = Required<ScrollViewer>(window, "ProfileFormScroll");
         var footer = Required<FrameworkElement>(window, "FooterActions");
-        var bottomField = Required<CheckBox>(window, "PatchVatEfsBox");
+        var bottomField = Required<PasswordBox>(window, "HoppieBox");
         Require(!IsWithin(footer, scroll), "Profile footer is inside the scrolling form.");
         Require(IsWithin(bottomField, scroll), "Last profile field is outside the scrolling form.");
         Require(scroll.VerticalScrollBarVisibility == ScrollBarVisibility.Auto && scroll.HorizontalScrollBarVisibility == ScrollBarVisibility.Disabled,
@@ -391,8 +404,7 @@ internal static partial class LayoutMatrix
         scroll.ScrollToEnd();
         DrainBindings();
         content.UpdateLayout();
-        // The explanatory paragraph after the last checkbox may fill a tiny viewport.
-        // Ask to reveal the actual option rather than assuming "bottom" shows that option.
+        // Reveal the last editable field explicitly in the smallest viewport.
         bottomField.BringIntoView();
         DrainBindings();
         content.UpdateLayout();
@@ -411,6 +423,14 @@ internal static partial class LayoutMatrix
 
     private static void CheckSettingsExpansion(SettingsWindow window)
     {
+        foreach (var name in new[] { "CompactLayoutChoice", "AlwaysOnTopChoice" })
+        {
+            var choice = Required<CheckBox>(window, name);
+            choice.BringIntoView(); DrainBindings(); LayoutValidation.CheckWindowContent(window);
+            Require(IsPresented(choice) && choice.Focusable && choice.IsTabStop, "Presentation preferences must remain keyboard reachable in Settings.");
+            CheckControlBounds(choice, (FrameworkElement)window.Content);
+            foreach (var text in LayoutValidation.Descendants(choice).OfType<TextBlock>()) CheckUntrimmedLabel(text);
+        }
         var expander = Required<Expander>(window,"ApplicationPaths");
         Require(!expander.IsExpanded, "Advanced application paths must start collapsed.");
         CheckFooter(window);
@@ -470,7 +490,7 @@ internal static partial class LayoutMatrix
         LayoutValidation.Descendants(root).OfType<T>().Single(element =>
             ReferenceEquals(element.DataContext, row) && BindingOperations.GetBinding(element, property)?.Path?.Path == path);
     private static T Required<T>(Window window, string name) where T : class =>
-        window.FindName(name) as T ?? throw new InvalidDataException("Expected named control " + name + ".");
+        window.FindName(name) as T ?? (window is AppConfigWindow profile ? profile.ProfileEditor.FindName(name) as T : null) ?? throw new InvalidDataException("Expected named control " + name + ".");
     private static void DrainBindings() => Dispatcher.CurrentDispatcher.Invoke(() => { }, DispatcherPriority.ApplicationIdle);
     private static Rect Bounds(FrameworkElement element, Visual ancestor) => element.TransformToAncestor(ancestor).TransformBounds(new Rect(element.RenderSize));
     private static bool IsWithin(DependencyObject child, DependencyObject ancestor)

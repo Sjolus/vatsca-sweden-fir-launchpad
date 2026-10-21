@@ -56,7 +56,7 @@ internal static class LayoutValidation
 
         // Closed ComboBox/other Selector popups intentionally have no visible item containers.
         // The production row lists are plain ItemsControl instances, with no virtualization.
-        foreach (var items in Descendants(content).OfType<ItemsControl>().Where(items => items.GetType() == typeof(ItemsControl) && items.Items.Count > 0))
+        foreach (var items in Descendants(content).OfType<ItemsControl>().Where(items => items.GetType() == typeof(ItemsControl) && items.Items.Count > 0 && IsPresentedContent(items)))
         {
             for (var index = 0; index < items.Items.Count; index++)
             {
@@ -65,7 +65,15 @@ internal static class LayoutValidation
                 RealizeTemplates(container!);
             }
         }
-        if (window is MainWindow) CheckRealizedProgressBindings(content);
+        if (window is MainWindow && (window.FindName("AppsWorkspace") is not FrameworkElement apps || apps.Visibility == Visibility.Visible))
+            CheckRealizedProgressBindings(content);
+    }
+
+    private static bool IsPresentedContent(DependencyObject element)
+    {
+        for (DependencyObject? current = element; current is not null && current is not Window; current = VisualTreeHelper.GetParent(current))
+            if (current is UIElement ui && ui.Visibility != Visibility.Visible) return false;
+        return true;
     }
 
     private static void RealizeTemplates(DependencyObject node)

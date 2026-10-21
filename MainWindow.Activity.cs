@@ -31,32 +31,13 @@ public partial class MainWindow
             : latest is null ? "" : $"{latest.DisplayTime} · {latest.Summary}";
         ActivityNotice.Visibility = string.IsNullOrEmpty(ActivityNotice.Text) ? Visibility.Collapsed : Visibility.Visible;
         ActivityNotice.ToolTip = "Open Activity to see recent changes and recovery options.";
+        if (_workspace != "Apps") ActivityNotice.Visibility = Visibility.Collapsed;
+        if (_workspace == "Setup" && SetupWorkspace.SelectedSection == "Activity") RefreshWorkspace();
     }
 
     private void Activity_Click(object sender, RoutedEventArgs e)
     {
-        if (_windowClosed || _softwareActionBusy || _softwareUpdates.IsBusy || _selfUpdateActionBusy || _openDialogCount > 0 || !IsEnabled) return;
-        var window = new ActivityWindow(_settings.EuroscopeDataPath, !_setupRestartRequired) { Owner = this };
-        ShowOwnedDialog(window);
-        RefreshActivityNotice();
-        if (window.ReportRequested is { } problem)
-        {
-            OpenProblemReport(ReportingApplicationFor(problem.ApplicationName), problem.Application == ActivityApplication.Gng
-                ? ReportingCategory.Gng : problem.Operation == ActivityOperation.Update ? ReportingCategory.Update
-                : problem.Operation == ActivityOperation.Install ? ReportingCategory.Installation : ReportingCategory.Other);
-            return;
-        }
-        if (window.RecoveryRequested is not { } requested ||
-            !ActivityHistoryService.SameDataFolder(requested.DataFolder, _settings.EuroscopeDataPath)) return;
-        // Opening these windows never starts recovery. Their original review, process and
-        // maintenance guards remain authoritative, including the final explicit confirmation.
-        _requestedActivityRecovery = requested;
-        try
-        {
-            if (requested.Operation is ActivityOperation.Cleanup or ActivityOperation.RestoreCleanup)
-                GngCleanup_Click(sender, e);
-            else GngUpdate_Click(sender, e);
-        }
-        finally { _requestedActivityRecovery = null; }
+        ShowWorkspace("Activity");
     }
+
 }

@@ -9,17 +9,43 @@ namespace VatscaUpdateChecker;
 public partial class MainWindow
 {
     private readonly SaamanReleaseService _saamanReleases = new();
+    private SaamanRelease? _lastSaamanRelease;
+    private bool _saamanReleaseChecked;
+    private string? _saamanReleaseFailure;
     private const string SaamanGuideUrl = "https://github.com/Kaskobiii/SAAMAN/blob/main/docs/controller-guide.md";
 
     private async Task CheckSaamanAsync()
     {
+        await RefreshSaamanLocalAsync();
+        if (_windowClosed) return;
         var row = SaamanRow;
         row.Status = CheckStatus.Checking;
-        row.ObservedLocalVersion = null;
-        row.InstalledVersion = "—";
-        row.LatestVersion = "—";
-        row.LatestIsPrerelease = false;
+        try
+        {
+            _lastSaamanRelease = await _saamanReleases.GetLatestAsync(_windowLifetime.Token);
+            if (_windowClosed) return;
+            _saamanReleaseChecked = true;
+            _saamanReleaseFailure = null;
+        }
+        catch (OperationCanceledException) when (_windowClosed) { }
+        catch (Exception ex)
+        {
+            if (_windowClosed) return;
+            ReportingEvents.RecordFailure(ex, ReportingApplication.Saaman, ReportingOperation.Check, ReportingStage.Check);
+            _saamanReleaseFailure = ex is SaamanReleaseUnavailableException ? ex.Message :
+                "The latest SAAMAN release could not be checked. Your local DLL and profile choices are still available.";
+        }
+        await RefreshSaamanLocalAsync();
+    }
+
+    private async Task RefreshSaamanLocalAsync()
+    {
+        if (_windowClosed) return;
+        var row = SaamanRow;
         string path = _settings.SaamanDllPath;
+        row.LatestVersion = _lastSaamanRelease is null ? "—" : "v" + _lastSaamanRelease.Version;
+        row.LatestIsPrerelease = false;
+        row.DownloadUrl = _lastSaamanRelease?.ReleaseUrl ?? SaamanReleaseService.ReleasesUrl;
         try
         {
             SaamanDllInfo? installed = string.IsNullOrWhiteSpace(path) || !File.Exists(path)
@@ -27,65 +53,39 @@ public partial class MainWindow
             if (_windowClosed) return;
             row.ObservedLocalVersion = installed?.Version;
             row.InstalledVersion = installed is null ? "Not installed" : "v" + installed.Version;
-            var release = await _saamanReleases.GetLatestAsync(_windowLifetime.Token);
-            if (_windowClosed) return;
-            row.LatestVersion = release is null ? "—" : "v" + release.Version;
-            row.DownloadUrl = release?.ReleaseUrl ?? SaamanReleaseService.ReleasesUrl;
             row.Status = installed is null ? CheckStatus.NotConfigured :
-                release is null ? CheckStatus.Installed :
+                _lastSaamanRelease is null || _saamanReleaseFailure is not null ? CheckStatus.Installed :
                 SoftwareVersion.TryParse(installed.Version, out var current) &&
-                SoftwareVersion.TryParse(release.Version, out var latest) && current.CompareTo(latest) < 0
+                SoftwareVersion.TryParse(_lastSaamanRelease.Version, out var latest) && current.CompareTo(latest) < 0
                     ? CheckStatus.UpdateAvailable : CheckStatus.UpToDate;
             row.StatusMessage = installed is null
-                ? "Install SAAMAN or choose an existing SAAMAN.dll. It runs inside EuroScope."
-                : "Installed SAAMAN " + installed.Version + ". It runs inside EuroScope.";
+                ? "Install SAAMAN or choose your existing DLL."
+                : "Installed SAAMAN " + installed.Version + ". Runs inside EuroScope.";
             row.StatusMessage += _settings.PatchSaaman
-                ? "\n\nSAAMAN profile integration is selected. Profile options previews the target, plugin order and MAESTRO replacement."
-                : "\n\nProfile integration is optional. Choose Profile options to enable SAAMAN first in APP/ACC and replace MAESTRO.";
-            if (release is null) row.StatusMessage += "\n\nNo published stable release is available.";
+                ? "\nProfile option: SAAMAN enabled."
+                : "\nProfile option: SAAMAN not enabled.";
+            if (_saamanReleaseFailure is not null)
+                row.StatusMessage += "\n\n" + _saamanReleaseFailure +
+                    (_lastSaamanRelease is null ? "" : "\nThe release shown is from the last successful check.");
+            else if (_saamanReleaseChecked && _lastSaamanRelease is null)
+                row.StatusMessage += "\n\nNo published stable release is available.";
         }
         catch (OperationCanceledException) when (_windowClosed) { }
         catch (Exception)
         {
             if (_windowClosed) return;
+            row.ObservedLocalVersion = null;
+            row.InstalledVersion = "—";
             row.Status = CheckStatus.Error;
-            row.StatusMessage = "SAAMAN could not be checked. Open Set up / update to review the DLL and retry the official release check.";
+            row.StatusMessage = "The selected SAAMAN DLL could not be verified. Open Setup → Applications and choose your current SAAMAN DLL.";
         }
     }
 
     private async void SaamanManage_Click(object sender, RoutedEventArgs e)
     {
-        if (!CanRunSoftwareAction() || !CanRunSelfUpdateAction()) return;
-        _softwareActionBusy = true;
-        _processTimer.Stop();
-        UpdateSelfUpdateActionEnabled();
-        try
-        {
-            // Each mutation takes its own cross-process lease and revalidates the preview.
-            var window = new SaamanWindow(_settings.Copy()) { Owner = this };
-            ShowOwnedDialog(window);
-            _setupRestartRequired |= window.RequiresRestart;
-            if (window.SettingsChanged)
-            {
-                _settings.SaamanDllPath = window.Settings.SaamanDllPath;
-                _settings.SaamanProfilePath = window.Settings.SaamanProfilePath;
-                _settings.PatchSaaman = window.Settings.PatchSaaman;
-                _settings.SaamanProfileManaged = window.Settings.SaamanProfileManaged;
-                ApplicationPreferences.SetNotUsed(_settings, "SAAMAN", false);
-                SaveSessionSettings("SAAMAN choices saved. Profile integration is reviewed separately.");
-            }
-            await CheckSaamanAsync();
-        }
-        catch (Exception ex) { LastCheckedText.Text = "SAAMAN setup could not finish: " + ex.Message; }
-        finally
-        {
-            _softwareActionBusy = false;
-            if (!_windowClosed)
-            {
-                _processTimer.Start();
-                UpdateSelfUpdateActionEnabled();
-            }
-        }
+        SetupWorkspace.ShowSection("Applications");
+        ShowWorkspace("Setup");
+        await UpdateSaamanAsync();
     }
 
     private void SaamanGuide_Click(object sender, RoutedEventArgs e)

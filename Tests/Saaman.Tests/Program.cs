@@ -5,7 +5,7 @@ using System.Text.Json;
 using VatscaUpdateChecker.Models;
 using VatscaUpdateChecker.Services;
 
-int passed = 0;
+int passed = await ReleaseCacheTests.RunAsync();
 await Test("selects highest stable and skips drafts and semantic prereleases", async () =>
 {
     using var fixture = new Fixture();
@@ -126,6 +126,7 @@ await Test("DLL registration and checksum manifest must agree with reviewed rele
     fixture.Payloads["SAAMAN.dll"] = Encoding.UTF8.GetBytes("SAAMAN 1.3.37");
     fixture.Payloads["SHA256SUMS.txt"] = Encoding.UTF8.GetBytes(new string('0', 64) + "  SAAMAN.dll");
     fixture.Catalog = "[" + fixture.ReleaseJson("1.3.37") + "]";
+    fixture.Now = fixture.Now.AddMinutes(11);
     release = (await fixture.Releases.GetLatestAsync())!;
     await ThrowsAsync<InvalidDataException>(() => fixture.Installer.InstallAsync(fixture.Installer.Preview(fixture.Settings, release), fixture.Settings));
     Equal("1.3.36", fixture.Inspect(fixture.Target).Version);
@@ -215,6 +216,7 @@ sealed class Fixture : IDisposable
     internal int FailGuardAt { get; set; }
     private int _guardCalls;
     internal int AssetRequests { get; private set; }
+    internal DateTimeOffset Now { get; set; } = DateTimeOffset.Parse("2026-10-21T12:00:00Z");
     internal Fixture()
     {
         string data = Path.Combine(_root, "GNG");
@@ -229,7 +231,7 @@ sealed class Fixture : IDisposable
         Payloads["SHA256SUMS.txt"] = Encoding.UTF8.GetBytes(string.Join("\n", Payloads.Select(pair => Hash(pair.Value) + "  " + pair.Key)));
         Catalog = "[" + ReleaseJson("1.3.37") + "]";
         _client = new HttpClient(new Handler(this));
-        Releases = new SaamanReleaseService(_client);
+        Releases = new SaamanReleaseService(_client, () => Now);
         Installer = new SaamanInstallService(Releases, Path.Combine(_root, "LaunchpadRecovery"), () =>
         {
             if (!Closed || ++_guardCalls == FailGuardAt) throw new InvalidOperationException("Synthetic EuroScope guard blocked.");

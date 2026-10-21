@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../Services/GngSetupDestination.cs" Link="GngSetupDestination.cs" />
+    <Compile Include="../../Services/SaamanFileSafety.cs" Link="SaamanFileSafety.cs" />
+    <Compile Include="../../Services/PreservationPath.cs" Link="PreservationPath.cs" />
+    <Compile Include="../ClientConfiguration.Tests/SyntheticJunction.cs" Link="SyntheticJunction.cs" />
+  </ItemGroup>
+</Project>

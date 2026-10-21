@@ -5,6 +5,130 @@ using VatscaUpdateChecker.Services;
 // Every removable path is generated inside a unique temporary fixture. No real apps or data are used.
 var tests = new (string Name, Func<Task> Body)[]
 {
+    ("controller editor distinguishes missing credentials from denied or unavailable reads without native access", () =>
+    {
+        CredentialManagerService.CheckEditingRead(false, 1168);
+        CredentialManagerService.CheckEditingRead(true, 5);
+        foreach (int error in new[] { 5, 87, 1312 })
+        {
+            bool rejected = false;
+            try { CredentialManagerService.CheckEditingRead(false, error); }
+            catch (System.ComponentModel.Win32Exception ex) { rejected = ex.NativeErrorCode == error && ex.Message == "Windows could not read the saved controller credential."; }
+            True(rejected);
+        }
+        return Task.CompletedTask;
+    }),
+    ("discovery retains configured custom and missing paths without asking to reselect them", () =>
+    {
+        var current = new AppSettings { VacsExePath = @"D:\Synthetic\Custom\vacs-client.exe", VatisExePath = @"D:\Synthetic\Missing\vATIS.exe" };
+        var selection = new InstallationDiscoverySelection(current, []);
+        Equal(2, selection.Options.Count); Equal(0, selection.Changes.Count);
+        True(selection.Options.All(o => o.IsCurrent && selection.IsSelected(o)));
+        Equal(JsonSerializer.Serialize(current), JsonSerializer.Serialize(selection.ApplyTo(current)));
+        return Task.CompletedTask;
+    }),
+    ("discovery recognises current copies despite path casing and trailing separators", () =>
+    {
+        var current = new AppSettings { EuroscopeDataPath = @"D:\Synthetic\EuroScope\", VacsExePath = @"D:\Synthetic\Vacs\vacs-client.exe" };
+        var candidates = new InstallationCandidate[]
+        {
+            new(AtcRemovalApp.Gng, "GNG", "", @"d:/synthetic/euroscope", "Known", "Recognised", true),
+            new(AtcRemovalApp.Vacs, "VACS", @"d:\synthetic\vacs\vacs-client.exe", null, "Known", "Recognised", true),
+            new(AtcRemovalApp.Vacs, "VACS", @"D:\SYNTHETIC\Vacs\vacs-client.exe", null, "Known", "Recognised", true)
+        };
+        var selection = new InstallationDiscoverySelection(current, candidates);
+        Equal(2, selection.Options.Count); True(selection.Options.All(o => o.IsCurrent)); Equal(0, selection.Changes.Count);
+        return Task.CompletedTask;
+    }),
+    ("discovery changing one copy leaves other paths and application-use preferences intact", () =>
+    {
+        var current = new AppSettings { VacsExePath = @"D:\Synthetic\old\vacs-client.exe", VatisExePath = @"D:\Synthetic\vatis.exe", NotUsedApplications = "VACS;vATIS", VatsimCid = "SYNTHETIC" };
+        var before = JsonSerializer.Serialize(current);
+        var alternate = new InstallationCandidate(AtcRemovalApp.Vacs, "VACS", @"D:\Synthetic\new\vacs-client.exe", null, "Known", "", true);
+        var selection = new InstallationDiscoverySelection(current, [alternate]);
+        selection.Choose(selection.Options.Single(o => !o.IsCurrent));
+        var changed = selection.ApplyTo(current);
+        Equal(1, selection.Changes.Count); Equal(alternate.ExecutablePath, changed.VacsExePath);
+        Equal(current.VatisExePath, changed.VatisExePath); Equal(current.NotUsedApplications, changed.NotUsedApplications);
+        Equal(current.VatsimCid, changed.VatsimCid); Equal(before, JsonSerializer.Serialize(current));
+        return Task.CompletedTask;
+    }),
+    ("discovery reopens from the parent draft and has no changes until another copy is chosen", () =>
+    {
+        var saved = new AppSettings { VacsExePath = @"D:\Synthetic\saved\vacs-client.exe" };
+        var draft = saved.Copy(); draft.VacsExePath = @"D:\Synthetic\unsaved\vacs-client.exe";
+        var selection = new InstallationDiscoverySelection(draft, []);
+        Equal(draft.VacsExePath, selection.Options.Single().Path); Equal(0, selection.Changes.Count);
+        Equal(@"D:\Synthetic\saved\vacs-client.exe", saved.VacsExePath);
+        return Task.CompletedTask;
+    }),
+    ("discovery supports per-application replacement and undo without global replacement", () =>
+    {
+        var current = new AppSettings { TrackAudioExePath = @"D:\Synthetic\current\trackaudio.exe" };
+        var first = new InstallationCandidate(AtcRemovalApp.TrackAudio, "TrackAudio", @"D:\Synthetic\first\trackaudio.exe", null, "Known", "", true);
+        var second = first with { ExecutablePath = @"D:\Synthetic\second\trackaudio.exe" };
+        var selection = new InstallationDiscoverySelection(current, [first, second]);
+        var firstOption = selection.Options.Single(o => o.Candidate == first);
+        var secondOption = selection.Options.Single(o => o.Candidate == second);
+        selection.Choose(firstOption); selection.Choose(secondOption);
+        Equal(1, selection.Changes.Count); Equal(second, selection.Changes.Single());
+        selection.Undo(secondOption);
+        Equal(0, selection.Changes.Count); True(selection.IsSelected(selection.Options.Single(o => o.IsCurrent)));
+        return Task.CompletedTask;
+    }),
+    ("discovery can undo a newly selected app and reject a copy outside the search", () =>
+    {
+        var candidate = new InstallationCandidate(AtcRemovalApp.VatEfs, "VatEFS", "", @"D:\Synthetic\VatEFS", "Known", "", true);
+        var selection = new InstallationDiscoverySelection(new AppSettings(), [candidate]);
+        var option = selection.Options.Single(); selection.Choose(option); Equal(1, selection.Changes.Count);
+        selection.Undo(option); Equal(0, selection.Changes.Count);
+        RejectSync(() => selection.Choose(new(candidate with { DataPath = @"D:\Synthetic\Other" }, false)));
+        return Task.CompletedTask;
+    }),
+    ("discovery no-op and cancellation never clear saved paths or unrelated preferences", () =>
+    {
+        var current = new AppSettings { EuroscopeExePath = @"D:\Synthetic\EuroScope.exe", PatchVatEfs = true, PatchSaaman = true, NotUsedApplications = "TrackAudio", CheckOnStartup = false };
+        var before = JsonSerializer.Serialize(current);
+        var candidate = new InstallationCandidate(AtcRemovalApp.EuroScope, "EuroScope", @"D:\Synthetic\Other\EuroScope.exe", null, "Known", "", true);
+        var selection = new InstallationDiscoverySelection(current, [candidate]);
+        Equal(before, JsonSerializer.Serialize(selection.ApplyTo(current)));
+        selection.Choose(selection.Options.Single(o => !o.IsCurrent));
+        Equal(before, JsonSerializer.Serialize(current));
+        return Task.CompletedTask;
+    }),
+    ("discovery relocates enabled VatEFS only for its selected changed folder and undo removes that intent", () =>
+    {
+        var current = new AppSettings { VatEfsPath = @"D:\Synthetic\old-vatefs", PatchVatEfs = true, VatsimCid = "SYNTHETIC-KEEP" };
+        var vat = new InstallationCandidate(AtcRemovalApp.VatEfs, "VatEFS", "", @"D:\Synthetic\new-vatefs", "Known", "", true);
+        var vacs = new InstallationCandidate(AtcRemovalApp.Vacs, "VACS", @"D:\Synthetic\vacs-client.exe", null, "Known", "", true);
+        var selection = new InstallationDiscoverySelection(current, [vat, vacs]);
+        True(!InstallationDiscoverySelection.RequiresVatEfsProfileRelocation(current, selection.ApplyTo(current)));
+        selection.Choose(selection.Options.Single(o => o.Candidate == vacs));
+        True(!InstallationDiscoverySelection.RequiresVatEfsProfileRelocation(current, selection.ApplyTo(current)));
+        var vatOption = selection.Options.Single(o => o.Candidate == vat);
+        selection.Choose(vatOption);
+        var changed = selection.ApplyTo(current);
+        True(InstallationDiscoverySelection.RequiresVatEfsProfileRelocation(current, changed));
+        True(changed.PatchVatEfs); Equal(current.VatsimCid, changed.VatsimCid);
+        Equal(@"D:\Synthetic\old-vatefs", current.VatEfsPath);
+        selection.Undo(vatOption);
+        True(!InstallationDiscoverySelection.RequiresVatEfsProfileRelocation(current, selection.ApplyTo(current)));
+        Equal(vacs.ExecutablePath, selection.ApplyTo(current).VacsExePath);
+        return Task.CompletedTask;
+    }),
+    ("discovery does not enable VatEFS or relocate equivalent folder spellings", () =>
+    {
+        var current = new AppSettings { VatEfsPath = @"D:\Synthetic\VatEFS\", PatchVatEfs = true };
+        var equivalent = current.Copy(); equivalent.VatEfsPath = "d:/synthetic/vatefs";
+        True(!InstallationDiscoverySelection.RequiresVatEfsProfileRelocation(current, equivalent));
+        var disabled = current.Copy(); disabled.PatchVatEfs = false;
+        var alternative = new InstallationCandidate(AtcRemovalApp.VatEfs, "VatEFS", "", @"D:\Synthetic\other-vatefs", "Known", "", true);
+        var selection = new InstallationDiscoverySelection(disabled, [alternative]);
+        selection.Choose(selection.Options.Single(o => o.Candidate == alternative));
+        var changed = selection.ApplyTo(disabled);
+        True(!changed.PatchVatEfs && !InstallationDiscoverySelection.RequiresVatEfsProfileRelocation(disabled, changed));
+        return Task.CompletedTask;
+    }),
     ("preview records exact bytes and empty directories without changing data", () =>
     {
         using var f = new Fixture(); var file = f.File("app/data/settings.txt", "FAKE-CREDENTIAL"); f.Dir("app/empty");

@@ -46,6 +46,26 @@ internal static class SaamanGngTests
             File.Delete(policy.DllPath);
             Reject(() => Plan(f, policy));
         });
+        test("SAAMAN local relocation unblocks GNG and retains MAESTRO restoration", f =>
+        {
+            var policy = Prepare(f);
+            f.Install(Plan(f, policy));
+            var moved = Path.Combine(f.DirectoryPath, "Moved", "SAAMAN.dll");
+            Directory.CreateDirectory(Path.GetDirectoryName(moved)!);
+            File.Move(policy.DllPath, moved);
+            Reject(() => Plan(f, policy));
+            var relocation = SaamanProfileService.BuildRelocationPlan(policy, moved, f.Root);
+            SaamanProfileService.Apply(relocation, new(Path.Combine(f.DirectoryPath, "Profile-recovery"), () => { }));
+            var corrected = policy with { DllPath = moved };
+            var plan = Plan(f, corrected);
+            var preview = GngUpdateService.PreviewFile(plan, Fixture.ProfilePath).AfterText!;
+            Require(preview.Contains("Plugins\tPlugin0\t" + moved), "GNG did not use the locally corrected DLL path.");
+            f.Install(plan);
+            Require(f.Read(Fixture.ProfilePath).Contains("Plugins\tPlugin0\t" + moved), "GNG reverted the local relocation.");
+            f.Install(Plan(f, corrected with { Enabled = false }));
+            Require(f.Read(Fixture.ProfilePath).Contains("MAESTRO.dll") && !f.Read(Fixture.ProfilePath).Contains("SAAMAN.dll"),
+                "Disabling after relocation and GNG update did not restore MAESTRO.");
+        });
         test("SAAMAN GNG explicit target override is confined and canonical profile remains package-managed", f =>
         {
             var policy = Prepare(f);

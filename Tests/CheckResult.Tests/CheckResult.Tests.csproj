@@ -7,6 +7,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../Models/CheckResult.cs" Link="CheckResult.cs" />
+    <Compile Include="../../Models/ApplicationRows.cs" Link="ApplicationRows.cs" />
     <Compile Include="../../Models/SoftwareUpdate.cs" Link="SoftwareUpdate.cs" />
     <Compile Include="../../Models/ProfileOption.cs" Link="ProfileOption.cs" />
     <Compile Include="../../Models/ApplicationDescriptions.cs" Link="ApplicationDescriptions.cs" />

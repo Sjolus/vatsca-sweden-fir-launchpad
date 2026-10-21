@@ -27,6 +27,13 @@ with an ignored output directory to render those controls without showing window
 All process actions remain inert; normal-close confirmation and process identity
 belong to the application-control service tests.
 
+`--check-workspaces` covers the five embedded Setup sections, including preference
+changes and save failures with synthetic settings. Add `--snapshots` to capture the
+Apps and Setup pages in both themes. Preference events are observed in memory;
+the fixture never saves settings or opens reporting windows.
+First-run captures include completely blank and partly configured installations, with
+inline guidance, prerequisite links and the same embedded sections as normal use.
+
 Add `--snapshots artifacts/ui-review` to render the measured application and workflow layouts
 as PNGs. Cleanup and GNG fresh/existing start, sign-in waiting, package/reference download progress, preparation between downloads, cancellation, review,
 completion and runtime-fallback states capture both themes at default and minimum size,
@@ -43,11 +50,27 @@ configured/missing paths, wizard steps and scaled content. Text-size cases use t
 100%/125%/150% presentation resources as the app, independently of whole-content scaling.
 Assertions cover:
 
-- Equal row heights, readable action captions and the selected application's details panel.
+- Equal row heights and direct daily actions. Status text stays selectable, with full
+  diagnostic tooltips, accessibility descriptions and inert Ctrl+C command routing.
 - Separate Show/Close controls and reviewed bulk actions remain readable at each
   text size, with keyboard access, operation gating and no controls for folders or Launchpad itself.
-- Text-size changes retain density and selected EuroScope profile; header controls and
-  More/Less space remain reachable at minimum size in both layouts.
+- Text-size changes retain density and selected EuroScope profile. Apps/Setup tabs and
+  primary actions remain reachable at minimum size; compact layout and keep-on-top choices live in Preferences.
+- Applications, Swedish GNG, Controller profile, Preferences and Activity remain inside
+  Setup with its section navigation visible. Neither application list uses row overflow menus.
+- First-setup guidance stays inline. Next/Later requests open no windows, unfinished
+  configuration remains optional, and guided navigation leaves preference errors visible.
+- Preference population emits no change event. Individual edits preserve unrelated
+  settings; failed saves keep the chosen values and expose a reachable retry action.
+- The embedded controller form retains its synthetic draft through Setup navigation
+  and refresh. Plugin choices live in Applications; preview/save handlers are inert, and their
+  fixed footer stays reachable while the fields scroll.
+- VatEFS and SAAMAN switches emit requests only on a click, with no writes on population
+  or refresh. Inline plugin feedback covers blocked, downloading, applying, save-retry and
+  missing-runtime states. Cancel stays reachable during an operation; other mutations remain locked.
+- SAAMAN uses direct install/update and profile actions. The shared production action
+  guards disable changes during work, restart requirements or a detected EuroScope
+  process. Restoring an earlier DLL retains its separate review and confirmation.
 - Recent activity has a reachable Close action, scrollable details, selectable recovery
   locations and separate GNG, vendor-recovery and no-backup examples. Its handlers are
   inert; recovery eligibility, filesystem safety and persistence belong to service tests.

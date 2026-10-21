@@ -23,6 +23,7 @@ public partial class FreshSoftwareInstallWindow : Window
     public bool RestartRequired { get; private set; }
     public bool AdoptionRequested { get; private set; }
     public bool RemovalRequested { get; private set; }
+    public string ConfigurationMessage { get; private set; } = "";
 
     public FreshSoftwareInstallWindow(SoftwareApp app, AppSettings settings)
     {
@@ -74,12 +75,19 @@ public partial class FreshSoftwareInstallWindow : Window
             _plan = await Task.Run(() => _service.PreviewAsync(_app, _settings, backup, allowBeta, _cancellation.Token));
             ReviewText.Text = _plan.Review;
             ReviewSummaryText.Text = ReviewSummaries.Fresh(_plan);
+            var clientSetup = ControllerClientSetup.Describe(_app);
+            if (clientSetup.Length > 0) ReviewSummaryText.Text += "\n\n" + clientSetup;
             if (_app == SoftwareApp.Vatis) ApplyButton.Content = _plan.Release.Version.Contains('-') ? "Install vATIS beta" : "Install vATIS";
             if (_app == SoftwareApp.VatEfs) ApplyButton.Content = _plan.Release.IsPrerelease ? "Install VatEFS prerelease" : "Install VatEFS";
             StatusText.Text = "Review what changes and where it will be installed. Expand the full plan for package checks and individual files. Nothing has been installed.";
         }
         catch (OperationCanceledException) { StatusText.Text = "Review cancelled. Nothing was installed."; }
-        catch (Exception ex) { StatusText.Text = ex.Message; }
+        catch (Exception ex)
+        {
+            ReportingEvents.RecordFailure(ex, ReportingEvents.ForSoftware(_app), ReportingOperation.Check,
+                ex is VendorRequestException ? ReportingStage.Check : ReportingStage.Prepare);
+            StatusText.Text = ex.Message;
+        }
         finally { _previewing = false; _cancellation.Dispose(); _cancellation = null; SetBusy(false); }
         if (_plan != null) ShowReviewedPlan();
     }
@@ -107,10 +115,23 @@ public partial class FreshSoftwareInstallWindow : Window
             ActivityHistoryService.Record(ActivityHistoryService.ForSoftware(_app), ActivityOperation.Install,
                 ActivityOutcome.Completed, plan.Release.Version, Result.BackupFolder, restartRequired: RestartRequired);
             _finished = true;
+            if (!RestartRequired && _app is SoftwareApp.Vatis or SoftwareApp.TrackAudio)
+            {
+                StatusText.Text = "Installation verified. Applying your saved controller details…";
+                Activity.IsIndeterminate = true;
+                CancelOperationButton.Visibility = Visibility.Collapsed;
+                var configured = _settings.Copy();
+                if (_app == SoftwareApp.Vatis) configured.VatisExePath = Result.ExecutablePath;
+                else configured.TrackAudioExePath = Result.ExecutablePath;
+                ApplicationPreferences.SetNotUsed(configured, _app == SoftwareApp.Vatis ? "vATIS" : "TrackAudio", false);
+                try { ConfigurationMessage = (await ControllerClientSetup.ApplySavedAsync(configured, _app)).Message; }
+                catch { ConfigurationMessage = "Application installed. Save the controller profile again to finish its configuration."; }
+            }
             StatusText.Text = (_app == SoftwareApp.VatEfs
-                ? "Installation verified. VatEFS remains closed. Enable its plugin through Controller profile before starting EuroScope."
+                ? "Installation verified. VatEFS remains closed. Enable its plugin with Use in EuroScope under Setup → Applications."
                 : "Installation verified. The application remains closed.") +
-                (Result.RestartRequired ? " Restart Windows before further changes." : "") + BackupNotice();
+                (Result.RestartRequired ? " Restart Windows before further changes." : "") +
+                (ConfigurationMessage.Length == 0 ? "" : " " + ConfigurationMessage) + BackupNotice();
         }
         catch (OperationCanceledException)
         {

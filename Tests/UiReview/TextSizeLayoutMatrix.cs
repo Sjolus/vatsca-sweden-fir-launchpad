@@ -10,7 +10,7 @@ namespace VatscaUpdateChecker;
 
 internal static partial class LayoutMatrix
 {
-    private static int CheckTextSizeLayouts()
+    private static int CheckTextSizeLayouts(bool mainOnly = false)
     {
         int cases = 0;
         try
@@ -29,12 +29,11 @@ internal static partial class LayoutMatrix
                     var main = new MainWindow { Tag = density };
                     try
                     {
-                        main.RefreshSyntheticDetailsLayout();
                         LayoutValidation.CheckWindowContent(main);
                         CheckTextPreference(main, scale);
                         CheckRowReadability(main);
                         CheckMainPresentationControls(main, scale);
-                        CheckDetailsSelection(main);
+                        CheckRowActions(main);
                         CheckFooter(main);
                         cases++;
                     }
@@ -45,7 +44,7 @@ internal static partial class LayoutMatrix
                     finally { main.Close(); }
                 }
 
-                if (scale == 1) continue; // Ordinary cases already cover each dialog at 100%.
+                if (mainOnly || scale == 1) continue; // Ordinary cases already cover each dialog at 100%.
                 foreach (bool blank in new[] { false, true })
                 {
                     UiFixture.Blank = blank;
@@ -143,7 +142,7 @@ internal static partial class LayoutMatrix
         foreach (var button in LayoutValidation.Descendants(list).OfType<Button>().Where(IsPresented))
             CheckButtonCaption(button);
 
-        foreach (string name in new[] { "PinButton", "DensityToggleButton", "ThemeToggleButton", "AppConfigButton", "SettingsButton", "StartAllButton", "CloseAllButton" })
+        foreach (string name in new[] { "HelpButton", "ThemeToggleButton", "StartAllButton", "CloseAllButton" })
         {
             var button = Required<Button>(window, name);
             CheckControlBounds(button, content);
@@ -153,33 +152,16 @@ internal static partial class LayoutMatrix
             text.Text is "Sweden FIR Launchpad" or "Controls" or "Application" or "Your version" or "Latest / supported" or "Status" or "Options"))
             CheckUntrimmedLabel(title);
 
-        var pin = Required<Button>(window, "PinButton");
-        pin.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        LayoutValidation.CheckWindowContent(window);
-        Require(Equals(pin.Content, "Unpin"), "Pin must expose its reverse action in the inert fixture.");
-        CheckButtonCaption(pin);
-        CheckControlBounds(pin, content);
-        pin.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-
-        SelectDetails(window, euroScope);
-        var details = Required<FrameworkElement>(window, "ApplicationDetails");
-        var size = Required<Button>(window, "DetailsSizeButton");
-        var initialHeight = details.Height;
-        size.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        LayoutValidation.CheckWindowContent(window);
-        Require(details.Height > initialHeight && Equals(size.Content, "Less space"), "More space must expand the inert details panel.");
-        CheckDetailsActionBounds(details);
-        CheckControlBounds(details, content);
+        foreach (string name in new[] { "AppsTab", "SetupTab" })
+        {
+            var tab = Required<RadioButton>(window, name);
+            CheckControlBounds(tab, content);
+            Require(tab.Focusable && tab.IsTabStop && tab.ActualHeight >= 28, "Workspace tabs must retain usable keyboard targets.");
+            foreach (var text in LayoutValidation.Descendants(tab).OfType<TextBlock>()) CheckUntrimmedLabel(text);
+        }
+        CheckRowActions(window);
         CheckFooter(window);
-        size.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        LayoutValidation.CheckWindowContent(window);
-        Require(Math.Abs(details.Height - initialHeight) < .5 && Equals(size.Content, "More space"), "Less space must recover the original row area.");
-        var thumb = Required<Thumb>(window, "DetailsResizeThumb");
-        Require(IsPresented(thumb) && !string.IsNullOrWhiteSpace(System.Windows.Automation.AutomationProperties.GetName(thumb)),
-            "The details resize handle needs a visible, named control.");
-        CheckDetailsActionBounds(details);
     }
-
     private static void CheckActivityLayout(ActivityWindow window)
     {
         var content = (FrameworkElement)window.Content;

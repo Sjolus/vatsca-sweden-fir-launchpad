@@ -9,6 +9,15 @@
   <ItemGroup>
     <ApplicationDefinition Include="../../App.xaml" Link="App.xaml" />
     <Page Include="../../MainWindow.xaml" Link="MainWindow.xaml" />
+    <Page Include="../../SetupWorkspaceControl.xaml" Link="SetupWorkspaceControl.xaml" />
+    <Compile Include="../../SetupWorkspaceControl.xaml.cs" Link="SetupWorkspaceControl.xaml.cs" />
+    <Page Include="../../ActivityWorkspaceControl.xaml" Link="ActivityWorkspaceControl.xaml" />
+    <Compile Include="../../ActivityWorkspaceControl.xaml.cs" Link="ActivityWorkspaceControl.xaml.cs" />
+    <Page Include="../../PreferencesWorkspaceControl.xaml" Link="PreferencesWorkspaceControl.xaml" />
+    <Compile Include="../../PreferencesWorkspaceControl.xaml.cs" Link="PreferencesWorkspaceControl.xaml.cs" />
+    <Compile Include="../../Models/SetupWorkspace.cs" Link="SetupWorkspace.cs" />
+    <Compile Include="../../Models/SetupGuide.cs" Link="SetupGuide.cs" />
+    <Compile Include="../../Models/ConfiguredPathValidation.cs" Link="ConfiguredPathValidation.cs" />
     <Page Include="../../ActivityWindow.xaml" Link="ActivityWindow.xaml" />
     <Page Include="../../BulkApplicationActionWindow.xaml" Link="BulkApplicationActionWindow.xaml" />
     <Compile Include="../../BulkApplicationActionWindow.xaml.cs" Link="BulkApplicationActionWindow.xaml.cs" />
@@ -24,8 +33,11 @@
     <Compile Include="../../Services/ReportingWire.cs" Link="ReportingWire.cs" />
     <Compile Include="../../Services/ReportingHistoryPresentation.cs" Link="ReportingHistoryPresentation.cs" />
     <Page Include="../../AppConfigWindow.xaml" Link="AppConfigWindow.xaml" />
-    <Compile Include="../../AppConfigWindow.Help.cs" Link="AppConfigWindow.Help.cs" />
+    <Page Include="../../ControllerProfileControl.xaml" Link="ControllerProfileControl.xaml" />
+    <Compile Include="../../ControllerProfileControl.Help.cs" Link="ControllerProfileControl.Help.cs" />
+    <Compile Include="../../ControllerProfileControl.Presentation.cs" Link="ControllerProfileControl.Presentation.cs" />
     <Page Include="../../SaamanWindow.xaml" Link="SaamanWindow.xaml" />
+    <Compile Include="../../SaamanWindow.Presentation.cs" Link="SaamanWindow.Presentation.cs" />
     <Page Include="../../MaintenanceWindow.xaml" Link="MaintenanceWindow.xaml" />
     <Page Include="../../GngCleanupWindow.xaml" Link="GngCleanupWindow.xaml" />
     <Page Include="../../GngUpdateWindow.xaml" Link="GngUpdateWindow.xaml" />
@@ -39,7 +51,8 @@
     <Resource Include="../../Assets/app.ico" Link="Assets/app.ico" />
     <Resource Include="../../Assets/logo-banner.png" Link="Assets/logo-banner.png" />
     <Compile Include="../../Models/CheckResult.cs" Link="CheckResult.cs" />
-    <Compile Include="../../MainWindow.ApplicationDetails.cs" Link="MainWindow.ApplicationDetails.cs" />
+    <Compile Include="../../Models/ApplicationRows.cs" Link="ApplicationRows.cs" />
+    <Compile Include="../../MainWindow.WorkspacePresentation.cs" Link="MainWindow.WorkspacePresentation.cs" />
     <Compile Include="../../GngUpdateWindow.Review.cs" Link="GngUpdateWindow.Review.cs" />
     <Compile Include="../../GngUpdateWindow.EuroScope.cs" Link="GngUpdateWindow.EuroScope.cs" />
     <Compile Include="../../GngUpdateWindow.BrowserPresentation.cs" Link="GngUpdateWindow.BrowserPresentation.cs" />

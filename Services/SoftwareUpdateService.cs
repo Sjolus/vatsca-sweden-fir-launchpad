@@ -8,6 +8,8 @@ namespace VatscaUpdateChecker.Services;
 public interface ISoftwareReleaseSource
 {
     Task<SoftwareRelease?> GetLatestAsync(SoftwareApp app, string installedVersion, CancellationToken cancellationToken);
+    Task<SoftwareRelease?> RefreshLatestAsync(SoftwareApp app, string installedVersion, CancellationToken cancellationToken) =>
+        GetLatestAsync(app, installedVersion, cancellationToken);
 }
 
 public interface ISoftwareInstaller
@@ -56,7 +58,7 @@ public sealed class SoftwareUpdateService
     }
 
     public event Action<SoftwareUpdateState>? StateChanged;
-    public event Action<SoftwareApp, Exception>? FailureObserved;
+    public event Action<SoftwareApp, SoftwareUpdatePhase, Exception>? FailureObserved;
     public bool IsBusy => _gate.CurrentCount == 0;
     public bool RestartRequired => _installer.RestartRequired;
     public bool CanCancel { get { lock (_sync) return _activeCancellation != null && !_installing; } }
@@ -229,7 +231,7 @@ public sealed class SoftwareUpdateService
 
     private async Task ValidateUnchangedReleaseAsync(SoftwareRelease expected, string installedVersion, CancellationToken token)
     {
-        var current = await _source.GetLatestAsync(expected.App, installedVersion, token).ConfigureAwait(false);
+        var current = await _source.RefreshLatestAsync(expected.App, installedVersion, token).ConfigureAwait(false);
         token.ThrowIfCancellationRequested();
         if (current != expected || Compare(expected.Version, installedVersion) <= 0)
             throw new InvalidOperationException("The release changed since the check. Check again before updating.");
@@ -280,7 +282,8 @@ public sealed class SoftwareUpdateService
     private async Task DownloadCoreAsync(SoftwareApp app, SoftwareRelease release, string path, CancellationToken token)
     {
         using var response = await OpenDownloadAsync(release, token).ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
+        if (!response.IsSuccessStatusCode)
+            throw VendorRequestException.FromResponse(response, app == SoftwareApp.Vatis ? VendorService.Vatis : VendorService.GitHub, DateTimeOffset.UtcNow);
         var finalUri = response.RequestMessage?.RequestUri ?? release.DownloadUri;
         if (!SoftwareReleaseSource.IsAllowedDownloadUri(release, finalUri, allowRedirect: true))
             throw new InvalidDataException("The package redirected outside its official download hosts.");
@@ -343,8 +346,8 @@ public sealed class SoftwareUpdateService
     private SoftwareUpdateState Fail(SoftwareApp app, Exception ex)
     {
         if (FailureObserved is { } observers)
-            foreach (Action<SoftwareApp, Exception> observer in observers.GetInvocationList())
-                try { observer(app, ex); } catch { }
+            foreach (Action<SoftwareApp, SoftwareUpdatePhase, Exception> observer in observers.GetInvocationList())
+                try { observer(app, GetState(app).Phase, ex); } catch { }
         return SetState(GetState(app) with
         {
             Phase = SoftwareUpdatePhase.Error,

@@ -4,7 +4,7 @@ using System.Windows.Input;
 
 namespace VatscaUpdateChecker;
 
-public partial class AppConfigWindow
+public partial class ControllerProfileControl
 {
     private void ProfileInfo_Open(object sender, RoutedEventArgs e)
     {

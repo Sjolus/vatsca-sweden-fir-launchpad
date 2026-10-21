@@ -1,0 +1,63 @@
+<UserControl x:Class="VatscaUpdateChecker.PreferencesWorkspaceControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Foreground="{DynamicResource PrimaryText}" FontSize="{DynamicResource TextSize12}">
+    <UserControl.Resources>
+        <Style x:Key="PreferenceChoice" TargetType="CheckBox">
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
+            <Setter Property="Margin" Value="0,0,0,9"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style x:Key="PreferenceAction" TargetType="Button" BasedOn="{StaticResource ThemedButton}">
+            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="MinHeight" Value="28"/>
+            <Setter Property="Margin" Value="0,0,6,6"/>
+        </Style>
+    </UserControl.Resources>
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+    <StackPanel x:Name="PreferenceContent" Margin="0,0,5,0">
+        <TextBlock Text="Preferences" FontSize="{DynamicResource TextSize16}" FontWeight="SemiBold" Margin="0,0,0,12"/>
+        <CheckBox x:Name="CheckOnStartupChoice" Style="{StaticResource PreferenceChoice}" Click="Preference_Click"
+                  ToolTip="Checks for new versions. Downloads and installations still need your approval.">
+            <TextBlock Text="Check for updates when Launchpad opens" TextWrapping="Wrap"/>
+        </CheckBox>
+        <WrapPanel Margin="0,0,0,9">
+            <TextBlock Text="Text size" VerticalAlignment="Center" Margin="0,0,12,0"/>
+            <ComboBox x:Name="TextSizeChoice" MinWidth="155" SelectedIndex="0" SelectionChanged="TextSize_Changed"
+                      AutomationProperties.Name="Text size">
+                <ComboBoxItem Content="Standard (100%)"/>
+                <ComboBoxItem Content="Larger (125%)"/>
+                <ComboBoxItem Content="Largest (150%)"/>
+            </ComboBox>
+        </WrapPanel>
+        <CheckBox x:Name="CompactLayoutChoice" Style="{StaticResource PreferenceChoice}" Click="Preference_Click">
+            <TextBlock Text="Use compact rows" TextWrapping="Wrap"/>
+        </CheckBox>
+        <CheckBox x:Name="AlwaysOnTopChoice" Style="{StaticResource PreferenceChoice}" Click="Preference_Click">
+            <TextBlock Text="Keep Launchpad on top of other windows" TextWrapping="Wrap"/>
+        </CheckBox>
+
+        <Expander x:Name="NotUsedExpander" Header="Applications I don't use" Foreground="{DynamicResource PrimaryText}" Margin="0,4,0,12">
+            <StackPanel Margin="0,8,0,0">
+                <TextBlock Text="Hide these from Apps and update reminders. Locations, data and EuroScope plugin choices stay unchanged." TextWrapping="Wrap"
+                           Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,9"/>
+                <WrapPanel x:Name="NotUsedChoices"/>
+            </StackPanel>
+        </Expander>
+
+        <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,0,0" Padding="0,12,0,0">
+            <StackPanel>
+                <TextBlock Text="Privacy and support" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                <WrapPanel>
+                    <Button x:Name="PrivacyButton" Content="Reporting choices &amp; support ID…" Style="{StaticResource PreferenceAction}" Click="Privacy_Click"/>
+                    <Button x:Name="ReportsButton" Content="Last sent reports…" Style="{StaticResource PreferenceAction}" Click="Reports_Click"/>
+                </WrapPanel>
+            </StackPanel>
+        </Border>
+        <TextBlock x:Name="SaveStatus" TextWrapping="Wrap" Margin="0,6,0,4" Foreground="{DynamicResource SecondaryText}"
+                   AutomationProperties.Name="Preference save status" AutomationProperties.LiveSetting="Polite"/>
+        <Button x:Name="RetrySaveButton" Content="Try saving again" Style="{StaticResource PreferenceAction}" Visibility="Collapsed"
+                HorizontalAlignment="Left" Click="RetrySave_Click"/>
+    </StackPanel>
+    </ScrollViewer>
+</UserControl>

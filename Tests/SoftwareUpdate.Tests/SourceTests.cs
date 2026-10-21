@@ -196,7 +196,7 @@ public static class SourceTests
             Assert(release is { Version: "4.1.0-beta.19" }, "Published beta missing from current feed");
             Assert(await source.GetLatestFreshAsync(SoftwareApp.Vatis, true) == release, "Fresh/update feeds differ");
             Assert(await source.GetLatestFreshAsync(SoftwareApp.Vatis, false) is null, "Fresh installation silently opted into beta");
-            Assert(calls == 3, "Unexpected feed requests");
+            Assert(calls == 2, "Beta/stable catalogs should be isolated, with matching checks shared");
             foreach (string url in new[] {
                 "https://vatis.app/updates/windows/" + release!.FileName,
                 "https://vatis.app/downloads/macos/" + release.FileName,
@@ -275,10 +275,115 @@ public static class SourceTests
             using var client = Client(async (_, token) => { await Task.Delay(Timeout.Infinite, token); throw new Exception("Unreachable"); });
             client.Timeout = TimeSpan.FromMinutes(20);
             var source = new SoftwareReleaseSource(client, TimeSpan.FromMilliseconds(30));
-            await Throws<TimeoutException>(() => source.GetLatestAsync(SoftwareApp.Vacs, "2.7.0", default));
+            try { await source.GetLatestAsync(SoftwareApp.Vacs, "2.7.0", default); throw new Exception("Missing timeout"); }
+            catch (VendorRequestException ex) { Assert(ex.FailureKind == VendorFailureKind.Timeout, "Timeout misclassified"); }
             using var cancellation = new CancellationTokenSource(); cancellation.Cancel();
             await Throws<OperationCanceledException>(() => source.GetLatestAsync(SoftwareApp.Vacs, "2.7.0", cancellation.Token));
         });
+        await Run("catalog cache shares normal checks and expires after ten minutes", async () =>
+        {
+            var now = DateTimeOffset.Parse("2026-10-21T12:00:00Z");
+            int calls = 0;
+            using var client = Client((request, _) => { calls++; return Task.FromResult(Response(GitHub(Release(SoftwareApp.TrackAudio, calls == 1 ? "1.4.0" : "1.5.0")), request)); });
+            var first = new SoftwareReleaseSource(client, TimeSpan.FromSeconds(10), () => now);
+            var second = new SoftwareReleaseSource(client, TimeSpan.FromSeconds(10), () => now);
+            Assert((await first.GetLatestAsync(SoftwareApp.TrackAudio, "1.3.0", default))?.Version == "1.4.0", "Wrong initial version");
+            Assert((await second.GetLatestFreshAsync(SoftwareApp.TrackAudio, false))?.Version == "1.4.0" && calls == 1, "Repeated read bypassed cache");
+            now = now.AddMinutes(10);
+            Assert((await second.GetLatestAsync(SoftwareApp.TrackAudio, "1.3.0", default))?.Version == "1.5.0" && calls == 2, "Cache did not expire");
+        });
+        await Run("installation revalidation bypasses cached metadata and updates the next check", async () =>
+        {
+            int calls = 0;
+            using var client = Client((request, _) => { calls++; return Task.FromResult(Response(GitHub(Release(SoftwareApp.TrackAudio, calls == 1 ? "1.4.0" : "1.5.0")), request)); });
+            var source = new SoftwareReleaseSource(client);
+            Assert((await source.GetLatestAsync(SoftwareApp.TrackAudio, "1.3.0", default))?.Version == "1.4.0", "Initial version");
+            Assert((await source.RefreshLatestAsync(SoftwareApp.TrackAudio, "1.3.0", default))?.Version == "1.5.0" && calls == 2, "Preflight used stale cache");
+            Assert((await source.GetLatestAsync(SoftwareApp.TrackAudio, "1.3.0", default))?.Version == "1.5.0" && calls == 2, "Fresh metadata was discarded");
+            await source.RefreshLatestFreshAsync(SoftwareApp.TrackAudio, false);
+            Assert(calls == 3, "Fresh-install preflight used cache");
+        });
+        await Run("simultaneous checks share work and one caller can cancel its wait", async () =>
+        {
+            int calls = 0;
+            var ready = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            using var client = Client(async (request, _) => { calls++; await ready.Task; return Response(GitHub(Release(SoftwareApp.Vacs, "2.8.0")), request); });
+            var source = new SoftwareReleaseSource(client);
+            using var cancel = new CancellationTokenSource();
+            var first = source.GetLatestAsync(SoftwareApp.Vacs, "2.7.0", cancel.Token);
+            var second = new SoftwareReleaseSource(client).GetLatestFreshAsync(SoftwareApp.Vacs, false);
+            cancel.Cancel();
+            await Throws<OperationCanceledException>(() => first);
+            ready.SetResult(true);
+            Assert((await second)?.Version == "2.8.0" && calls == 1, "A cancelled waiter aborted shared work");
+        });
+        await Run("invalid catalog is not retained in the cache", async () =>
+        {
+            int calls = 0;
+            using var client = Client((request, _) => Task.FromResult(Response(++calls == 1 ? "{}" : GitHub(Release(SoftwareApp.Vacs, "2.8.0")), request)));
+            var source = new SoftwareReleaseSource(client);
+            await Throws<InvalidDataException>(() => source.GetLatestAsync(SoftwareApp.Vacs, "2.7.0", default));
+            Assert((await source.GetLatestAsync(SoftwareApp.Vacs, "2.7.0", default))?.Version == "2.8.0" && calls == 2, "Invalid metadata was cached");
+        });
+        await Run("GitHub 403 quota exhaustion cools down all GitHub clients but not vATIS", async () =>
+        {
+            var now = DateTimeOffset.Parse("2026-10-21T12:00:00Z");
+            int calls = 0;
+            using var client = Client((request, _) =>
+            {
+                calls++;
+                if (request.RequestUri!.Host == "vatis.app") return Task.FromResult(Response(Vatis(VatisAsset("4.1.0-beta.19")), request));
+                var response = new HttpResponseMessage(HttpStatusCode.Forbidden) { RequestMessage = request, Content = new StringContent("SECRET response body") };
+                response.Headers.Add("X-RateLimit-Remaining", "0");
+                response.Headers.Add("X-RateLimit-Reset", now.AddMinutes(20).ToUnixTimeSeconds().ToString());
+                return Task.FromResult(response);
+            });
+            var source = new SoftwareReleaseSource(client, TimeSpan.FromSeconds(10), () => now);
+            var error = await Failure(() => source.GetLatestAsync(SoftwareApp.Vacs, "2.7.0", default));
+            Assert(error.Vendor == VendorService.GitHub && error.FailureKind == VendorFailureKind.RateLimited && error.StatusCode == HttpStatusCode.Forbidden && error.RetryAtUtc == now.AddMinutes(20), "Lost typed quota failure");
+            Assert(!error.ToString().Contains("SECRET"), "Server text escaped into diagnostics");
+            await Failure(() => source.GetLatestAsync(SoftwareApp.TrackAudio, "1.3.0", default));
+            await Failure(() => source.RefreshLatestFreshAsync(SoftwareApp.VatEfs, false));
+            Assert(calls == 1, "Cooldown made another API request");
+            Assert((await source.GetLatestAsync(SoftwareApp.Vatis, "4.1.0-beta.18", default)) is not null && calls == 2, "GitHub cooldown blocked vATIS");
+            now = now.AddMinutes(21);
+            await Failure(() => source.GetLatestAsync(SoftwareApp.Vacs, "2.7.0", default));
+            Assert(calls == 3, "Cooldown did not expire");
+        });
+        await Run("plain forbidden is not called rate limiting and can be retried", async () =>
+        {
+            int calls = 0;
+            using var client = Client((request, _) => { calls++; return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Forbidden) { RequestMessage = request, ReasonPhrase = "SECRET" }); });
+            var source = new SoftwareReleaseSource(client);
+            var error = await Failure(() => source.GetLatestAsync(SoftwareApp.TrackAudio, "1.3.0", default));
+            Assert(error.FailureKind == VendorFailureKind.Forbidden && error.RetryAtUtc is null && !error.Message.Contains("SECRET"), "Ordinary forbidden misclassified");
+            await Failure(() => source.GetLatestAsync(SoftwareApp.TrackAudio, "1.3.0", default));
+            Assert(calls == 2, "An unrelated forbidden response created a quota lockout");
+        });
+        await Run("provider retry headers are respected and bounded", () =>
+        {
+            var now = DateTimeOffset.Parse("2026-10-21T12:00:00Z");
+            using var response = new HttpResponseMessage(HttpStatusCode.TooManyRequests);
+            response.Headers.RetryAfter = new System.Net.Http.Headers.RetryConditionHeaderValue(TimeSpan.FromMinutes(2));
+            Assert(VendorRequestException.FromResponse(response, VendorService.Vatis, now).RetryAtUtc == now.AddMinutes(2), "Retry-After ignored");
+            response.Headers.RetryAfter = new System.Net.Http.Headers.RetryConditionHeaderValue(now.AddDays(2));
+            Assert(VendorRequestException.FromResponse(response, VendorService.GitHub, now).RetryAtUtc == now.AddDays(1), "Unbounded cooldown");
+            response.Headers.RetryAfter = new System.Net.Http.Headers.RetryConditionHeaderValue(now.AddSeconds(-1));
+            Assert(VendorRequestException.FromResponse(response, VendorService.GitHub, now).RetryAtUtc == now.AddSeconds(1), "Expired header caused hot retries");
+            return Task.CompletedTask;
+        });
+        await Run("transport exception text is never copied into vendor diagnostics", async () =>
+        {
+            using var client = Client((_, _) => throw new HttpRequestException("SECRET local credential and path"));
+            var error = await Failure(() => new SoftwareReleaseSource(client).GetLatestAsync(SoftwareApp.TrackAudio, "1.3.0", default));
+            Assert(error.FailureKind == VendorFailureKind.Unavailable && !error.ToString().Contains("SECRET"), "Unsafe transport diagnostics");
+        });
+    }
+
+    private static async Task<VendorRequestException> Failure(Func<Task> action)
+    {
+        try { await action(); } catch (VendorRequestException error) { return error; }
+        throw new Exception("Expected a typed vendor failure");
     }
 
     private static Dictionary<string, object?> Release(SoftwareApp app, string version, bool draft = false, bool prerelease = false, string? tag = null)

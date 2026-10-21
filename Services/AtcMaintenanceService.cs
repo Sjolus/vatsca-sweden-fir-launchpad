@@ -19,6 +19,7 @@ public sealed record AtcMaintenancePlan(
 public sealed class AtcMaintenanceService
 {
     public bool ActivityHistoryReset { get; private set; }
+    public bool ControllerProfileReset { get; private set; }
     private readonly AtcRemovalCatalog _catalog;
     private readonly AtcRemovalVendor _vendors;
     private readonly AtcRemovalEnvironment _environment;
@@ -128,6 +129,7 @@ public sealed class AtcMaintenanceService
     public async Task<string?> ApplyAsync(AtcMaintenancePlan plan, IProgress<string>? progress, CancellationToken cancellationToken)
     {
         ActivityHistoryReset = false;
+        ControllerProfileReset = false;
         RequireNoRestart();
         LastBackupFolder = null;
         ValidateConfiguredPaths(plan.Selections, plan.DirectRemovalFiles.Roots, plan.BackupDestination);
@@ -184,12 +186,15 @@ public sealed class AtcMaintenanceService
             // merely to report the reset, but preserve failures that happened before reset.
             ActivityHistoryReset = plan.LaunchpadData.Settings &&
                 !File.Exists(Path.Combine(_environment.LocalAppData, "VatscaUpdateChecker", "Activity", "history.json"));
+            ControllerProfileReset = plan.LaunchpadData.Settings &&
+                !File.Exists(Path.Combine(_environment.RoamingAppData, "VatscaUpdateChecker", "settings.json"));
         }
         if (!deleted.Succeeded)
             throw new IOException("Removal stopped. " + string.Join("; ", deleted.Errors.Select(e => e.Path + ": " + e.Message)));
         if (plan.LaunchpadData.Credentials)
         {
             _deleteCredential(CredentialManagerService.TargetVatsim);
+            ControllerProfileReset = true;
             _deleteCredential(CredentialManagerService.TargetHoppie);
         }
         progress?.Report("Selected removal completed. " + (backup == null ? "No recovery export was requested." : "Recovery export: " + backup));
@@ -342,6 +347,7 @@ public sealed class AtcMaintenanceService
         {
             roots.Add(Path.Combine(software, "Backups"));
             roots.Add(Path.Combine(software, "VatEfsRecovery"));
+            roots.Add(Path.Combine(_environment.LocalAppData, "VatscaUpdateChecker", "VatEfs", "ProfileRecovery"));
             roots.Add(Path.Combine(gng, "Installations"));
             roots.Add(Path.Combine(_environment.LocalAppData, "VatscaUpdateChecker", "CleanupBackups"));
         }

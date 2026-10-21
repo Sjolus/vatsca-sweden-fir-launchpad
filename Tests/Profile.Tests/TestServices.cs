@@ -17,3 +17,13 @@ internal static class Logger
     public static List<string> Messages { get; } = new();
     public static void Log(string category, string message) => Messages.Add(category + ": " + message);
 }
+
+internal static class MaintenanceLock
+{
+    public static bool IsHeldByCurrentProcess => throw new Exception("Tests must inject the maintenance guard.");
+}
+
+internal static class GngUpdateService
+{
+    public static void RequireNoPendingUpdate(string path) => throw new Exception("Tests must inject the recovery guard.");
+}

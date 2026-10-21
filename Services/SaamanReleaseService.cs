@@ -2,6 +2,7 @@ using System.Globalization;
 using System.IO;
 using System.Net;
 using System.Net.Http;
+using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text.Json;
 using VatscaUpdateChecker.Models;
@@ -15,21 +16,84 @@ public sealed class SaamanReleaseService
     public const long MaximumDllSize = 64L * 1024 * 1024;
     private static readonly string[] RequiredAssets = ["SAAMAN.dll", "LICENSE.txt", "THIRD-PARTY-NOTICES.txt", "SHA256SUMS.txt"];
     private static readonly HttpClient SharedClient = new(new HttpClientHandler { AllowAutoRedirect = false });
+    private static readonly ConditionalWeakTable<HttpClient, CatalogCache> Caches = new();
+    private static readonly TimeSpan CatalogLifetime = TimeSpan.FromMinutes(10);
     private readonly HttpClient _client;
+    private readonly CatalogCache _cache;
+    private readonly Func<DateTimeOffset> _utcNow;
     public SaamanReleaseService() : this(SharedClient) { }
-    public SaamanReleaseService(HttpClient client) => _client = client;
+    public SaamanReleaseService(HttpClient client) : this(client, () => DateTimeOffset.UtcNow) { }
+    internal SaamanReleaseService(HttpClient client, Func<DateTimeOffset> utcNow)
+    {
+        _client = client;
+        _cache = Caches.GetValue(client, _ => new CatalogCache());
+        _utcNow = utcNow;
+    }
 
     public async Task<SaamanRelease?> GetLatestAsync(CancellationToken cancellationToken = default)
     {
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(TimeSpan.FromSeconds(45));
+        cancellationToken.ThrowIfCancellationRequested();
+        Task<SaamanRelease?> pending;
+        TaskCompletionSource<SaamanRelease?>? start = null;
+        lock (_cache)
+        {
+            DateTimeOffset now = _utcNow();
+            if (_cache.HasValue && now < _cache.ExpiresAt) return _cache.Release;
+            if (_cache.RetryAt is { } retryAt && now < retryAt)
+                throw RateLimited(retryAt);
+            if (_cache.InFlight is null)
+            {
+                start = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                _cache.InFlight = start.Task;
+            }
+            pending = _cache.InFlight;
+        }
+        if (start is not null) _ = PopulateCacheAsync(start);
+        // Cancelling one dialog must not cancel a check shared with another caller.
+        return await pending.WaitAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task PopulateCacheAsync(TaskCompletionSource<SaamanRelease?> completion)
+    {
+        try
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(45));
+            var release = await FetchLatestAsync(timeout.Token).ConfigureAwait(false);
+            lock (_cache)
+            {
+                _cache.Release = release;
+                _cache.HasValue = true;
+                _cache.ExpiresAt = _utcNow() + CatalogLifetime;
+                _cache.RetryAt = null;
+                _cache.InFlight = null;
+                completion.TrySetResult(release);
+            }
+        }
+        catch (Exception ex)
+        {
+            var failure = ex is OperationCanceledException
+                ? new SaamanReleaseUnavailableException("The SAAMAN release check timed out. Your selected DLL and profile settings are unchanged.", failureKind: VendorFailureKind.Timeout)
+                : ex;
+            lock (_cache)
+            {
+                if (ex is SaamanReleaseUnavailableException { RetryAtUtc: { } retryAt }) _cache.RetryAt = retryAt;
+                _cache.InFlight = null;
+                completion.TrySetException(failure);
+            }
+            // A caller may already have cancelled its wait; observe the shared failure as well.
+            _ = completion.Task.Exception;
+        }
+    }
+
+    private async Task<SaamanRelease?> FetchLatestAsync(CancellationToken cancellationToken)
+    {
         JsonElement? selected = null;
         SoftwareVersion? highest = null;
         for (int page = 1; page <= 5; page++)
         {
-            using var response = await SendAsync(new Uri($"https://api.github.com/repos/Kaskobiii/SAAMAN/releases?per_page=100&page={page}"), false, timeout.Token).ConfigureAwait(false);
-            using var body = await ReadBoundedAsync(response, 8 * 1024 * 1024, timeout.Token).ConfigureAwait(false);
-            using var document = await JsonDocument.ParseAsync(body, cancellationToken: timeout.Token).ConfigureAwait(false);
+            using var response = await SendAsync(new Uri($"https://api.github.com/repos/Kaskobiii/SAAMAN/releases?per_page=100&page={page}"), false, cancellationToken).ConfigureAwait(false);
+            using var body = await ReadBoundedAsync(response, 8 * 1024 * 1024, cancellationToken).ConfigureAwait(false);
+            using var document = await JsonDocument.ParseAsync(body, cancellationToken: cancellationToken).ConfigureAwait(false);
             if (document.RootElement.ValueKind != JsonValueKind.Array) throw Invalid("Invalid release catalog.");
             foreach (var release in document.RootElement.EnumerateArray())
             {
@@ -117,7 +181,10 @@ public sealed class SaamanReleaseService
             using var request = new HttpRequestMessage(HttpMethod.Get, uri);
             request.Headers.UserAgent.ParseAdd("VATSCA-Launchpad/2.5");
             request.Headers.Accept.ParseAdd(assets ? "application/octet-stream" : "application/vnd.github+json");
-            var response = await _client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+            HttpResponseMessage response;
+            try { response = await _client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false); }
+            catch (HttpRequestException)
+            { throw new SaamanReleaseUnavailableException("GitHub could not be reached. Try again later. Your selected DLL and profile settings are unchanged."); }
             // Injected clients must also disable automatic redirects.
             if (response.RequestMessage?.RequestUri is { } actual && actual != uri)
             { response.Dispose(); throw Invalid("Automatic HTTP redirects are not allowed."); }
@@ -131,10 +198,36 @@ public sealed class SaamanReleaseService
                     throw Invalid("The release redirected outside GitHub's asset hosts.");
                 continue;
             }
-            try { response.EnsureSuccessStatusCode(); return response; }
-            catch { response.Dispose(); throw; }
+            if (response.IsSuccessStatusCode) return response;
+            var failure = ResponseFailure(response);
+            response.Dispose();
+            throw failure;
         }
         throw Invalid("Too many release redirects.");
+    }
+
+    private SaamanReleaseUnavailableException ResponseFailure(HttpResponseMessage response)
+    {
+        var diagnostic = VendorRequestException.FromResponse(response, VendorService.GitHub, _utcNow());
+        if (diagnostic.FailureKind != VendorFailureKind.RateLimited)
+            return new(diagnostic.FailureKind == VendorFailureKind.Forbidden
+                ? "GitHub refused the SAAMAN release request. Try again later or open the release page. Your selected DLL and profile settings are unchanged."
+                : "The SAAMAN release service is unavailable. Try again later. Your selected DLL and profile settings are unchanged.",
+                failureKind: diagnostic.FailureKind, statusCode: diagnostic.StatusCode);
+        return RateLimited(diagnostic.RetryAtUtc!.Value, diagnostic.StatusCode);
+    }
+
+    private static SaamanReleaseUnavailableException RateLimited(DateTimeOffset retryAt, HttpStatusCode? statusCode = null) =>
+        new($"GitHub is temporarily limiting release checks. Try again after {retryAt.ToLocalTime():HH:mm}. Your selected DLL and profile settings are unchanged.",
+            retryAt, VendorFailureKind.RateLimited, statusCode);
+
+    private sealed class CatalogCache
+    {
+        internal SaamanRelease? Release;
+        internal bool HasValue;
+        internal DateTimeOffset ExpiresAt;
+        internal DateTimeOffset? RetryAt;
+        internal Task<SaamanRelease?>? InFlight;
     }
 
     private static async Task<MemoryStream> ReadBoundedAsync(HttpResponseMessage response, int maximum, CancellationToken token)
@@ -160,3 +253,8 @@ public sealed class SaamanReleaseService
             ? value.GetBoolean() : throw Invalid("Incomplete release publication status.");
     private static InvalidDataException Invalid(string message) => new(message);
 }
+
+public sealed class SaamanReleaseUnavailableException(string message, DateTimeOffset? retryAtUtc = null,
+    VendorFailureKind failureKind = VendorFailureKind.Unavailable, HttpStatusCode? statusCode = null)
+    : VendorRequestException(VendorService.GitHub, retryAtUtc.HasValue ? VendorFailureKind.RateLimited : failureKind,
+        statusCode, retryAtUtc, message);

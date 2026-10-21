@@ -9,5 +9,6 @@
     <Compile Include="..\..\Models\AppSettings.cs" Link="AppSettings.cs" />
     <Compile Include="..\..\Models\ApplicationPreferences.cs" Link="ApplicationPreferences.cs" />
     <Compile Include="..\..\Models\SetupWizardState.cs" Link="SetupWizardState.cs" />
+    <Compile Include="..\..\Models\SetupGuide.cs" Link="SetupGuide.cs" />
   </ItemGroup>
 </Project>

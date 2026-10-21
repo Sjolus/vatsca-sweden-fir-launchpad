@@ -10,6 +10,26 @@ namespace VatscaUpdateChecker;
 
 internal static partial class LayoutSnapshots
 {
+    internal static void CapturePreviouslySelectedChild(string outputDirectory)
+    {
+        Directory.CreateDirectory(outputDirectory);
+        UiFixture.Blank = UiFixture.Minimum = false;
+        UiFixture.SetTextScale(1);
+        foreach (bool dark in new[] { false, true })
+        {
+            if (UiFixture.Dark != dark) UiFixture.ToggleTheme();
+            var window = new MainWindow { Tag = "Compact" };
+            try
+            {
+                var list = (ItemsControl)window.FindName("AppList");
+                var row = list.Items.Cast<CheckResult>().Single(item => item.SoftwareApp == SoftwareApp.VatEfs);
+                row.IsSelected = true;
+                Save(window, Path.Combine(outputDirectory, $"{(dark ? "dark" : "light")}-apps-vatefs-previously-selected.png"));
+            }
+            finally { window.Close(); }
+        }
+    }
+
     internal static void CaptureApplicationControls(string outputDirectory)
     {
         Directory.CreateDirectory(outputDirectory);
@@ -28,7 +48,6 @@ internal static partial class LayoutSnapshots
                 var window = new MainWindow { Tag = density };
                 try
                 {
-                    window.RefreshSyntheticDetailsLayout();
                     UiFixture.SetRunningScenario(window, RunningFixtureState.Mixed);
                     ((TextBlock)window.FindName("ApplicationsSummary")).Text = "Applications · 2 updates · 1 to review";
                     Save(window, Path.Combine(outputDirectory, $"{(dark ? "dark" : "light")}-controls-{density.ToLowerInvariant()}-{scale * 100:0}-{(minimum ? "minimum" : "default")}.png"));
@@ -60,7 +79,6 @@ internal static partial class LayoutSnapshots
             var window = new MainWindow { Width = width, Height = 550, Tag = compact ? "Compact" : "Comfortable" };
             try
             {
-                window.RefreshSyntheticDetailsLayout();
                 LayoutValidation.CheckWindowContent(window);
                 Save(window, Path.Combine(outputDirectory, $"{(dark ? "dark" : "light")}-{(compact ? "compact" : "expanded")}-{width}.png"));
                 if (compact && width == 880)
@@ -70,14 +88,14 @@ internal static partial class LayoutSnapshots
                     row.SoftwareUpdate = new(SoftwareApp.TrackAudio, SoftwareUpdatePhase.Unavailable,
                         "Synthetic example: the executable version and Windows registration disagree. Repair using the official installer before updating through Launchpad.");
                     row.StatusMessage = row.SoftwareUpdate.Message;
-                    window.SelectSyntheticDetails(row);
+                    window.FocusSyntheticRow(row);
                     LayoutValidation.CheckWindowContent(window);
                     Save(window, Path.Combine(outputDirectory, $"{(dark ? "dark" : "light")}-compact-review-880.png"));
                 }
                 if (compact)
                 {
                     var list = (ItemsControl)window.FindName("AppList");
-                    window.SelectSyntheticDetails(list.Items.Cast<CheckResult>().Single(item => item.HasFontsCheck));
+                    window.FocusSyntheticRow(list.Items.Cast<CheckResult>().Single(item => item.HasFontsCheck));
                     LayoutValidation.CheckWindowContent(window);
                     Save(window, Path.Combine(outputDirectory, $"{(dark ? "dark" : "light")}-compact-gng-{width}.png"));
                 }
@@ -184,10 +202,9 @@ internal static partial class LayoutSnapshots
             var main = new MainWindow { Tag = "Compact" };
             try
             {
-                main.RefreshSyntheticDetailsLayout();
                 Snapshot(main, "main-compact");
-                ((Button)main.FindName("DetailsSizeButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                Snapshot(main, "main-details-expanded");
+                main.Tag = "Comfortable";
+                Snapshot(main, "main-expanded");
             }
             finally { main.Close(); }
 

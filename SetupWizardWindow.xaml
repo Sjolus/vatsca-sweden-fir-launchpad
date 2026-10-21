@@ -179,7 +179,7 @@
                             <TextBlock Text="{x:Static models:ApplicationDescriptions.Saaman}" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,4,0,0"/>
                             <TextBlock x:Name="SaamanPathText" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,4,0,8"/>
                             <Button x:Name="SaamanButton" Content="Set up / update SAAMAN…" Click="Saaman_Click" HorizontalAlignment="Left" Padding="10,6"/>
-                            <TextBlock Text="Then enable SAAMAN in Controller profile below. It replaces MAESTRO in APP/ACC only, and goes first in the plugin list."
+                            <TextBlock Text="Turn on Use in APP / ACC under Setup → Applications. SAAMAN replaces MAESTRO in that profile and goes first in its plugin list."
                                        TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,8,0,0"/>
                         </StackPanel>
                     </Border>

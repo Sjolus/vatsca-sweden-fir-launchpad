@@ -28,6 +28,10 @@ internal static class WireFixture
         foreach (var value in Enum.GetValues<ReportingStage>()) usage.Add(Event() with { Stage = value });
         foreach (var value in Enum.GetValues<ReportingDurationBucket>()) usage.Add(Event() with { DurationBucket = value });
         foreach (var value in Enum.GetValues<ReportingSource>()) usage.Add(Event() with { Source = value });
+        foreach (var value in Enum.GetValues<ReportingReason>()) usage.Add(Event() with { Reason = value });
+        foreach (var value in Enum.GetValues<ReportingView>()) usage.Add(Event() with { EventName = ReportingEventName.ViewOpened, View = value });
+        foreach (var value in Enum.GetValues<ReportingRemoteService>()) errors.Add(Event() with
+        { EventName = ReportingEventName.OperationFailed, ErrorCode = ReportingErrorCode.RateLimited, Reason = ReportingReason.RateLimited, Service = value, HttpStatus = 403 });
         foreach (var value in Enum.GetValues<ReportingErrorCode>()) errors.Add(Event() with { EventName = ReportingEventName.OperationFailed, ErrorCode = value });
         var inventory = Enum.GetValues<ReportingInventoryStatus>().Select(status => new ReportingEvent(Guid.NewGuid(), support, session,
             now, "2.2.0", ReportingEventName.InventorySnapshot, Items: InventoryTests.Items().Select(item => item with

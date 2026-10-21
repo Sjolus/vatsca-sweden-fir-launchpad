@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.6.0] — 2026-10-21
+
+- Bring application locations, GNG, controller details and preferences together under Setup. Move Activity & recovery out of the main toolbar and place help beside the window controls.
+- Guide first-time setup in that same view, with next steps and saved progress across restarts. Switching tabs no longer marks setup complete, and startup update checks wait until the guide is finished or dismissed.
+- Enable or disable VatEFS and SAAMAN from Setup → Applications. SAAMAN installs its DLL when needed and restores MAESTRO when switched off, without a separate settings dialog. Controller details save independently of plugin choices.
+- Hide unused applications from Apps. Group GNG, VatEFS and SAAMAN beneath EuroScope.
+- Keep existing locations selected when finding installed applications. Review only the paths being changed.
+- Change an enabled SAAMAN DLL's location and update its profile reference in one place, without an online release check. Keep its plugin order and MAESTRO restoration information.
+- Use saved controller details for supported vATIS and TrackAudio installations. Add the Swedish vATIS profile when needed, preserving existing profiles and audio settings.
+- Reuse recent release checks and respect service retry times. Explain rate limits separately from access failures and connection problems.
+- Add setup and maintenance outcomes, screen visits and inventory freshness to the maintainer dashboard. Include the service and HTTP status in optional error reports and the local sent-report viewer.
+
 ## [2.5.2] — 2026-10-21
 
 - Fix unreadable dark-mode text under **What is sent?** in the Privacy and support dialog. (#20)

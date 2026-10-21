@@ -71,6 +71,7 @@ public partial class MainWindow : Window
         _softwareUpdates = new SoftwareUpdateService(new SoftwareReleaseSource(_softwareHttp), new SoftwareInstaller(), _softwareHttp);
         _softwareUpdates.StateChanged += SoftwareUpdate_StateChanged;
         _softwareUpdates.FailureObserved += ReportSoftwareFailure;
+        UpdateChecker.FailureObserved += ReportPublicCheckFailure;
         _launchpadUpdates = new LaunchpadUpdateService();
         _launchpadUpdates.StateChanged += LaunchpadUpdate_StateChanged;
         _launchpadUpdates.FailureObserved += ReportSelfUpdateFailure;
@@ -78,15 +79,15 @@ public partial class MainWindow : Window
 
         ApplyLaunchPaths();
         RefreshEuroscopeProfiles();
-        AppList.ItemsSource = _results;
+        PresentApplicationRows(_results);
 
-        InitializeApplicationDetails();
         InitializePresentation();
         InitializeActivityHistory();
 
         _processTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
         _processTimer.Tick += (_, _) => UpdateRunningStates();
         _processTimer.Start();
+        InitializeWorkspaces();
     }
 
     private void RefreshEuroscopeProfiles()
@@ -185,24 +186,35 @@ public partial class MainWindow : Window
     private async void Window_Loaded(object sender, RoutedEventArgs e)
     {
         RestorePresentationPlacement();
+        if (SetupGuide.Initialize(_settings, _firstSetup)) SaveSessionSettings("Getting started. Your progress is saved as you go.");
         OfferReportingChoices();
-        ReportPresentationPreferences();
-        if (_firstSetup && !_settings.SetupWizardCompleted && !_settings.SetupWizardDismissed)
-            await OpenSetupWizard();
         if (_windowClosed) return;
+        ReportPresentationPreferences();
+        if (_settings.SetupGuideActive)
+        {
+            SetupWorkspace.ShowSection(SetupGuide.Section(_settings));
+            ShowWorkspace("Setup");
+        }
+        if (_windowClosed) return;
+        ReportWorkspaceView();
         UpdateRunningStates();
         UpdateAppConfigButton();
-        if (_settings.CheckOnStartup && !_setupRestartRequired)
+        if (_settings.CheckOnStartup && !_setupRestartRequired && !_settings.SetupGuideActive)
             await RunChecks();
     }
 
     private void UpdateAppConfigButton()
     {
-        bool needsAttention = !ProfileService.IsConfigured(_settings) ||
+        bool needsAttention = _controllerApplyNeedsAttention || !ProfileService.IsConfigured(_settings) ||
             !ProfileService.IsInSync(_settings, _settings.EuroscopeDataPath);
+        bool showAttention = _controllerApplyNeedsAttention || needsAttention && !_settings.SetupGuideActive;
 
-        AppConfigButton.Content = needsAttention ? "Controller profile · review" : "Controller profile";
-        AppConfigButton.ToolTip = needsAttention
+        AppConfigButton.Content = showAttention ? "Controller profile · review" : "Controller profile";
+        _controllerProfileNeedsReview = needsAttention;
+        SetupTab.Content = showAttention ? "Setup · !" : "Setup";
+        SetupTab.ToolTip = showAttention ? "Review controller profile choices in Setup" : "Your saved applications, GNG package and EuroScope configuration";
+        RefreshWorkspace();
+        AppConfigButton.ToolTip = showAttention
             ? "Review your controller identity and application configuration."
             : "Your identity and optional EuroScope profile configuration";
     }
@@ -217,7 +229,7 @@ public partial class MainWindow : Window
 
         // Force row backgrounds to re-evaluate via the converter
         AppList.ItemsSource = null;
-        AppList.ItemsSource = _results;
+        PresentApplicationRows(_results);
 
         _settings.IsDarkMode = _isDarkMode;
         SaveSessionSettings("Theme preference saved.");
@@ -282,19 +294,11 @@ public partial class MainWindow : Window
 
     private void AppConfig_Click(object sender, RoutedEventArgs e)
     {
-        if (_setupRestartRequired || _isChecking || _softwareActionBusy || _softwareUpdates.IsBusy) return;
-        if (!TryAcquireMaintenanceGuard(out var lease)) return;
-        using var guard = lease;
-        var win = new AppConfigWindow(_settings, _settings.EuroscopeDataPath) { Owner = this };
-        if (ShowOwnedDialog(win) == true)
-        {
-            _settings            = win.Settings;
-            _settings.IsDarkMode = _isDarkMode;
-            SaveSessionSettings("Controller profile choices saved.");
-            UpdateAppConfigButton();
-        }
+        if (_windowClosed || _openDialogCount > 0) return;
+        SetupWorkspace.ShowSection("Profile");
+        ShowWorkspace("Setup");
+        RefreshControllerProfileWorkspace();
     }
-
     private async Task CheckLaunchpadAsync()
     {
         // A normal check only discovers updates. Download and restart are separate user actions.
@@ -458,6 +462,8 @@ public partial class MainWindow : Window
         try
         {
             window.Owner = this;
+            if (window is SettingsWindow) ReportView(ReportingView.Preferences);
+            else if (window is AppConfigWindow) ReportView(ReportingView.ControllerProfile);
             return window.ShowDialog();
         }
         finally
@@ -468,6 +474,8 @@ public partial class MainWindow : Window
                 UpdateSelfUpdateActionEnabled();
                 _lastPresentationReport = null;
                 ReportPresentationPreferences();
+                RefreshWorkspace();
+                ReportWorkspaceView();
             }
         }
     }
@@ -480,14 +488,24 @@ public partial class MainWindow : Window
         _launchpadUpdates.FailureObserved -= ReportSelfUpdateFailure;
         _softwareUpdates.StateChanged -= SoftwareUpdate_StateChanged;
         _softwareUpdates.FailureObserved -= ReportSoftwareFailure;
+        UpdateChecker.FailureObserved -= ReportPublicCheckFailure;
         _windowLifetime.Cancel();
         _windowLifetime.Dispose();
         _softwareHttp.Dispose();
         base.OnClosed(e);
     }
 
-    private void Settings_Click(object sender, RoutedEventArgs e) => OpenSettings();
-    private void DiscoverInstallations_Click(object sender, RoutedEventArgs e) => OpenSettings(discover: true);
+    private void Settings_Click(object sender, RoutedEventArgs e)
+    {
+        SetupWorkspace.ShowSection("Preferences");
+        ShowWorkspace("Setup");
+    }
+    private async void DiscoverInstallations_Click(object sender, RoutedEventArgs e)
+    {
+        if (!CanRunSoftwareAction()) return;
+        ShowWorkspace("Setup");
+        await DiscoverWorkspaceLocations();
+    }
 
     private void OpenSettings(bool discover = false)
     {
@@ -497,6 +515,7 @@ public partial class MainWindow : Window
         var win = new SettingsWindow(_settings, discoverOnLoad: discover) { Owner = this };
         if (ShowOwnedDialog(win) == true)
         {
+            var previous = _settings;
             _settings            = win.Settings;
             _settings.IsDarkMode = _isDarkMode;
             SaveSessionSettings("Settings saved.");
@@ -505,11 +524,12 @@ public partial class MainWindow : Window
             RefreshEuroscopeProfiles();
             UpdateRunningStates();
             UpdateAppConfigButton();
-            ResetSoftwareChecks();
+            ResetChangedSoftwareChecks(previous);
+            RefreshWorkspace();
         }
     }
 
-    private void SaveSessionSettings(string successMessage)
+    private bool SaveSessionSettings(string successMessage)
     {
         bool saved = SettingsService.TrySave(_settings);
         ReportPresentationPreferences();
@@ -517,7 +537,10 @@ public partial class MainWindow : Window
             new ReportingDetails { Application = ReportingApplication.Launchpad, Operation = ReportingOperation.Save });
         LastCheckedText.Text = saved
             ? successMessage
-            : "Your Launchpad choices are kept for this session, but could not be saved. Open Settings and try saving again. Completed profile or application changes have not been undone.";
+            : "Your Launchpad choices are kept for this session, but could not be saved. Try saving again in Setup → Preferences. Completed profile or application changes have not been undone.";
+        _preferencesWorkspace?.SetSaveResult(saved);
+        RefreshWorkspace();
+        return saved;
     }
 
     private void Launch_Click(object sender, RoutedEventArgs e)
@@ -621,7 +644,7 @@ public partial class MainWindow : Window
         {
             case FontsState.Unknown:
                 MessageBox.Show(
-                    "Set the EuroScope data folder in Settings to enable font checking.",
+                    "Set the EuroScope data folder in Setup → Swedish GNG to enable font checking.",
                     "Fonts", MessageBoxButton.OK, MessageBoxImage.Information);
                 break;
             case FontsState.AllOk:

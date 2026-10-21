@@ -115,7 +115,8 @@ foreach (var test in tests)
     Console.WriteLine("PASS profile: " + test.Name);
 }
 var saamanCount = SaamanProfileTests.Run();
-Console.WriteLine($"{tests.Length + saamanCount} profile checks passed. Synthetic temporary files only; no real credentials, settings, registry, apps or network.");
+var vatEfsCount = VatEfsProfileTests.Run();
+Console.WriteLine($"{tests.Length + saamanCount + vatEfsCount} profile checks passed. Synthetic temporary files only; no real credentials, settings, registry, apps or network.");
 
 static void Check(bool condition, string message) { if (!condition) throw new Exception(message); }
 static void RejectUnavailable(string path)

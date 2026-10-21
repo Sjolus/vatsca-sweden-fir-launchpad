@@ -1,6 +1,5 @@
 using System.IO;
 using System.Windows;
-using Microsoft.Win32;
 using VatscaUpdateChecker.Services;
 
 namespace VatscaUpdateChecker;
@@ -18,16 +17,9 @@ public partial class MainWindow
             var root = _settings.EuroscopeDataPath;
             if (string.IsNullOrWhiteSpace(root))
             {
-                // Choosing a folder is tentative. Only a completed installation adopts it.
-                var defaultRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "EuroScope");
-                var picker = new OpenFolderDialog
-                {
-                    Title = "Choose the EuroScope data folder for the Swedish GNG package",
-                    InitialDirectory = Directory.Exists(defaultRoot) ? defaultRoot : Path.GetDirectoryName(defaultRoot)!,
-                    Multiselect = false
-                };
-                if (picker.ShowDialog(this) != true) return;
-                root = picker.FolderName;
+                // This explicit setup action may prepare the standard folder. Only a
+                // completed installation adopts it; existing selected folders are kept.
+                root = GngSetupDestination.PrepareDefault();
             }
 
             // Installation/recovery acquire their own shared lease. Keeping a lease while
@@ -54,7 +46,7 @@ public partial class MainWindow
                 await UpdateChecker.CheckGng(_results[1], _settings.EuroscopeDataPath);
             }
             LastCheckedText.Text = !saved
-                ? "GNG was installed, but its folder could not be saved. Open App settings and save the EuroScope data folder before reopening Launchpad."
+                ? "GNG was installed, but its folder could not be saved. Open Setup → Swedish GNG and save the EuroScope data folder before reopening Launchpad."
                 : _setupRestartRequired
                     ? "Restart Windows before further installation, removal or profile changes."
                     : window.InstallationCompleted

@@ -128,7 +128,7 @@ public static partial class GngUpdateService
                     ? "SAAMAN remains the first plugin in " + target + "; MAESTRO profile entries are removed. Plugin binaries are not deleted."
                     : "SAAMAN entries are removed from " + target + "; any MAESTRO entries replaced by Launchpad are restored. Other plugin changes are kept.");
             else if (!File.Exists(saamanPolicy.ProfilePath))
-                throw new InvalidOperationException("The selected SAAMAN APP/ACC profile is missing from both this folder and the GNG package. Review the selected profile in Manage SAAMAN.");
+                throw new InvalidOperationException("The selected SAAMAN APP/ACC profile is missing from both this folder and the GNG package. Restore that profile, or turn off Use in APP / ACC for SAAMAN under Setup → Applications.");
             else
                 warnings.Add("The selected SAAMAN APP/ACC profile is not supplied by this package. It remains unchanged: " + target);
         }

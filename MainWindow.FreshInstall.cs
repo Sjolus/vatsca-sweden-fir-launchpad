@@ -7,6 +7,15 @@ namespace VatscaUpdateChecker;
 
 public partial class MainWindow
 {
+    private void SoftwareLocation_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: CheckResult row } || !CanRunSoftwareAction()) return;
+        if (row.SoftwareNeedsSetup) { SoftwareInstall_Click(sender, e); return; }
+        SetupWorkspace.ShowSection("Applications");
+        ShowWorkspace("Setup");
+        SetupWorkspace.ShowNotice("Choose Location beside " + row.DisplayName + " to select a different copy.");
+    }
+
     private void SoftwareInstall_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not FrameworkElement { DataContext: CheckResult { SoftwareApp: { } app } } ||
@@ -25,6 +34,7 @@ public partial class MainWindow
                 remove = window.RemovalRequested && !_setupRestartRequired;
                 if (window.Result is { } result)
                 {
+                    var previous = _settings.Copy();
                     switch (app)
                     {
                         case SoftwareApp.Vacs: _settings.VacsExePath = result.ExecutablePath; break;
@@ -32,15 +42,35 @@ public partial class MainWindow
                         case SoftwareApp.TrackAudio: _settings.TrackAudioExePath = result.ExecutablePath; break;
                         case SoftwareApp.VatEfs: _settings.VatEfsPath = Path.GetDirectoryName(result.ExecutablePath)!; break;
                     }
+                    if (app != SoftwareApp.VatEfs)
+                        ApplicationPreferences.SetNotUsed(_settings, app switch
+                        { SoftwareApp.Vacs => "VACS", SoftwareApp.Vatis => "vATIS", _ => "TrackAudio" }, false);
                     try
                     {
                         SettingsService.Save(_settings);
                         string name = app switch { SoftwareApp.Vacs => "VACS", SoftwareApp.Vatis => "vATIS", SoftwareApp.VatEfs => "VatEFS", _ => "TrackAudio" };
-                        LastCheckedText.Text = name + " installation verified. The application remains closed. Check for updates to refresh versions.";
+                        LastCheckedText.Text = name + " installation verified.";
                     }
-                    catch { LastCheckedText.Text = failureMessage = "Installation succeeded, but its path could not be saved. Set it in Settings."; }
+                    catch { LastCheckedText.Text = failureMessage = "Installation succeeded, but its location could not be saved. Choose it under Setup → Applications."; }
+                    ApplyLaunchPaths(); ResetChangedSoftwareChecks(previous);
+                    var row = _results.Single(r => r.SoftwareApp == app);
+                    row.SoftwareUpdate = null;
+                    row.Status = CheckStatus.Installed;
+                    row.StatusMessage = "Installation completed and was verified. " + window.ConfigurationMessage +
+                        " Check for updates to compare with the latest release.";
+                    if (window.ConfigurationMessage.Length > 0)
+                    {
+                        LastCheckedText.Text = (failureMessage == null ? "" : failureMessage + " ") + window.ConfigurationMessage;
+                        SetupWorkspace.ShowNotice(LastCheckedText.Text);
+                    }
+                    try
+                    {
+                        var installed = new SoftwareInstaller().Inspect(app, result.ExecutablePath);
+                        row.InstalledVersion = string.IsNullOrWhiteSpace(installed.Version) ? "Installed" : "v" + installed.Version;
+                    }
+                    catch { row.InstalledVersion = "Installed"; }
                 }
-                ApplyLaunchPaths(); ResetSoftwareChecks();
+                ApplyLaunchPaths(); ApplyApplicationUsage(); UpdateAppConfigButton(); RefreshWorkspace();
             }
         }
         catch (Exception ex) { LastCheckedText.Text = failureMessage = "Application setup could not finish: " + ex.Message; }
@@ -55,7 +85,7 @@ public partial class MainWindow
                         "Restart Windows before further installation or controller-profile changes.";
             }
         }
-        if (!_windowClosed && adopt) OpenSettings(discover: true);
+        if (!_windowClosed && adopt) DiscoverInstallations_Click(sender, e);
         else if (!_windowClosed && remove) Maintenance_Click(sender, e);
     }
 }

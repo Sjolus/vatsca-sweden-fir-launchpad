@@ -8,6 +8,13 @@ using VatscaUpdateChecker.Services;
 
 var tests = new (string Name, Func<Task> Run)[]
 {
+    ("fresh installs revalidate current vendor metadata before download and apply", async () =>
+    {
+        using var f = new Fixture(); var plan = await f.Preview();
+        Check(f.RefreshCalls == 0);
+        await f.Service.ApplyAsync(plan);
+        Check(f.RefreshCalls == 2 && f.Commands.Count == 1);
+    }),
     ("preview obtains metadata without downloading or installing", async () =>
     {
         using var f = new Fixture(); var plan = await f.Preview();
@@ -276,6 +283,7 @@ sealed class Fixture : IDisposable
     public bool Running, Residue, BadProduct, BadSignature, UnreviewedVatis;
     public string? Problem;
     public int SourceCalls, Downloads, VatisRuns, TrustChecks;
+    public int RefreshCalls;
     public int VatEfsRuns;
     public bool VatEfsInstalled;
     public byte[] Bytes { get; }
@@ -335,7 +343,8 @@ sealed class Fixture : IDisposable
             }
         };
         Service = new(_http, environment, (_, beta, token) => { token.ThrowIfCancellationRequested(); SourceCalls++; SourceBetaFlags.Add(beta); return Task.FromResult<SoftwareRelease?>(Release); },
-            installer: app == SoftwareApp.VatEfs ? new SyntheticVatEfsInstaller(this) : null, cacheRoot: PathOf("Cache"), downloadTimeout: timeout);
+            installer: app == SoftwareApp.VatEfs ? new SyntheticVatEfsInstaller(this) : null, cacheRoot: PathOf("Cache"), downloadTimeout: timeout,
+            refreshSource: (_, beta, token) => { token.ThrowIfCancellationRequested(); RefreshCalls++; SourceCalls++; SourceBetaFlags.Add(beta); return Task.FromResult<SoftwareRelease?>(Release); });
     }
     public Task<FreshSoftwareInstallPlan> Preview() => Service.PreviewAsync(App, Settings, Recovery, App == SoftwareApp.Vatis);
     public string AddSettings() => File(App == SoftwareApp.TrackAudio ? "Roaming/trackaudio/settings.json" : "Roaming/app.vacs.vacs-client/settings.json", "FAKE-PRIVATE-SETTINGS");

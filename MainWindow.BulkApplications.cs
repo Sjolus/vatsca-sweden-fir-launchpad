@@ -52,10 +52,10 @@ public partial class MainWindow
             int requested = results.Count(result => result.Requested);
             int skipped = results.Count - requested;
             LastCheckedText.Text = $"{(action == ApplicationBatchAction.Start ? "Start" : "Close")} requested for {requested} application{(requested == 1 ? "" : "s")}." +
-                (skipped > 0 ? $" {skipped} skipped or unavailable; see application details." :
+                (skipped > 0 ? $" {skipped} skipped or unavailable; hover over their status for more information." :
                     action == ApplicationBatchAction.Close ? " Check for save or confirmation prompts." : "");
             if (results.FirstOrDefault(result => !result.Requested) is { } first &&
-                _results.FirstOrDefault(row => row.AppName == first.Id) is { } selected) SelectApplicationDetails(selected);
+                _results.FirstOrDefault(row => row.AppName == first.Id) is { } selected) FocusApplicationRow(selected);
         }
         catch (Exception error)
         {

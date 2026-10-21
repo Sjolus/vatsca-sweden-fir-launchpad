@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 namespace VatscaUpdateChecker.Models;
 
 public enum ActivityApplication { EuroScope, Gng, TrackAudio, Vacs, Vatis, VatEfs, Launchpad, Maintenance, Saaman }
-public enum ActivityOperation { Install, Update, Repair, Replace, Remove, Cleanup, Restore, RestoreCleanup, Prerequisite }
+public enum ActivityOperation { Install, Update, Repair, Replace, Remove, Cleanup, Restore, RestoreCleanup, Prerequisite, Configure }
 public enum ActivityOutcome { Completed, Stopped, Cancelled, NeedsAttention }
 
 /// <summary>Only public package metadata and local recovery locations belong in activity history.</summary>
@@ -25,7 +25,7 @@ public sealed record ActivityEntry(Guid Id, DateTimeOffset Time, ActivityApplica
         ActivityOperation.Repair => "Repair", ActivityOperation.Replace => "Replacement",
         ActivityOperation.Remove => "Removal", ActivityOperation.Cleanup => "Old-file cleanup",
         ActivityOperation.Restore or ActivityOperation.RestoreCleanup => "Backup restore",
-        ActivityOperation.Prerequisite => "Runtime installation", _ => "Change"
+        ActivityOperation.Prerequisite => "Runtime installation", ActivityOperation.Configure => "Profile configuration", _ => "Change"
     };
     [JsonIgnore] public string OutcomeName => Outcome switch
     {

@@ -17,6 +17,29 @@ Run("GitHub newer release keeps every notification on its owner thread", () => G
 Run("GitHub current release finishes on its owner thread", () => GitHubRemote("current"));
 Run("GitHub absent release becomes Error instead of leaving Checking", () => GitHubRemote("missing"));
 Run("GitHub asynchronous transport failure becomes Error on its owner thread", () => GitHubRemote("fault"));
+Run("public metadata cache, cooldown and bounds", MetadataTests.RunAsync);
+Run("public catalog validation rejects incomplete publication metadata", () =>
+{
+    Require(!UpdateChecker.ValidVersionPage(new("https://api.github.com/repos/example/tool/releases/latest"), "{}"), "An empty object is not a release.");
+    Require(!UpdateChecker.ValidVersionPage(new("https://api.github.com/repos/example/tool/releases/latest"), "{\"tag_name\":\"v2.5.2\",\"draft\":true,\"prerelease\":false}"), "A draft is not a public latest release.");
+    Require(UpdateChecker.ValidVersionPage(new("https://api.github.com/repos/example/tool/releases/latest"), "{\"tag_name\":\"v2.5.2\",\"draft\":false,\"prerelease\":false}"), "Valid public latest release rejected.");
+    Require(!UpdateChecker.ValidVersionPage(new("https://api.github.com/repos/example/tool/releases"), "[{\"tag_name\":\"v2.5.2\"}]"), "Missing flags accepted.");
+    return Task.CompletedTask;
+});
+Run("failed checks emit one typed callback while unconfigured locations do not", async () =>
+{
+    var observed = new List<PublicUpdateCheck>();
+    Action<PublicUpdateCheck, Exception> handler = (check, _) => observed.Add(check);
+    UpdateChecker.FailureObserved += handler;
+    try
+    {
+        await GngRemote("fault");
+        await GitHubRemote("fault");
+        await GngLocal("unconfigured");
+        Require(observed.SequenceEqual(new[] { PublicUpdateCheck.Gng, PublicUpdateCheck.GitHub }), "Failure callback count or check identity differed.");
+    }
+    finally { UpdateChecker.FailureObserved -= handler; }
+});
 
 Console.WriteLine($"{passed} update-check tests passed; {failed} failed. Synthetic files, injected results and no native UI or network.");
 Environment.ExitCode = failed == 0 ? 0 : 1;

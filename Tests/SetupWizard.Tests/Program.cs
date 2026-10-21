@@ -4,6 +4,130 @@ using VatscaUpdateChecker.Models;
 // In-memory only: no WPF, settings service, registry, credential or installer dependency.
 var tests = new List<(string Name, Action Test)>
 {
+    ("new inline guide starts once without configuring or installing anything", () =>
+    {
+        var settings = new AppSettings();
+        var before = settings.Copy();
+        True(SetupGuide.Initialize(settings, firstLaunch: true));
+        True(settings.SetupGuideActive && !settings.SetupWizardCompleted && !settings.SetupWizardDismissed);
+        Equal("Applications", SetupGuide.Section(settings));
+        True(!SetupGuide.Initialize(settings, firstLaunch: true));
+        Equal(UnrelatedSettings(before), UnrelatedSettings(settings));
+    }),
+    ("saved inline guide resumes even when a settings file now exists", () =>
+    {
+        var settings = new AppSettings();
+        SetupGuide.Initialize(settings, firstLaunch: true);
+        SetupGuide.RememberSection(settings, "Gng");
+        var loaded = JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(settings))!;
+        True(!SetupGuide.Initialize(loaded, firstLaunch: false));
+        True(loaded.SetupGuideActive);
+        Equal("Gng", SetupGuide.Section(loaded));
+        Equal("2 · Swedish GNG", SetupGuide.Present(loaded, "Gng")!.Heading);
+    }),
+    ("existing installations without the inline marker are never enrolled automatically", () =>
+    {
+        foreach (var settings in new[]
+        {
+            new AppSettings(), Existing(),
+            new AppSettings { SetupWizardStep = 3 },
+            new AppSettings { SetupWizardDismissed = true, SetupGuideSection = "Profile" }
+        })
+        {
+            string before = JsonSerializer.Serialize(settings);
+            True(!SetupGuide.Initialize(settings, firstLaunch: false));
+            True(SetupGuide.Present(settings, "Applications") is null);
+            Equal(before, JsonSerializer.Serialize(settings));
+        }
+    }),
+    ("legacy completion and dismissal prevent first-launch re-enrollment", () =>
+    {
+        foreach (var settings in new[]
+        {
+            new AppSettings { SetupWizardCompleted = true },
+            new AppSettings { SetupWizardDismissed = true }
+        })
+        {
+            string before = JsonSerializer.Serialize(settings);
+            True(!SetupGuide.Initialize(settings, firstLaunch: true));
+            Equal(before, JsonSerializer.Serialize(settings));
+        }
+    }),
+    ("Apps and optional-section navigation cannot finish or advance the guide", () =>
+    {
+        var settings = Existing();
+        SetupGuide.Start(settings);
+        True(SetupGuide.RememberSection(settings, "Gng"));
+        foreach (string destination in new[] { "Apps", "Preferences", "Activity", "unknown" })
+        {
+            string before = JsonSerializer.Serialize(settings);
+            True(!SetupGuide.RememberSection(settings, destination));
+            Equal(before, JsonSerializer.Serialize(settings));
+            var next = SetupGuide.Next(settings, destination);
+            True(!next.Changed && settings.SetupGuideActive && !settings.SetupWizardCompleted);
+            Equal("Gng", next.Destination);
+            Equal(before, JsonSerializer.Serialize(settings));
+        }
+    }),
+    ("guide steps end only on explicit Finish and do not imply setup readiness", () =>
+    {
+        var settings = new AppSettings();
+        var before = settings.Copy();
+        SetupGuide.Initialize(settings, firstLaunch: true);
+        foreach (var (visible, destination) in new[] { ("Applications", "Gng"), ("Gng", "Profile") })
+        {
+            var next = SetupGuide.Next(settings, visible);
+            True(next.Changed && settings.SetupGuideActive && !settings.SetupWizardCompleted);
+            Equal(destination, next.Destination);
+        }
+        Equal("Finish setup", SetupGuide.Present(settings, "Profile")!.NextLabel);
+        var finished = SetupGuide.Next(settings, "Profile");
+        True(finished.Changed && !settings.SetupGuideActive && settings.SetupWizardCompleted && !settings.SetupWizardDismissed);
+        Equal("Apps", finished.Destination);
+        Equal(UnrelatedSettings(before), UnrelatedSettings(settings));
+        True(SetupGuide.Present(settings, "Profile") is null);
+        True(!SetupGuide.Next(settings, "Profile").Changed);
+    }),
+    ("Later retains choices and its checkpoint while Help resumes it", () =>
+    {
+        var settings = Existing();
+        settings.PatchVatEfs = true; settings.PatchSaaman = true;
+        ApplicationPreferences.SetNotUsed(settings, "vATIS", true);
+        var before = settings.Copy();
+        SetupGuide.Start(settings);
+        SetupGuide.RememberSection(settings, "Profile");
+        True(SetupGuide.Later(settings));
+        True(!settings.SetupGuideActive && settings.SetupWizardDismissed && !settings.SetupWizardCompleted);
+        True(!SetupGuide.Later(settings));
+        True(!SetupGuide.Initialize(settings, firstLaunch: false));
+        True(SetupGuide.Start(settings));
+        Equal("Profile", SetupGuide.Section(settings));
+        True(settings.SetupGuideActive && !settings.SetupWizardDismissed);
+        Equal(UnrelatedSettings(before), UnrelatedSettings(settings));
+    }),
+    ("Help restarts a finished guide without altering installed apps or saved identity", () =>
+    {
+        var settings = Existing();
+        settings.SetupGuideSection = "Profile";
+        var before = settings.Copy();
+        True(SetupGuide.Start(settings));
+        Equal("Applications", SetupGuide.Section(settings));
+        True(settings.SetupGuideActive && !settings.SetupWizardCompleted);
+        Equal(UnrelatedSettings(before), UnrelatedSettings(settings));
+        True(!SetupGuide.Start(settings));
+    }),
+    ("invalid active checkpoints normalize once and direct navigation saves only a real change", () =>
+    {
+        var settings = new AppSettings { SetupGuideActive = true, SetupGuideSection = "obsolete" };
+        True(SetupGuide.Initialize(settings, firstLaunch: false));
+        Equal("Applications", settings.SetupGuideSection);
+        True(!SetupGuide.Initialize(settings, firstLaunch: false));
+        True(!SetupGuide.RememberSection(settings, "Applications"));
+        True(SetupGuide.RememberSection(settings, "Profile"));
+        True(!SetupGuide.RememberSection(settings, "Profile"));
+        Equal("Continue: Controller profile", SetupGuide.Present(settings, "Preferences")!.NextLabel);
+        Equal("Profile", SetupGuide.Next(settings, "Activity").Destination);
+    }),
     ("progress checkpoints resume without committing tentative appearance choices", () =>
     {
         var current = new AppSettings { IsDarkMode = true, CompactLayout = true };
@@ -324,6 +448,14 @@ static AppSettings Existing() => new()
     VatsimName = "Synthetic identity", VatsimCid = "0000000", VatsimRating = 2, ObsCallsign = "TEST",
     LastEuroscopeProfile = @"D:\Synthetic\GNG\ESAA TEST.prf"
 };
+static string UnrelatedSettings(AppSettings settings)
+{
+    var copy = settings.Copy();
+    copy.SetupGuideActive = false; copy.SetupGuideSection = "Applications";
+    copy.SetupWizardCompleted = copy.SetupWizardDismissed = false;
+    copy.SetupWizardStep = 0;
+    return JsonSerializer.Serialize(copy);
+}
 static void True(bool condition) { if (!condition) throw new Exception("Assertion failed."); }
 static void Equal<T>(T expected, T actual) { if (!EqualityComparer<T>.Default.Equals(expected, actual)) throw new Exception("Values did not match."); }
 static void Throws<T>(Action action) where T : Exception

@@ -83,9 +83,24 @@ public static class CredentialManagerService
         }
     }
 
-    public static string? Load(string target)
+    public static string? Load(string target) => Load(target, strict: false);
+
+    // Editors must distinguish a missing credential from a failed read before allowing a replacement.
+    public static string? LoadForEditing(string target) => Load(target, strict: true);
+
+    internal static void CheckEditingRead(bool succeeded, int error)
     {
-        if (!CredRead(target, CRED_TYPE_GENERIC, 0, out var ptr)) return null;
+        if (!succeeded && error != 1168)
+            throw new System.ComponentModel.Win32Exception(error, "Windows could not read the saved controller credential.");
+    }
+
+    private static string? Load(string target, bool strict)
+    {
+        if (!CredRead(target, CRED_TYPE_GENERIC, 0, out var ptr))
+        {
+            if (strict) CheckEditingRead(false, Marshal.GetLastWin32Error());
+            return null;
+        }
         try
         {
             var cred = Marshal.PtrToStructure<CREDENTIAL>(ptr);
