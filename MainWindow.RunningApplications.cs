@@ -47,7 +47,7 @@ public partial class MainWindow
         if (!shown)
         {
             row.StatusMessage = "The application is running, but its window could not be brought forward. Use the Windows taskbar or Alt+Tab. No application was closed.";
-            SelectApplicationDetails(row);
+            FocusApplicationRow(row);
         }
     }
 
@@ -84,7 +84,7 @@ public partial class MainWindow
         if (copies.Length == 0)
         {
             row.StatusMessage = "Launchpad could not verify a running copy of this application. Use its own window or the Windows taskbar.";
-            SelectApplicationDetails(row);
+            FocusApplicationRow(row);
             return;
         }
         if (action == RunningApplicationAction.Show) { ShowRunningApplication(row); return; }
@@ -101,7 +101,7 @@ public partial class MainWindow
         row.StatusMessage = accepted == 0 ? "The application did not accept the request. Use its own window to close it."
             : action == RunningApplicationAction.CloseNormally ? "Close requested. The application may be waiting for you to save or confirm; check its window."
             : "Force-stop requested for the verified running copy. Other installations were left alone.";
-        SelectApplicationDetails(row);
+        FocusApplicationRow(row);
         UpdateRunningStates();
     }
 }

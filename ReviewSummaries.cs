@@ -19,7 +19,7 @@ internal static class ReviewSummaries
             "Existing known settings stay in place. Other applications are not changed. The new application stays closed.",
             plan.BackupDestination == null ? "No existing known settings need a recovery copy." :
                 $"Copy {plan.BackupFiles.Files.Count:N0} existing settings files before installation to:\n{plan.BackupDestination}\nKeep this folder private; it may contain passwords.",
-            plan.App == SoftwareApp.VatEfs ? "Close EuroScope and the VatEFS backend. After installation, use Controller profile to enable the plugin; installing it does not change your profiles." :
+            plan.App == SoftwareApp.VatEfs ? "Close EuroScope and the VatEFS backend. Use in EuroScope under Setup → Applications controls the plugin; this installer does not change your profiles." :
                 "Required Microsoft components are installed through the separate runtime action. Once installation starts, wait for it to finish.");
     }
 

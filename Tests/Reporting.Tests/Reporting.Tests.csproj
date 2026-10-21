@@ -8,5 +8,6 @@
     <Compile Include="../../Services/Reporting*.cs" Link="Services/%(Filename)%(Extension)" />
     <Compile Include="../../Models/SoftwareUpdate.cs" Link="Models/SoftwareUpdate.cs" />
     <Compile Include="../../ReportingEvents.cs" Link="ReportingEvents.cs" />
+    <Compile Include="../../Services/VendorRequestException.cs" Link="Services/VendorRequestException.cs" />
   </ItemGroup>
 </Project>

@@ -58,7 +58,7 @@ public sealed class SaamanInstallService
         var protectedPaths = ProtectedPaths(settings).ToArray();
         RequireSeparateStorage(target);
         if (FindRecovery(target) is { } recovery && IsPending(recovery))
-            throw new InvalidOperationException("An earlier SAAMAN change is incomplete. Review recovery before installing again.");
+            throw new InvalidOperationException("An earlier SAAMAN change is incomplete. Open Setup → Activity & recovery before installing again.");
         return new(target, release, previous, protectedPaths);
     }
 
@@ -79,19 +79,19 @@ public sealed class SaamanInstallService
         string target = ValidateTarget(plan.TargetPath, settings, allowUnconfigured: false);
         if (!target.Equals(SaamanFileSafety.Canonical(GetSuggestedPath(settings)), StringComparison.OrdinalIgnoreCase) ||
             !plan.ProtectedPaths.SequenceEqual(ProtectedPaths(settings), StringComparer.OrdinalIgnoreCase))
-            throw new InvalidOperationException("The selected paths changed after review. Review SAAMAN again.");
+            throw new InvalidOperationException("The selected paths changed while preparing SAAMAN. Try again from Setup → Applications.");
         RequireSeparateStorage(target);
         if (FindRecovery(target) is { } pending && IsPending(pending))
         {
             LastRecoveryFolder = Path.GetDirectoryName(pending.ReceiptPath);
-            throw new InvalidOperationException("An earlier SAAMAN change is incomplete. Review recovery before installing again.");
+            throw new InvalidOperationException("An earlier SAAMAN change is incomplete. Open Setup → Activity & recovery before installing again.");
         }
         _requireClosed();
         RequireOriginal(target, plan.Previous);
         string id = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N");
         string transaction = SaamanFileSafety.Canonical(Path.Combine(_storage, "Recovery", id));
         using var storageParents = new SaamanFileSafety.DirectoryGuard(transaction, true);
-        progress?.Report(new("Downloading the reviewed release and license notices…"));
+        progress?.Report(new("Downloading SAAMAN and licence notices…"));
         foreach (var asset in plan.Release.Assets)
             await _releases.DownloadAsync(asset, Path.Combine(transaction, asset.Name), progress, cancellationToken).ConfigureAwait(false);
         string downloaded = Path.Combine(transaction, "SAAMAN.dll");

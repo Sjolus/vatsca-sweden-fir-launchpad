@@ -20,16 +20,27 @@ export function usageFixture() {
     releases:[{version:'2.2.0',installations:31},{version:'2.1.0',installations:8},{version:'2.0.2',installations:3}],
     applications:[['euroscope',46,32],['trackaudio',39,29],['vacs',22,20],['vatis',18,16],['vatefs',14,12],['vatiris',9,9]].map(([application,launches,installations])=>({application,launches,installations})),
     features:[['check_updates',51,28],['gng_package_review',18,14],['controller_profile_review',15,12],['install_or_update',14,11],['setup_guide',8,8],['gng_cleanup_review',5,4]].map(([feature,uses,installations])=>({feature,uses,installations})),
+    views:[['apps',81,42],['setup_applications',24,19],['setup_gng',18,14],['controller_profile',12,10],['preferences',8,7],['activity_recovery',4,3]].map(([view,opens,installations])=>({view,opens,installations})),
+    tasks:{summary:{started:28,installations:19,matched:25,incomplete:3,unmatched_finishes:2,unlinked_records:4},
+      outcomes:[['completed',16],['partial',2],['blocked',3],['failed',2],['cancelled',2],['incomplete',3]].map(([outcome,attempts])=>({outcome,attempts})),
+      by_task:[
+        {application:'gng',operation:'update',started:12,installations:9,matched:10,completed:8,partial:0,blocked:1,failed:1,cancelled:0,unknown:0,incomplete:2},
+        {application:'vatis',operation:'configure_sweden_profile',started:7,installations:6,matched:6,completed:4,partial:1,blocked:1,failed:0,cancelled:0,unknown:0,incomplete:1},
+        {application:'trackaudio',operation:'configure_sign_in',started:5,installations:4,matched:5,completed:3,partial:0,blocked:1,failed:0,cancelled:1,unknown:0,incomplete:0},
+        {application:'saaman',operation:'configure_plugin_profile',started:4,installations:4,matched:4,completed:1,partial:1,blocked:0,failed:1,cancelled:1,unknown:0,incomplete:0}],
+      durations:[{duration_bucket:'under_1s',attempts:10},{duration_bucket:'under_10s',attempts:8},{duration_bucket:'under_1m',attempts:7}],
+      reasons:[{reason:'client_running',outcome:'blocked',attempts:3},{reason:'missing_configuration',outcome:'partial',attempts:2},{reason:'rate_limited',outcome:'failed',attempts:1}]},
     setup_routes:[{route:'existing',attempts:5,installations:5},{route:'fresh',attempts:3,installations:3}],
     gng_sources:[{source:'cache',packages:10,installations:9},{source:'download',packages:6,installations:5},{source:'import',packages:2,installations:2}],
     display_preferences:{responding_installations:40,missing_installations:2,compact_layout:[{value:true,installations:29},{value:false,installations:11}],text_scale:[{value:'standard',installations:31},{value:'larger',installations:7},{value:'largest',installations:2}],always_on_top:[{value:true,installations:16},{value:false,installations:24}],theme:[{value:'dark',installations:35},{value:'light',installations:5}]},
-    inventory:{snapshot_installations:30,latest_snapshot_at:'2026-10-13T20:00:00.000Z',cohort:'inventory_snapshots',components},
+    inventory:{snapshot_installations:30,latest_snapshot_at:'2026-10-13T20:00:00.000Z',freshness:[{age:'last_24h',installations:21},{age:'one_to_seven_days',installations:9}],cohort:'inventory_snapshots',components},
   };
 }
 export function emptyUsageFixture() {
   const data=usageFixture(); data.window.coverage_complete=false;
   data.cohort={active_installations:0,sessions:0,app_launches:0,app_launch_installations:0,returning_installations:null,returning_available:false,returning_reason:'coverage'};
-  for(const key of ['daily','releases','applications','features','setup_routes','gng_sources']) data[key]=[];
+  for(const key of ['daily','releases','applications','features','views','setup_routes','gng_sources']) data[key]=[];
+  data.tasks={summary:{started:0,installations:0,matched:0,incomplete:0,unmatched_finishes:0,unlinked_records:0},outcomes:[],by_task:[],durations:[],reasons:[]};
   data.display_preferences={responding_installations:0,missing_installations:0};
   data.inventory={snapshot_installations:0,latest_snapshot_at:null,cohort:'inventory_snapshots',components:[]};
   return data;

@@ -15,6 +15,7 @@
     <Compile Include="..\..\Models\AppSettings.cs" Link="AppSettings.cs" />
     <Compile Include="..\..\Models\AtcRemovalTarget.cs" Link="AtcRemovalTarget.cs" />
     <Compile Include="..\..\Models\InstallationCandidate.cs" Link="InstallationCandidate.cs" />
+    <Compile Include="..\..\Models\InstallationDiscoverySelection.cs" Link="InstallationDiscoverySelection.cs" />
     <Compile Include="..\..\Models\SoftwareUpdate.cs" Link="SoftwareUpdate.cs" />
     <Compile Include="..\..\Services\AtcMaintenanceService.cs" Link="AtcMaintenanceService.cs" />
     <Compile Include="..\..\Services\PreservationPath.cs" Link="PreservationPath.cs" />
@@ -42,5 +43,8 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="../../Services/VatEfsMsiTrust.cs" Link="VatEfsMsiTrust.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../Services/VendorRequestException.cs" Link="Services/VendorRequestException.cs" />
   </ItemGroup>
 </Project>

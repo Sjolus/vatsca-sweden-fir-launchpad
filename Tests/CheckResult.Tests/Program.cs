@@ -1,4 +1,5 @@
 using VatscaUpdateChecker.Models;
+using VatscaUpdateChecker.Services;
 
 // Model-only checks. Synthetic paths/files only; no application or installer is started.
 var temporary = Path.Combine(Path.GetTempPath(), "launchpad-presentation-" + Guid.NewGuid().ToString("N"));
@@ -8,6 +9,65 @@ File.WriteAllText(fakeExe, "Synthetic existence fixture; never executed.");
 var passed = 0;
 try
 {
+    Run("Apps groups EuroScope components without changing operation indices", () =>
+    {
+        var source = AppRows();
+        var displayed = ApplicationRows.Visible(source);
+        Equal("EuroScope|EuroScope (GNG Pack)|VatEFS|SAAMAN|TrackAudio|VACS|vATIS|VATIRIS|Sweden FIR Launchpad",
+            string.Join('|', displayed.Select(row => row.AppName)));
+        Equal("TrackAudio", source[2].AppName);
+        Equal("VatEFS", source[5].AppName);
+        foreach (var row in displayed) True(ReferenceEquals(source.Single(candidate => candidate.AppName == row.AppName), row));
+        True(displayed.Skip(1).Take(3).All(row => row.IsEuroScopeChild));
+        True(!source[0].IsEuroScopeChild && !source[2].IsEuroScopeChild);
+    });
+    Run("unused applications disappear and return with their saved state intact", () =>
+    {
+        var source = AppRows();
+        foreach (var name in new[] { "TrackAudio", "VatEFS", "SAAMAN", "EuroScope (GNG Pack)" })
+        {
+            var row = source.Single(candidate => candidate.AppName == name);
+            row.LaunchPath = name == "VatEFS" ? "http://localhost:17770" : fakeExe;
+            row.InstalledVersion = "v1.2.3";
+            row.IsRunning = true;
+            string path = row.LaunchPath;
+            row.IsNotUsed = true;
+            True(!ApplicationRows.Visible(source).Contains(row));
+            Equal(path, row.LaunchPath);
+            Equal("v1.2.3", row.InstalledVersion);
+            True(row.IsRunning);
+            row.IsNotUsed = false;
+            True(ApplicationRows.Visible(source).Contains(row));
+        }
+        Equal(9, ApplicationRows.Visible(source).Length);
+    });
+    Run("hiding EuroScope leaves separately chosen components visible", () =>
+    {
+        var source = AppRows();
+        source[0].IsNotUsed = true;
+        var visible = ApplicationRows.Visible(source);
+        Equal(8, visible.Length);
+        Equal("EuroScope (GNG Pack)|VatEFS|SAAMAN", string.Join('|', visible.Take(3).Select(row => row.AppName)));
+        True(visible.Take(3).All(row => row.IsEuroScopeChild));
+    });
+    Run("Apps retains Launchpad when all optional applications are hidden", () =>
+    {
+        var source = AppRows();
+        foreach (var row in source) row.IsNotUsed = true;
+        True(ReferenceEquals(source[^1], ApplicationRows.Visible(source).Single()));
+    });
+    Run("verified fresh installation remains visible before another online check", () =>
+    {
+        var row = new CheckResult { AppName = "TrackAudio", SoftwareApp = SoftwareApp.TrackAudio, LaunchPath = fakeExe,
+            Status = CheckStatus.Installed, InstalledVersion = "v1.4.0" };
+        Equal("Installed", row.RowStatusText);
+        Equal("Success", row.RowStatusKind);
+        Equal("Installation verified", row.RowExplanation);
+        Equal("v1.4.0", row.DisplayInstalledVersion);
+        Equal("Not checked", row.DisplayLatestVersion);
+        row.SoftwareUpdate = new(SoftwareApp.TrackAudio, SoftwareUpdatePhase.Error, "Network unavailable");
+        Equal("Needs attention", row.RowStatusText);
+    });
     Run("SAAMAN is managed as a plugin and never exposes standalone launch or stop", () =>
     {
         var row = new CheckResult { AppName = "SAAMAN", HasSaamanManagement = true, LaunchPath = fakeExe,
@@ -108,7 +168,7 @@ try
             row.SoftwareExecutablePath = Path.Combine(temporary, "missing-efs.exe");
             row.LaunchPath = "http://localhost:17770";
             True(!row.SoftwareNeedsSetup && row.ShowSoftwareAction);
-            Equal("Manage…", row.SoftwareSetupText);
+            Equal("Change location…", row.SoftwareSetupText);
             Equal("Open releases ↗", row.SoftwareActionText);
         }
         finally { File.Delete(dll); }
@@ -132,7 +192,7 @@ try
         Equal("Latest package", gng.LatestVersionCaption);
         Equal("2605/01  rev.1", gng.DisplayInstalledVersion);
         Equal("Review a GNG update", gng.RowExplanation);
-        True(gng.DetailText.Contains("Nothing installs without your confirmation"));
+        True(gng.DetailText.Contains("review the package before installing"));
         gng.DownloadUrl = "https://files.aero-nav.com/ESAA";
         True(!gng.ShowDownload && !gng.HasSoftwareUpdate);
         Equal("Folder", gng.LaunchActionText);
@@ -231,7 +291,7 @@ try
         Equal("Review the required GNG fonts", row.RowExplanation);
         row.Status = CheckStatus.UpdateAvailable;
         Equal("Update available", row.RowStatusText);
-        True(row.DetailText.Contains("Set up / update"));
+        True(row.DetailText.Contains("Choose Update, or open Setup → Swedish GNG"));
         row.FontsState = VatscaUpdateChecker.Services.FontsState.AllOk;
         Equal("Review a GNG update", row.RowExplanation);
     });
@@ -302,7 +362,7 @@ try
         row.SoftwareUpdate = row.SoftwareUpdate! with { Phase = SoftwareUpdatePhase.Completed };
         True(row.LaunchEnabled);
     });
-    Run("not-used applications retain paths and are neutral without hiding active operations", () =>
+    Run("not-used applications retain paths and active operation state for Setup", () =>
     {
         var row = Software(SoftwareApp.TrackAudio, SoftwareUpdatePhase.Unavailable);
         var path = row.LaunchPath;
@@ -339,6 +399,191 @@ try
         Equal("Show", row.LaunchActionText);
     });
 
+    Run("each software state selects one compact action without changing update eligibility", () =>
+    {
+        foreach (var app in Enum.GetValues<SoftwareApp>())
+        foreach (var phase in Enum.GetValues<SoftwareUpdatePhase>())
+        {
+            var row = Software(app, phase);
+            row.SoftwareExecutablePath = fakeExe;
+            var (action, text) = phase switch
+            {
+                SoftwareUpdatePhase.Checking or SoftwareUpdatePhase.Downloading or SoftwareUpdatePhase.Verifying or SoftwareUpdatePhase.BackingUp
+                    => (CheckRowAction.SoftwareCancel, "Cancel"),
+                SoftwareUpdatePhase.Installing or SoftwareUpdatePhase.Current or SoftwareUpdatePhase.Completed
+                    => (CheckRowAction.None, ""),
+                SoftwareUpdatePhase.Available => (CheckRowAction.SoftwareUpdate, "Update"),
+                SoftwareUpdatePhase.Unavailable => (CheckRowAction.Downloads, "Downloads"),
+                SoftwareUpdatePhase.Error or SoftwareUpdatePhase.Cancelled => (CheckRowAction.SoftwareCheck, "Retry"),
+                _ => (CheckRowAction.SoftwareCheck, "Check")
+            };
+            RowAction(row, action, text, action != CheckRowAction.None);
+            Equal(phase == SoftwareUpdatePhase.Available, row.SoftwareUpdate!.CanUpdate);
+        }
+    });
+    Run("missing software always routes to setup instead of updating or downloading", () =>
+    {
+        foreach (var app in Enum.GetValues<SoftwareApp>())
+        foreach (var phase in new[] { SoftwareUpdatePhase.Available, SoftwareUpdatePhase.Unavailable, SoftwareUpdatePhase.Error, SoftwareUpdatePhase.Current })
+        {
+            var row = Software(app, phase);
+            row.LaunchPath = app == SoftwareApp.VatEfs ? "http://localhost:17770" : Path.Combine(temporary, "missing.exe");
+            row.SoftwareExecutablePath = Path.Combine(temporary, "missing-efs.exe");
+            RowAction(row, CheckRowAction.Setup, "Set up", true);
+        }
+    });
+    Run("cancel remains available during locked work and takes priority over missing or unused paths", () =>
+    {
+        var row = Software(SoftwareApp.TrackAudio, SoftwareUpdatePhase.Downloading);
+        row.Status = CheckStatus.Checking;
+        row.IsNotUsed = true;
+        row.LaunchPath = "";
+        row.SoftwareActionsAllowed = row.ApplicationActionsAllowed = false;
+        RowAction(row, CheckRowAction.SoftwareCancel, "Cancel", true);
+        row.SoftwareUpdate = row.SoftwareUpdate! with { Phase = SoftwareUpdatePhase.Installing };
+        RowAction(row, CheckRowAction.None, "", false);
+    });
+    Run("compact update preserves running client and maintenance guards", () =>
+    {
+        var row = Software(SoftwareApp.TrackAudio, SoftwareUpdatePhase.Available);
+        row.IsRunning = true;
+        RowAction(row, CheckRowAction.SoftwareUpdate, "Update", false);
+        True(row.RowActionTooltip.Contains("Close the app"));
+        row.IsRunning = false;
+        row.SoftwareActionsAllowed = false;
+        RowAction(row, CheckRowAction.SoftwareUpdate, "Update", false);
+        row.SoftwareActionsAllowed = true;
+        RowAction(row, CheckRowAction.SoftwareUpdate, "Update", true);
+        var plugin = Software(SoftwareApp.VatEfs, SoftwareUpdatePhase.Available);
+        plugin.SoftwareExecutablePath = fakeExe;
+        plugin.IsRunning = true;
+        RowAction(plugin, CheckRowAction.SoftwareUpdate, "Update", true);
+        plugin.SoftwareBlockingReason = "EuroScope is running.";
+        RowAction(plugin, CheckRowAction.SoftwareUpdate, "Update", false);
+    });
+    Run("unused row state preserves setup routing without interrupting a running app", () =>
+    {
+        var row = Software(SoftwareApp.TrackAudio, SoftwareUpdatePhase.Current);
+        row.IsNotUsed = true;
+        RowAction(row, CheckRowAction.Setup, "Set up", true);
+        row.ApplicationActionsAllowed = false;
+        RowAction(row, CheckRowAction.Setup, "Set up", false);
+        row.ApplicationActionsAllowed = true;
+        row.IsRunning = true;
+        RowAction(row, CheckRowAction.None, "", false);
+        row.IsRunning = false;
+        row.IsNotUsed = false;
+        RowAction(row, CheckRowAction.None, "", false);
+    });
+    Run("self-update uses existing routing and permission with compact labels", () =>
+    {
+        var row = new CheckResult { AppName = "Sweden FIR Launchpad", HasSelfUpdate = true, ShowSelfUpdateAction = true };
+        foreach (var (full, compact) in new[] { ("Check for updates", "Check"), ("Download update", "Download"),
+            ("Restart to update", "Restart"), ("Open downloads ↗", "Downloads"), ("Retry update check", "Retry"), ("Cancel", "Cancel") })
+        {
+            row.SelfUpdateActionText = full;
+            RowAction(row, CheckRowAction.SelfUpdate, compact, true);
+            Equal(full, row.RowActionTooltip);
+            row.SelfUpdateActionEnabled = false;
+            RowAction(row, CheckRowAction.SelfUpdate, compact, false);
+            row.SelfUpdateActionEnabled = true;
+        }
+        row.ShowSelfUpdateAction = false;
+        RowAction(row, CheckRowAction.None, "", false);
+        row.ShowSelfUpdateAction = true;
+        row.SelfUpdateBusy = true;
+        RowAction(row, CheckRowAction.None, "", false);
+    });
+    Run("GNG prioritizes setup then package update then required fonts", () =>
+    {
+        var row = new CheckResult { AppName = "EuroScope (GNG Pack)", HasFontsCheck = true, IsFolder = true,
+            LaunchPath = temporary, FontsState = FontsState.NeedsAction, Status = CheckStatus.NotConfigured };
+        RowAction(row, CheckRowAction.Setup, "Set up", true);
+        row.Status = CheckStatus.UpdateAvailable;
+        RowAction(row, CheckRowAction.GngUpdate, "Update", true);
+        row.Status = CheckStatus.UpToDate;
+        RowAction(row, CheckRowAction.Fonts, "Fonts", true);
+        row.Status = CheckStatus.Checking;
+        RowAction(row, CheckRowAction.None, "", false);
+        row.Status = CheckStatus.UpToDate;
+        row.FontsState = FontsState.Unknown;
+        RowAction(row, CheckRowAction.None, "", false);
+    });
+    Run("SAAMAN offers local setup for invalid DLLs and update only when available", () =>
+    {
+        var row = new CheckResult { AppName = "SAAMAN", HasSaamanManagement = true, Status = CheckStatus.NotConfigured };
+        RowAction(row, CheckRowAction.Setup, "Set up", true);
+        row.Status = CheckStatus.Error;
+        RowAction(row, CheckRowAction.Setup, "Set up", true);
+        row.Status = CheckStatus.UpdateAvailable;
+        RowAction(row, CheckRowAction.SaamanManage, "Update", true);
+        row.SoftwareActionsAllowed = false;
+        RowAction(row, CheckRowAction.SaamanManage, "Update", false);
+        row.SoftwareActionsAllowed = true;
+        foreach (var status in new[] { CheckStatus.Unknown, CheckStatus.Installed, CheckStatus.UpToDate, CheckStatus.Checking })
+        {
+            row.Status = status;
+            RowAction(row, CheckRowAction.None, "", false);
+        }
+    });
+    Run("EuroScope offers supported-installation management and web apps need no maintenance shortcut", () =>
+    {
+        var row = new CheckResult { AppName = "EuroScope", HasEuroScopeManagement = true, Status = CheckStatus.NotConfigured };
+        RowAction(row, CheckRowAction.Setup, "Set up", true);
+        row.LaunchPath = fakeExe;
+        row.Status = CheckStatus.Unsupported;
+        RowAction(row, CheckRowAction.EuroScopeManage, "Manage", true);
+        row.Status = CheckStatus.UpToDate;
+        RowAction(row, CheckRowAction.None, "", false);
+        var web = new CheckResult { AppName = "VATIRIS", IsWebApp = true, Status = CheckStatus.WebApp };
+        True(!web.CanOpenSetup);
+        RowAction(web, CheckRowAction.None, "", false);
+        web.IsNotUsed = true;
+        RowAction(web, CheckRowAction.None, "", false);
+    });
+    Run("setup routes exist only for applications supported by the setup workspace", () =>
+    {
+        foreach (var app in Enum.GetValues<SoftwareApp>()) True(Software(app, SoftwareUpdatePhase.Idle).CanOpenSetup);
+        True(new CheckResult { HasEuroScopeManagement = true }.CanOpenSetup);
+        True(new CheckResult { HasFontsCheck = true }.CanOpenSetup);
+        True(new CheckResult { HasSaamanManagement = true }.CanOpenSetup);
+        True(!new CheckResult { HasSelfUpdate = true }.CanOpenSetup);
+        True(!new CheckResult { IsWebApp = true, IsLocalUrl = true }.CanOpenSetup);
+    });
+    Run("missing-location help names the current setup workspace", () =>
+    {
+        var gng = new CheckResult { HasFontsCheck = true, Status = CheckStatus.NotConfigured };
+        True(gng.ConfigureTooltip.Contains("Setup → Swedish GNG"));
+        True(gng.RowActionTooltip.Contains("Setup → Swedish GNG"));
+        var plugin = new CheckResult { IsLocalUrl = true };
+        True(plugin.ConfigureTooltip.Contains("Setup → Applications"));
+        True(plugin.ConfigureTooltip.Contains("Use in EuroScope"));
+        var app = Software(SoftwareApp.TrackAudio, SoftwareUpdatePhase.Unavailable);
+        app.LaunchPath = "";
+        True(app.SoftwareDetail.Contains("Setup → Applications"));
+        True(app.RowActionTooltip.Contains("Setup → Applications"));
+        var saaman = new CheckResult { HasSaamanManagement = true, Status = CheckStatus.NotConfigured };
+        True(saaman.RowActionTooltip.Contains("Setup → Applications"));
+    });
+    Run("all action inputs notify the compact bindings", () =>
+    {
+        var row = Software(SoftwareApp.TrackAudio, SoftwareUpdatePhase.Available);
+        var notices = new HashSet<string?>();
+        row.PropertyChanged += (_, args) => notices.Add(args.PropertyName);
+        foreach (var change in new Action[] { () => row.Status = CheckStatus.Checking, () => row.IsNotUsed = true,
+            () => row.IsRunning = true, () => row.ApplicationActionsAllowed = false, () => row.SoftwareActionsAllowed = false,
+            () => row.SoftwareBlockingReason = "Synthetic guard", () => row.LaunchPath = "", () => row.SoftwareExecutablePath = fakeExe,
+            () => row.SoftwareUpdate = row.SoftwareUpdate! with { Phase = SoftwareUpdatePhase.Error },
+            () => row.FontsState = FontsState.NeedsAction, () => row.SelfUpdateActionText = "Download update",
+            () => row.ShowSelfUpdateAction = true, () => row.SelfUpdateActionEnabled = false, () => row.SelfUpdateBusy = true })
+        {
+            notices.Clear();
+            change();
+            foreach (var property in new[] { nameof(CheckResult.RowAction), nameof(CheckResult.RowActionText),
+                nameof(CheckResult.ShowRowAction), nameof(CheckResult.RowActionEnabled), nameof(CheckResult.RowActionTooltip) })
+                True(notices.Contains(property));
+        }
+    });
     Run("status, progress and error changes refresh the selected detail bindings", () =>
     {
         var row = Software(SoftwareApp.TrackAudio, SoftwareUpdatePhase.Current);
@@ -372,6 +617,19 @@ CheckResult Software(SoftwareApp app, SoftwareUpdatePhase phase) => new()
     SoftwareUpdate = new(app, phase, "Synthetic operation state.")
 };
 
+static CheckResult[] AppRows() =>
+[
+    new() { AppName = "EuroScope", HasEuroScopeManagement = true },
+    new() { AppName = "EuroScope (GNG Pack)", IsFolder = true, HasFontsCheck = true },
+    new() { AppName = "TrackAudio", SoftwareApp = SoftwareApp.TrackAudio },
+    new() { AppName = "VACS", SoftwareApp = SoftwareApp.Vacs },
+    new() { AppName = "vATIS", SoftwareApp = SoftwareApp.Vatis },
+    new() { AppName = "VatEFS", SoftwareApp = SoftwareApp.VatEfs, IsWebApp = true, IsLocalUrl = true },
+    new() { AppName = "SAAMAN", HasSaamanManagement = true },
+    new() { AppName = "VATIRIS", IsWebApp = true },
+    new() { AppName = "Sweden FIR Launchpad", HasSelfUpdate = true }
+];
+
 void Run(string name, Action action)
 {
     action();
@@ -388,4 +646,14 @@ static void Equal<T>(T expected, T actual)
 {
     if (!EqualityComparer<T>.Default.Equals(expected, actual))
         throw new InvalidOperationException($"Expected {expected}, got {actual}.");
+}
+
+static void RowAction(CheckResult row, CheckRowAction action, string text, bool enabled)
+{
+    Equal(action, row.RowAction);
+    Equal(text, row.RowActionText);
+    Equal(action != CheckRowAction.None, row.ShowRowAction);
+    Equal(enabled, row.RowActionEnabled);
+    True(row.RowActionText.Length <= 10);
+    if (row.ShowRowAction) True(!string.IsNullOrWhiteSpace(row.RowActionTooltip));
 }

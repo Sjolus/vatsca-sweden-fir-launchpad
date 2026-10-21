@@ -75,6 +75,10 @@ public static class ReportingHistoryPresentation
             Field(text, "Result", entry.Outcome);
             Field(text, "Step", entry.Stage);
             Field(text, "Error category", entry.ErrorCode);
+            Field(text, "Reason", entry.Reason);
+            Field(text, "Screen", entry.View);
+            Field(text, "Online service", entry.Service);
+            Field(text, "HTTP status", entry.HttpStatus?.ToString(CultureInfo.InvariantCulture));
             Field(text, "Time taken", entry.DurationBucket);
             Field(text, "Reported version", entry.PackageVersion);
             Field(text, "Previous version", entry.PreviousVersion);
@@ -158,7 +162,17 @@ public static class ReportingHistoryPresentation
         ReportingInventorySource.PackageMetadata => "GNG package metadata",
         ReportingInventorySource.PluginFile => "Version read from DLL",
         ReportingEventName.SessionStarted => "Launchpad session started",
-        ReportingEventName.ApplicationOpened => "Application launch",
+        ReportingEventName.ApplicationOpened => "Application start requested",
+        ReportingEventName.ViewOpened => "Screen opened",
+        ReportingRemoteService.GitHub => "GitHub",
+        ReportingRemoteService.AeroNav => "AeroNav",
+        ReportingRemoteService.Vatis => "vATIS",
+        ReportingOperation.ConfigureSignIn => "Apply saved controller details",
+        ReportingOperation.ConfigureSwedenProfile => "Prepare Swedish vATIS profile",
+        ReportingOperation.ConfigurePluginProfile => "Configure EuroScope plugin",
+        ReportingView.SetupGng => "Setup: Swedish GNG package",
+        ReportingView.SetupApplications => "Setup: applications",
+        ReportingView.ActivityRecovery => "Activity and recovery",
         ReportingEventName.InventorySnapshot => "Software and plugin observations",
         ReportingEventName.PreferencesSnapshot => "Display preferences",
         ReportingEventName.GngPackageObtained => "GNG package obtained",

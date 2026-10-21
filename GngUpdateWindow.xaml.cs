@@ -1010,6 +1010,7 @@ public partial class GngUpdateWindow : Window
 
     private void ShowCompletion(string title, string text, string backup)
     {
+        OtherOptions.IsExpanded = true;
         SetStage(title);
         _plan = null;
         _reviewPackagePath = _reviewReferencePath = null;
@@ -1130,6 +1131,7 @@ public partial class GngUpdateWindow : Window
     private void ShowBrowserFallback(string message, bool runtimeMissing = false)
     {
         if (_closed) return;
+        OtherOptions.IsExpanded = true;
         DisarmDownloadRequest();
         BrowserToolbar.Visibility = Visibility.Collapsed;
         StartPanel.Visibility = Visibility.Visible;
@@ -1174,8 +1176,9 @@ public partial class GngUpdateWindow : Window
         BrowserPanel.Visibility = Visibility.Visible;
         StartPanel.Visibility = Visibility.Visible;
         BrowserToolbar.Visibility = Visibility.Collapsed;
-        StartHeading.Text = "Get your GNG package";
-        StartExplanation.Text = "Launchpad checks AeroNav's current version and matching saved packages first, then downloads what is missing. Sign in if asked. You review the changes before installing; your website sign-in stays in this browser.";
+        StartHeading.Text = "Get Swedish GNG";
+        StartExplanation.Text = "Use the latest package from AeroNav. Saved copies are reused; sign in only if needed.";
+        StartOptions.IsExpanded = OtherOptions.IsExpanded = false;
         UpdatePackageKind();
         SetStage("");
         ReviewPanel.Visibility = CompletePanel.Visibility = Visibility.Collapsed;

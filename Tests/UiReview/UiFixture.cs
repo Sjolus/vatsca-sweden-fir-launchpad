@@ -21,6 +21,17 @@ internal static class UiReviewProgram
         {
             app.InitializeComponent();
             UiFixture.SetTextScale(1);
+            if (args.Contains("--check-workspaces"))
+            {
+                app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+                var option = Array.IndexOf(args, "--snapshots");
+                var output = option >= 0 && option + 1 < args.Length ? args[option + 1] : null;
+                var result = WorkspaceLayoutReview.Run(output);
+                File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "workspace-validation.txt"), result);
+                Console.WriteLine(result);
+                app.Shutdown();
+                return 0;
+            }
             if (args.Contains("--check-saaman"))
             {
                 app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
@@ -30,18 +41,20 @@ internal static class UiReviewProgram
                 app.Shutdown();
                 return 0;
             }
-            if (args.Contains("--check") || args.Contains("--validate-layouts") || args.Contains("--check-application-controls"))
+            if (args.Contains("--check") || args.Contains("--validate-layouts") || args.Contains("--check-application-controls") || args.Contains("--check-main"))
             {
                 app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
                 var snapshotOption = Array.IndexOf(args, "--snapshots");
                 if (snapshotOption >= 0)
                 {
                     if (snapshotOption + 1 >= args.Length) throw new ArgumentException("--snapshots needs an output directory.");
-                    if (args.Contains("--check-application-controls")) LayoutSnapshots.CaptureApplicationControls(args[snapshotOption + 1]);
+                    if (args.Contains("--check-main")) LayoutSnapshots.CapturePreviouslySelectedChild(args[snapshotOption + 1]);
+                    else if (args.Contains("--check-application-controls")) LayoutSnapshots.CaptureApplicationControls(args[snapshotOption + 1]);
                     else LayoutSnapshots.Capture(args[snapshotOption + 1]);
                 }
                 File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "layout-validation.txt"), "RUNNING: hidden content and binding validation.");
-                var result = args.Contains("--check-application-controls") ? LayoutMatrix.RunApplicationControlsOnly() : LayoutMatrix.Run();
+                var result = args.Contains("--check-main") ? LayoutMatrix.RunApplicationControlsOnly(includeMainPresentation: true)
+                    : args.Contains("--check-application-controls") ? LayoutMatrix.RunApplicationControlsOnly() : LayoutMatrix.Run();
                 File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "layout-validation.txt"), result);
                 Console.WriteLine(result);
                 app.Shutdown();
@@ -143,9 +156,11 @@ internal static partial class UiFixture
     }
     public static void ToggleTheme()
     {
+        var currentRows = Windows.OfType<MainWindow>().ToDictionary(window => window, window => window.SyntheticRows);
         Dark = !Dark;
         Application.Current.Resources.MergedDictionaries[0] = new ResourceDictionary { Source = new Uri(Dark ? "Themes/Dark.xaml" : "Themes/Light.xaml",UriKind.Relative) };
         Refresh();
+        foreach (var (window, rows) in currentRows) window.SetSyntheticApplicationRows(rows);
     }
     private static void Populate(Window window)
     {
@@ -156,9 +171,8 @@ internal static partial class UiFixture
         if (window is MainWindow main)
         {
             main.SetSyntheticRestart(RestartRequired);
-            Find<ItemsControl>(window,"AppList")!.ItemsSource = Rows();
+            main.SetSyntheticApplicationRows(Rows());
             RefreshSyntheticBulkAvailability(main);
-            main.ResetSyntheticDetails();
             Text(window,"LastCheckedText","Synthetic UI review • no checks or clients run");
             Find<FrameworkElement>(window,"DiscoveryPrompt")!.Visibility = Blank ? Visibility.Visible : Visibility.Collapsed;
             Find<Button>(window,"ThemeToggleButton")!.Content = Dark ? "☀" : "☽";
@@ -176,24 +190,8 @@ internal static partial class UiFixture
             Text(window,"DiscoveryStatus","Synthetic paths only. Save and Browse stay inside this inert review fixture.");
             PopulatePathVerification((SettingsWindow)window);
         }
-        if (window is AppConfigWindow)
-        {
-            Text(window,"SaamanHintText",Blank ? "Choose SAAMAN.dll in Set up / update before enabling this option."
-                : "Puts SAAMAN first in ESAA APP ACC.prf, replacing MAESTRO. Uncheck to restore the MAESTRO entries Launchpad replaced, including their order and display settings. Other edits stay.\n\nChoose the DLL in Manage SAAMAN first. Close EuroScope before applying. Changes are backed up.");
-            Find<CheckBox>(window,"PatchSaamanBox")!.IsChecked = false;
-            Text(window,"NameBox","Åsa Östergård (synthetic)"); Text(window,"CidBox","0000000"); Text(window,"ObsBox","ES");
-            Find<ComboBox>(window,"RatingBox")!.ItemsSource = new[] { "Observer (OBS)","Student 1 (S1)","Student 2 (S2)","Student 3 (S3)","Controller (C1)" };
-            Find<ComboBox>(window,"RatingBox")!.SelectedIndex = 2;
-            Find<PasswordBox>(window,"PasswordBox")!.Password = "FAKE-PASSWORD";
-            Find<PasswordBox>(window,"HoppieBox")!.Password = "FAKE-HOPPIE";
-            Find<Border>(window,"SyncBanner")!.SetResourceReference(Border.BackgroundProperty,"WarningBg");
-            Find<TextBlock>(window,"SyncText")!.SetResourceReference(TextBlock.ForegroundProperty,"WarningFg");
-            Text(window,"SyncText","Synthetic attention state: profile settings need review. No real credentials were loaded.");
-            Text(window,"TargetPathText",Blank ? "Not configured" : FakePath("EuroScope data/An intentionally long controller profile directory name/ESAA/Profiles"));
-            Text(window,"ApplyHintText",Blank ? "Save stores the synthetic profile only; no EuroScope files can be updated." : "Save & apply would update all EuroScope profiles (ES*.prf) in the folder above. This fixture changes nothing.");
-            Find<Button>(window,"SaveProfileButton")!.Content = Blank ? "Save profile" : "Save & apply";
-            Find<Button>(window,"PreviewButton")!.IsEnabled = !Blank;
-        }
+        if (window is AppConfigWindow profile)
+            PopulateController(profile.ProfileEditor, Blank);
         if (window is MaintenanceWindow)
         {
             Find<ItemsControl>(window,"TargetsList")!.ItemsSource = new[] { "EuroScope", "GNG package", "VACS", "vATIS", "TrackAudio", "VatEFS", "VATIRIS" }.Select(name => new RemovalRow { Target = new(name, "Synthetic recognized installation and personal settings.", true, true), Details = FakePath(name + "/installation and data") }).ToList();
@@ -254,10 +252,6 @@ internal static partial class UiFixture
             case "Window_Loaded": return;
             case "Header_MouseLeftButtonDown": if (args is MouseButtonEventArgs { LeftButton:MouseButtonState.Pressed }) window.DragMove(); return;
             case "ThemeToggle_Click": ToggleTheme(); return;
-            case "DensityToggle_Click": window.Tag=Equals(window.Tag,"Compact")?"Comfortable":"Compact"; return;
-            case "Pin_Click":
-                if (sender is Button pin) pin.Content = Equals(pin.Content, "Pin") ? "Unpin" : "Pin";
-                return;
             case "Minimize_Click": window.WindowState=WindowState.Minimized; return;
             case "Maximize_Click": window.WindowState=window.WindowState==WindowState.Maximized?WindowState.Normal:WindowState.Maximized; return;
             case "Close_Click": case "Cancel_Click": window.Close(); return;
@@ -357,6 +351,10 @@ internal static partial class UiFixture
         public string Path {get;set;}="";
         public bool Selected {get;set;}
         public bool CanSelect {get;set;}=true;
+        public bool CanChoose => CanSelect;
+        public string StateLabel {get;set;}="Other copy found";
+        public string ActionText {get;set;}="Use this copy";
+        public string DetailsLabel => CanSelect || StateLabel == "Current location" ? "Details" : "Location unavailable — details";
         public string VerificationText {get;set;}="";
         public Brush VerificationBrush {get;set;}=Brushes.Black;
         public string LocationKind {get;set;}="";
@@ -383,7 +381,7 @@ internal static partial class UiFixture
         var password=Find<PasswordBox>(window,passwordName)!; var text=Find<TextBox>(window,textName)!;
         bool show=text.Visibility!=Visibility.Visible; text.Text=password.Password; text.Visibility=show?Visibility.Visible:Visibility.Collapsed; password.Visibility=show?Visibility.Collapsed:Visibility.Visible;
     }
-    private static T? Find<T>(Window window,string name) where T:class => window.FindName(name) as T;
+    private static T? Find<T>(Window window,string name) where T:class => window.FindName(name) as T ?? (window is AppConfigWindow profile ? profile.ProfileEditor.FindName(name) as T : null);
     private static void Text(Window window,string name,string value) { if(Find<TextBox>(window,name) is {} box) box.Text=value; else if(Find<TextBlock>(window,name) is {} block) block.Text=value; }
     private static string FakePath(string name) => Path.Combine(Root,name.Replace('/',Path.DirectorySeparatorChar));
     internal static string SampleExecutable() => FakeFile("VACS.exe");

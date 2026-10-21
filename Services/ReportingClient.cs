@@ -187,7 +187,8 @@ internal sealed class ReportingClient : IDisposable
                 details.OperationId, details.Application, details.Operation, details.Outcome, details.Stage,
                 details.ErrorCode, details.DurationBucket, details.PackageVersion, details.PreviousVersion,
                 details.Source, details.RestartRequired, details.RecoveryAvailable, details.Feature, details.CompactLayout,
-                details.TextScale, details.AlwaysOnTop, details.Theme, items, dllInventory);
+                details.TextScale, details.AlwaysOnTop, details.Theme, items, dllInventory,
+                details.Reason, details.View, details.Service, details.HttpStatus);
             if (!ReportingWire.ValidEvent(entry, _now())) return false;
             // Session-only context is available for a separately reviewed manual report.
             if (!ReportingWire.IsInventory(name)) _context.Enqueue(entry);

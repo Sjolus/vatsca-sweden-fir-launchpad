@@ -8,45 +8,55 @@ namespace VatscaUpdateChecker;
 // Production XAML with in-memory examples only. No installer, network or profile service is linked.
 public partial class SaamanWindow : Window
 {
+    private bool _busy, _restart, _profileEnabled, _hasRecovery, _ready;
+    private string? _blocked;
     public SaamanWindow()
     {
         InitializeComponent();
         DllPathText.Text = @"C:\Synthetic\EuroScope\ESAA\Plugins\SAAMAN\SAAMAN.dll";
         ProfilePathText.Text = @"C:\Synthetic\EuroScope\ESAA APP ACC.prf";
+        ProfileStateText.Text = "Enabled · first plugin in this profile.";
+        ProfileEnabledCheck.IsChecked = true;
         RuntimeButton.Content = "WebView2 is available";
         RuntimeButton.IsEnabled = false;
+        _ready = true;
     }
-    internal void SetScenario(bool existing, bool busy, bool blocked)
+    internal void SetScenario(string scenario)
     {
-        var release = new SaamanRelease("1.3.37", "v1.3.37", [
-            new("SAAMAN.dll", new Uri("https://github.com/Kaskobiii/SAAMAN/releases/download/v1.3.37/SAAMAN.dll"), 1604608, new string('a', 64))
-        ]);
-        var plan = new SaamanInstallPlan(DllPathText.Text, release,
-            existing ? new(DllPathText.Text, "1.3.36", 1500000, new string('b', 64)) : null, []);
-        ReviewText.Text = SaamanReviewPresentation.Format(plan, runtimeAvailable: true);
-        StatusText.Text = blocked ? "Close every EuroScope instance before installing or updating SAAMAN."
-            : busy ? "Downloading SAAMAN.dll — 64%" : "Release checked. Review the changes before installing.";
-        Activity.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
-        Activity.Value = 64;
-        ConfirmChange.IsEnabled = !busy && !blocked;
+        _busy = scenario == "downloading";
+        _restart = scenario == "restart";
+        _profileEnabled = scenario != "install";
+        _hasRecovery = scenario.StartsWith("restore", StringComparison.Ordinal);
+        _blocked = scenario is "blocked" or "restore-blocked" ? "Close every EuroScope instance before changing SAAMAN." : null;
+        ReviewPanel.Visibility = ConfirmChange.Visibility = RestoreButton.Visibility = CancelReviewButton.Visibility =
+            _hasRecovery ? Visibility.Visible : Visibility.Collapsed;
+        ReviewText.Text = "Restore the previous synthetic SAAMAN DLL. The current DLL is preserved in the recovery record.";
+        ConfirmChangeText.Text = "I have reviewed this restore.";
         ConfirmChange.IsChecked = false;
-        ApplyButton.IsEnabled = false;
-        ApplyButton.Content = existing ? "Install reviewed update" : "Install reviewed release";
-        OptionsPanel.IsEnabled = !busy;
-        ReviewButton.IsEnabled = !busy;
-        CancelOperationButton.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
+        StatusText.Text = _busy ? "Downloading SAAMAN.dll — 64%" : _hasRecovery ? "Review the previous DLL before restoring it." : "Choose an existing DLL or install the latest stable release.";
+        Activity.Visibility = _busy ? Visibility.Visible : Visibility.Collapsed;
+        Activity.Value = 64;
+        OptionsPanel.IsEnabled = !_busy;
+        ProfileEnabledCheck.IsChecked = _profileEnabled;
+        CancelOperationButton.Visibility = _busy ? Visibility.Visible : Visibility.Collapsed;
+        RefreshSyntheticActions();
     }
-    private void Review_Click(object sender, RoutedEventArgs e) => SetScenario(true, false, false);
-    private void Apply_Click(object sender, RoutedEventArgs e) { }
-    private void CancelOperation_Click(object sender, RoutedEventArgs e) => SetScenario(true, false, false);
+    private void RefreshSyntheticActions() => PresentActionAvailability(_busy, _restart, _profileEnabled, _hasRecovery, _blocked);
+    private void Install_Click(object sender, RoutedEventArgs e) { }
+    private void CancelOperation_Click(object sender, RoutedEventArgs e) => SetScenario("update");
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
     private void Adopt_Click(object sender, RoutedEventArgs e) { }
     private void ReleaseNotes_Click(object sender, RoutedEventArgs e) { }
     private void Runtime_Click(object sender, RoutedEventArgs e) { }
     private void ChooseProfile_Click(object sender, RoutedEventArgs e) { }
-    private void ConfirmationChanged(object sender, RoutedEventArgs e) { }
-    private void Recovery_Click(object sender, RoutedEventArgs e) { }
+    private void ConfirmationChanged(object sender, RoutedEventArgs e) { if (_ready) RefreshSyntheticActions(); }
+    private void Recovery_Click(object sender, RoutedEventArgs e) => SetScenario("restore");
     private void Restore_Click(object sender, RoutedEventArgs e) { }
+    private void ProfileChoiceChanged(object sender, RoutedEventArgs e) { }
+    private void CancelReview_Click(object sender, RoutedEventArgs e) => SetScenario("update");
+    private void ProfileInfo_Click(object sender, RoutedEventArgs e) { }
+    private void ProfileInfo_Close(object sender, System.Windows.Input.KeyboardFocusChangedEventArgs e) { }
+
 }
 
 internal static class SaamanLayoutReview
@@ -60,17 +70,17 @@ internal static class SaamanLayoutReview
             if (UiFixture.Dark != dark) UiFixture.ToggleTheme();
             foreach (double textScale in new[] { 1d, 1.25d, 1.5d })
             foreach (bool minimum in new[] { false, true })
-            foreach (var scenario in new[] { "install", "update", "downloading", "blocked" })
+            foreach (var scenario in new[] { "install", "update", "downloading", "blocked", "restart", "restore", "restore-blocked" })
             {
                 UiFixture.SetTextScale(textScale);
                 var window = new SaamanWindow();
-                window.SetScenario(scenario != "install", scenario == "downloading", scenario == "blocked");
+                window.SetScenario(scenario);
                 if (minimum) { window.Width = window.MinWidth; window.Height = window.MinHeight; }
                 try
                 {
                     LayoutValidation.CheckWindowContent(window);
                     var content = (FrameworkElement)window.Content;
-                    foreach (var name in new[] { "ReviewButton", "ApplyButton", "CloseButton", "ConfirmChange" })
+                    foreach (var name in scenario.StartsWith("restore", StringComparison.Ordinal) ? new[] { "InstallButton", "CloseButton", "ConfirmChange" } : new[] { "InstallButton", "CloseButton" })
                     {
                         var control = (FrameworkElement)window.FindName(name);
                         var bounds = control.TransformToAncestor(content).TransformBounds(new Rect(control.RenderSize));
@@ -78,10 +88,31 @@ internal static class SaamanLayoutReview
                             bounds.Right > content.ActualWidth + 1 || bounds.Bottom > content.ActualHeight + 1)
                             throw new InvalidDataException($"SAAMAN {scenario}: {name} clipped at {textScale:P0}, minimum={minimum}.");
                     }
-                    if (((Button)window.FindName("ApplyButton")).IsEnabled)
-                        throw new InvalidDataException("The unconfirmed SAAMAN review must not enable installation.");
-                    if (scenario == "blocked" && ((CheckBox)window.FindName("ConfirmChange")).IsEnabled)
-                        throw new InvalidDataException("Blocked SAAMAN review must require a new confirmation after EuroScope closes.");
+                    bool restore = scenario.StartsWith("restore", StringComparison.Ordinal);
+                    bool available = scenario is not ("blocked" or "restart" or "downloading" or "restore-blocked");
+                    if (window.FindName("ApplyButton") is not null || window.FindName("ReviewProfileButton") is not null)
+                        throw new InvalidDataException("SAAMAN normal actions must not reintroduce a second review/apply step.");
+                    if (((FrameworkElement)window.FindName("ReviewPanel")).Visibility != (restore ? Visibility.Visible : Visibility.Collapsed) ||
+                        ((FrameworkElement)window.FindName("ConfirmChange")).Visibility != (restore ? Visibility.Visible : Visibility.Collapsed))
+                        throw new InvalidDataException("Only restoring an earlier DLL requires the review panel and confirmation.");
+                    if (((Button)window.FindName("InstallButton")).IsEnabled != available || ((CheckBox)window.FindName("ProfileEnabledCheck")).IsEnabled != available)
+                        throw new InvalidDataException("SAAMAN mutations must follow the detected process, restart and busy guards.");
+                    if (((Button)window.FindName("ChooseProfileButton")).IsEnabled != (scenario == "install"))
+                        throw new InvalidDataException("A managed enabled profile cannot be silently switched.");
+                    var confirm = (CheckBox)window.FindName("ConfirmChange");
+                    var restoreButton = (Button)window.FindName("RestoreButton");
+                    if (restoreButton.IsEnabled) throw new InvalidDataException("Restore must start unconfirmed.");
+                    if (restore)
+                    {
+                        if (((TextBlock)window.FindName("ConfirmChangeText")).Text != "I have reviewed this restore.")
+                            throw new InvalidDataException("Restore confirmation must describe the restore.");
+                        confirm.IsChecked = true;
+                        if (restoreButton.IsEnabled != available) throw new InvalidDataException("Restore confirmation must not bypass process guards.");
+                        confirm.IsChecked = false;
+                        restoreButton.BringIntoView(); LayoutValidation.CheckWindowContent(window);
+                    }
+                    if (scenario is "blocked" or "restore-blocked" or "restart" && ((TextBlock)window.FindName("ProcessBlockText")).Visibility != Visibility.Visible)
+                        throw new InvalidDataException("Blocked SAAMAN actions must explain the actual guard.");
                     if (output != null && textScale == 1 && !minimum)
                         LayoutSnapshots.SaveSaamanWindow(window, Path.Combine(output, $"{(dark ? "dark" : "light")}-saaman-{scenario}.png"));
                     count++;
@@ -102,13 +133,15 @@ internal static class SaamanLayoutReview
                 launchpad.LatestVersion = "2.4.0";
                 launchpad.ShowSelfUpdateAction = false;
                 launchpad.SelfUpdateSummary = "Development preview";
-                ((FrameworkElement)main.FindName("ApplicationDetails")).Height = 140;
-                main.SelectSyntheticDetails(row);
+                main.FocusSyntheticRow(row);
                 LayoutValidation.CheckWindowContent(main);
                 if (row.ShowLaunch || row.ShowRunningActions) throw new InvalidDataException("SAAMAN must not expose a standalone process action.");
-                foreach (string name in new[] { "DetailSaamanButton", "DetailSaamanProfileButton", "DetailSaamanGuideButton" })
-                    if (((Button)main.FindName(name)).Visibility != Visibility.Visible)
-                        throw new InvalidDataException("SAAMAN action missing: " + name);
+                main.ShowSyntheticWorkspace("Setup");
+                main.SetupWorkspace.ShowSection("Applications");
+                LayoutValidation.CheckWindowContent(main);
+                if (main.SetupWorkspace.SelectedSection != "Applications") throw new InvalidDataException("SAAMAN configuration must remain reachable in Setup.");
+                main.ShowSyntheticWorkspace("Apps");
+                LayoutValidation.CheckWindowContent(main);
                 if (output != null) LayoutSnapshots.SaveSaamanWindow(main, Path.Combine(output, $"{(dark ? "dark" : "light")}-saaman-main.png"));
                 count++;
             }
@@ -116,13 +149,11 @@ internal static class SaamanLayoutReview
             var profile = new AppConfigWindow();
             try
             {
-                ((TextBox)profile.FindName("TargetPathText")).Text = @"C:\Synthetic\EuroScope";
-                ((TextBlock)profile.FindName("SyncText")).Text = "Saved profile differs from EuroScope. Preview before applying.";
-                var choice = (CheckBox)profile.FindName("PatchSaamanBox");
-                if (choice.IsChecked == true) throw new InvalidDataException("SAAMAN must start unchecked.");
-                choice.IsChecked = true; // Show a user's selection, before applying.
+                ((TextBox)profile.ProfileEditor.FindName("TargetPathText")).Text = @"C:\Synthetic\EuroScope";
+                ((TextBlock)profile.ProfileEditor.FindName("SyncText")).Text = "Saved profile differs from EuroScope. Preview before applying.";
+                if (profile.ProfileEditor.FindName("PatchVatEfsBox") is not null) throw new InvalidDataException("Plugin choices belong in Setup Applications, not controller identity.");
                 LayoutValidation.CheckWindowContent(profile);
-                ((ScrollViewer)profile.FindName("ProfileFormScroll")).ScrollToBottom();
+                ((ScrollViewer)profile.ProfileEditor.FindName("ProfileFormScroll")).ScrollToBottom();
                 if (output != null) LayoutSnapshots.SaveSaamanWindow(profile, Path.Combine(output, $"{(dark ? "dark" : "light")}-saaman-profile.png"));
                 count++;
             }

@@ -1,5 +1,4 @@
 using System.Windows;
-using System.Windows.Controls.Primitives;
 using VatscaUpdateChecker.Models;
 using VatscaUpdateChecker.Services;
 
@@ -15,13 +14,12 @@ public partial class MainWindow
         foreach (var row in _results)
             row.PropertyChanged += (_, e) => { if (e.PropertyName is nameof(CheckResult.RowStatusKind) or nameof(CheckResult.IsNotUsed)) RefreshApplicationsSummary(); };
         LocationChanged += (_, _) => { if (_placementReady) WindowPlacementService.Capture(this, _settings); };
-        SizeChanged += (_, _) => { if (_placementReady) { WindowPlacementService.Capture(this, _settings); ApplyDetailsHeight(); } };
+        SizeChanged += (_, _) => { if (_placementReady) WindowPlacementService.Capture(this, _settings); };
         StateChanged += (_, _) => { if (_placementReady) WindowPlacementService.Capture(this, _settings); };
         Closing += (_, e) =>
         {
             if (e.Cancel) return;
             WindowPlacementService.Capture(this, _settings);
-            _settings.DetailPanelHeight = ApplicationDetails.Height;
             SettingsService.TrySave(_settings);
         };
     }
@@ -36,40 +34,14 @@ public partial class MainWindow
     {
         App.SetTextScale(_settings.TextScale);
         Topmost = _settings.AlwaysOnTop;
-        PinButton.Content = Topmost ? "Unpin" : "Pin";
-        PinButton.ToolTip = Topmost ? "Let other windows cover Launchpad" : "Keep Launchpad above other windows";
-        ApplyDetailsHeight();
+        ApplyDensity();
         if (_results != null) ApplyApplicationUsage();
-    }
-
-    private void Pin_Click(object sender, RoutedEventArgs e)
-    {
-        _settings.AlwaysOnTop = !_settings.AlwaysOnTop;
-        ApplyPresentationPreferences();
-        SaveSessionSettings(Topmost ? "Launchpad will stay on top." : "Launchpad is no longer pinned.");
-    }
-
-    private void ApplyDetailsHeight()
-    {
-        double wanted = double.IsFinite(_settings.DetailPanelHeight) ? _settings.DetailPanelHeight : 100;
-        ApplicationDetails.Height = Math.Clamp(wanted, 100, Math.Max(100, Math.Min(360, ActualHeight > 0 ? ActualHeight * .48 : 220)));
-        DetailsSizeButton.Content = ApplicationDetails.Height > 150 ? "Less space" : "More space";
-    }
-    private void DetailsSize_Click(object sender, RoutedEventArgs e)
-    {
-        _settings.DetailPanelHeight = ApplicationDetails.Height > 150 ? 100 : 240;
-        ApplyDetailsHeight();
-        SettingsService.TrySave(_settings);
-    }
-    private void DetailsResize_DragDelta(object sender, DragDeltaEventArgs e)
-    {
-        _settings.DetailPanelHeight = ApplicationDetails.Height - e.VerticalChange;
-        ApplyDetailsHeight();
     }
 
     private void ApplyApplicationUsage()
     {
         foreach (var row in _results) row.IsNotUsed = ApplicationPreferences.IsNotUsed(_settings, row.AppName);
+        PresentApplicationRows(_results);
         RefreshApplicationsSummary();
     }
     private void Usage_Click(object sender, RoutedEventArgs e)

@@ -10,7 +10,7 @@ using VatscaUpdateChecker;
 
 // Synthetic temporary storage + injected HTTP handler only. No production facade initialization.
 if (args.SequenceEqual(new[] { "--emit-wire" })) { WireFixture.Write(); return; }
-int passed = 0;
+int passed = ReportingInstrumentationTests.Run();
 await Test("unset choices never queue or transmit, but an explicitly submitted report works", async () =>
 {
     using var f = new Fixture();
@@ -410,6 +410,7 @@ await Test("repeated errors are combined before storage access while fatal envel
     Assert(f.Client.TryRegenerateId() && f.Client.State.SuppressedCount == 0 && f.Client.State.PendingCount == 0);
     return Task.CompletedTask;
 });
+passed += await ReportingContractTests.Run();
 passed += await InventoryTests.Run();
 passed += PluginVersionTests.Run();
 passed += PluginRegistrationTests.Run();

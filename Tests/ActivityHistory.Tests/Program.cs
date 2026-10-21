@@ -36,6 +36,16 @@ try
         var result = store.Read().Entries;
         Assert(result.Count == 100 && result[0].Version == "1.0.124" && result[^1].Version == "1.0.25");
     });
+    Test("plugin profile changes retain their operation and recovery after reload", () =>
+    {
+        var path = Path.Combine(root, "plugin-profile", "history.json");
+        var entry = Entry() with { Application = ActivityApplication.VatEfs, Operation = ActivityOperation.Configure,
+            Outcome = ActivityOutcome.NeedsAttention, RecoveryFolder = Path.Combine(root, "profile-backup") };
+        Assert(new ActivityHistoryStore(path).Append(entry));
+        var reloaded = new ActivityHistoryStore(path).Read();
+        Assert(!reloaded.Unavailable && reloaded.Entries.Single() == entry);
+        Assert(entry.OperationName == "Profile configuration");
+    });
     Test("idempotent entry replacement cannot duplicate an outcome", () =>
     {
         var store = new ActivityHistoryStore(Path.Combine(root, "id", "history.json"));

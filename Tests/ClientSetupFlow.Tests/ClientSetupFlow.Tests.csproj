@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../Services/ControllerClientSetup.cs" Link="ControllerClientSetup.cs"/>
+    <Compile Include="../../Services/ControllerProfileResultPresentation.cs" Link="ControllerProfileResultPresentation.cs"/>
+    <Compile Include="../../Models/AppSettings.cs" Link="AppSettings.cs"/>
+    <Compile Include="../../Models/ApplicationPreferences.cs" Link="ApplicationPreferences.cs"/>
+    <Compile Include="../../Models/ClientSignIn.cs" Link="ClientSignIn.cs"/>
+    <Compile Include="../../Models/SoftwareUpdate.cs" Link="SoftwareUpdate.cs"/>
+    <Compile Include="../../Models/ReportingModels.cs" Link="ReportingModels.cs"/>
+  </ItemGroup>
+</Project>

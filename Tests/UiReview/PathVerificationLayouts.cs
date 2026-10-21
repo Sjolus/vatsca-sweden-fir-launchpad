@@ -74,9 +74,13 @@ internal static partial class LayoutMatrix
             Require(rows.Any(row => row.CanSelect) && rows.Any(row => !row.CanSelect), "Verification fixtures lack selectable and invalid examples.");
             foreach (var row in rows)
             {
-                var checkbox = LayoutValidation.Descendants(list).OfType<CheckBox>().Single(element => ReferenceEquals(element.DataContext, row));
-                Require(checkbox.IsEnabled == row.CanSelect && checkbox.IsChecked != true,
-                    "Discovery selection must follow verification and start unchecked.");
+                var action = LayoutValidation.Descendants(list).OfType<Button>().Single(element =>
+                    ReferenceEquals(element.DataContext, row) && BindingOperations.GetBinding(element, ContentControl.ContentProperty)?.Path?.Path == "ActionText");
+                Require(action.IsEnabled == row.CanChoose && action.Content?.ToString() == row.ActionText,
+                    "Discovery must distinguish current locations and explicit changes.");
+                var details = LayoutValidation.Descendants(list).OfType<Expander>().Single(element => ReferenceEquals(element.DataContext, row));
+                details.IsExpanded = true;
+                DrainBindings(); content.UpdateLayout();
                 var reason = LayoutValidation.Descendants(list).OfType<TextBlock>().Single(element =>
                     ReferenceEquals(element.DataContext, row) && BindingOperations.GetBinding(element, TextBlock.TextProperty)?.Path?.Path == "VerificationText");
                 Require(reason.Text == row.VerificationText && reason.Text.Length > 20 && reason.TextWrapping != TextWrapping.NoWrap,
@@ -85,6 +89,7 @@ internal static partial class LayoutMatrix
                 Require(reason.IsEnabled, "Disabling an invalid choice must not also disable its explanation.");
                 Require(reason.Foreground is SolidColorBrush foreground && Application.Current.FindResource("RowBg") is SolidColorBrush background &&
                     Contrast(foreground.Color, background.Color) >= 4.5, "Discovery verification feedback has insufficient contrast.");
+                details.IsExpanded = false;
             }
             Require(rows.Single(row => row.Candidate.AppName == "VACS").CanSelect,
                 "A valid custom copy must remain selectable even without automatic management.");

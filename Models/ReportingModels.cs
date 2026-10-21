@@ -4,7 +4,10 @@ namespace VatscaUpdateChecker.Models;
 
 public enum ReportingApplication { Launchpad, Euroscope, Gng, Trackaudio, Vacs, Vatis, Vatefs, Vatiris, Maintenance, Saaman }
 public enum ReportingCategory { Setup, Installation, Update, Gng, Launch, Appearance, Other }
-public enum ReportingEventName { SessionStarted, SetupStep, OperationStarted, OperationFinished, GngPackageObtained, PreferenceChanged, OperationFailed, UnhandledError, ApplicationOpened, FeatureUsed, PreferencesSnapshot, InventorySnapshot }
+public enum ReportingEventName { SessionStarted, SetupStep, OperationStarted, OperationFinished, GngPackageObtained, PreferenceChanged, OperationFailed, UnhandledError, ApplicationOpened, FeatureUsed, PreferencesSnapshot, InventorySnapshot, ViewOpened }
+public enum ReportingView { Apps, SetupApplications, SetupGng, ControllerProfile, Preferences, ActivityRecovery }
+public enum ReportingReason { AlreadyConfigured, ClientRunning, Busy, MissingConfiguration, UnsupportedInstallation, Conflict, RateLimited, AccessDenied, Timeout, NetworkUnavailable, SaveFailed, VerificationFailed, Unexpected }
+public enum ReportingRemoteService { [JsonStringEnumMemberName("github")] GitHub, AeroNav, Vatis }
 public enum ReportingFeature { CheckUpdates, ControllerProfileReview, GngPackageReview, GngCleanupReview, GngRestoreReview, SetupGuide, InstallOrUpdate, Adopt, FontCheck }
 public enum ReportingTheme { Dark, Light }
 public enum ReportingTextScale { Standard, Larger, Largest }
@@ -29,10 +32,10 @@ public sealed class ReportingInventoryCapture
     internal ReportingInventoryCapture(Guid supportId, Guid generation, DateTime startedAt, bool includeDllInventory = false)
     { SupportId = supportId; Generation = generation; StartedAt = startedAt; IncludeDllInventory = includeDllInventory; }
 }
-public enum ReportingOperation { Install, Update, Repair, Replace, Remove, Cleanup, Restore, RestoreCleanup, Prerequisite, Setup, Adopt, Check, Save, Download, Launch }
-public enum ReportingOutcome { Completed, Cancelled, Blocked, Failed, Unknown }
+public enum ReportingOperation { Install, Update, Repair, Replace, Remove, Cleanup, Restore, RestoreCleanup, Prerequisite, Setup, Adopt, Check, Save, Download, Launch, ConfigureSignIn, ConfigureSwedenProfile, ConfigurePluginProfile }
+public enum ReportingOutcome { Completed, Cancelled, Blocked, Failed, Unknown, Partial }
 public enum ReportingStage { Start, Check, Prepare, Download, Verify, Apply, Finish, Welcome, Applications, Gng, Profile, Fonts, Preferences }
-public enum ReportingErrorCode { Unknown, DownloadTimeout, NetworkUnavailable, PackageInvalid, InstallationFailed, InstallationIdentityMismatch, SettingsSaveFailed, BrowserProcessFailed, OperationStopped, UnexpectedError }
+public enum ReportingErrorCode { Unknown, DownloadTimeout, NetworkUnavailable, PackageInvalid, InstallationFailed, InstallationIdentityMismatch, SettingsSaveFailed, BrowserProcessFailed, OperationStopped, UnexpectedError, RateLimited, AccessDenied }
 public enum ReportingSource { Cache, Download, Import, Discovery, Browse, Compact, Expanded, Standard, Larger, Largest, Existing, Fresh, Preferences }
 public enum ReportingDurationBucket
 {
@@ -68,7 +71,11 @@ public sealed record ReportingDetails(
     bool? CompactLayout = null,
     ReportingTextScale? TextScale = null,
     bool? AlwaysOnTop = null,
-    ReportingTheme? Theme = null);
+    ReportingTheme? Theme = null,
+    ReportingReason? Reason = null,
+    ReportingView? View = null,
+    ReportingRemoteService? Service = null,
+    int? HttpStatus = null);
 
 public sealed class PreparedReport
 {
@@ -90,7 +97,8 @@ internal sealed record ReportingEvent(
     ReportingSource? Source = null, bool? RestartRequired = null, bool? RecoveryAvailable = null,
     ReportingFeature? Feature = null, bool? CompactLayout = null, ReportingTextScale? TextScale = null,
     bool? AlwaysOnTop = null, ReportingTheme? Theme = null, IReadOnlyList<ReportingInventoryEntry>? Items = null,
-    ReportingDllInventory? DllInventory = null);
+    ReportingDllInventory? DllInventory = null, ReportingReason? Reason = null, ReportingView? View = null,
+    ReportingRemoteService? Service = null, int? HttpStatus = null);
 
 internal sealed record ReportingBatch(int SchemaVersion, IReadOnlyList<ReportingEvent> Events);
 internal sealed record ReportingReport(int SchemaVersion, Guid ReportId, Guid SupportId, string LaunchpadVersion,

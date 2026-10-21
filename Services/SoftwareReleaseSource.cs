@@ -1,6 +1,7 @@
 using System.IO;
 using System.Globalization;
 using System.Net.Http;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using VatscaUpdateChecker.Models;
 
@@ -16,33 +17,139 @@ public sealed class SoftwareReleaseSource : ISoftwareReleaseSource
     private const string VatisDownloadBase = "https://vatis.app/downloads/windows/";
     private readonly HttpClient _httpClient;
     private readonly TimeSpan _metadataTimeout;
+    private readonly Func<DateTimeOffset> _utcNow;
+    private readonly Catalogs _catalogs;
+    private static readonly ConditionalWeakTable<HttpClient, Catalogs> SharedCatalogs = new();
+    private static readonly TimeSpan CatalogLifetime = TimeSpan.FromMinutes(10);
 
     public SoftwareReleaseSource(HttpClient httpClient) : this(httpClient, TimeSpan.FromSeconds(45)) { }
 
-    internal SoftwareReleaseSource(HttpClient httpClient, TimeSpan metadataTimeout)
+    internal SoftwareReleaseSource(HttpClient httpClient, TimeSpan metadataTimeout, Func<DateTimeOffset>? utcNow = null)
     {
         ArgumentNullException.ThrowIfNull(httpClient);
         if (metadataTimeout <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(metadataTimeout));
         _httpClient = httpClient;
         _metadataTimeout = metadataTimeout;
+        _utcNow = utcNow ?? (() => DateTimeOffset.UtcNow);
+        _catalogs = SharedCatalogs.GetValue(httpClient, _ => new());
     }
 
     public Task<SoftwareRelease?> GetLatestAsync(SoftwareApp app, string installedVersion,
+        CancellationToken cancellationToken) => GetCatalogAsync(app, AllowVatisBeta(app, installedVersion), false, cancellationToken);
+
+    public Task<SoftwareRelease?> RefreshLatestAsync(SoftwareApp app, string installedVersion,
+        CancellationToken cancellationToken) => GetCatalogAsync(app, AllowVatisBeta(app, installedVersion), true, cancellationToken);
+
+    private Task<SoftwareRelease?> FetchCatalogAsync(SoftwareApp app, bool allowBeta,
         CancellationToken cancellationToken) => app switch
         {
             SoftwareApp.Vacs or SoftwareApp.TrackAudio or SoftwareApp.VatEfs => ReadGitHubAsync(app, cancellationToken),
-            SoftwareApp.Vatis => ReadVatisAsync(installedVersion, cancellationToken),
+            SoftwareApp.Vatis => ReadVatisCatalogAsync(allowBeta, cancellationToken),
             _ => throw new NotSupportedException("This application does not support managed updates.")
         };
 
     /// <summary>vATIS beta needs an explicit opt-in; VatEFS includes published prereleases.</summary>
     public Task<SoftwareRelease?> GetLatestFreshAsync(SoftwareApp app, bool allowVatisBeta,
-        CancellationToken cancellationToken = default) => app switch
+        CancellationToken cancellationToken = default) => GetCatalogAsync(app, allowVatisBeta, false, cancellationToken);
+
+    public Task<SoftwareRelease?> RefreshLatestFreshAsync(SoftwareApp app, bool allowVatisBeta,
+        CancellationToken cancellationToken = default) => GetCatalogAsync(app, allowVatisBeta, true, cancellationToken);
+
+    private static bool AllowVatisBeta(SoftwareApp app, string installedVersion)
+    {
+        if (app != SoftwareApp.Vatis) return false;
+        if (!SoftwareVersion.TryParse(installedVersion, out var installed))
+            throw InvalidCatalog("The installed vATIS version cannot be compared safely.");
+        return installed.PrereleaseLabel == "beta";
+    }
+
+    private async Task<SoftwareRelease?> GetCatalogAsync(SoftwareApp app, bool allowBeta, bool refresh,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!Enum.IsDefined(app)) throw new NotSupportedException("This application does not support managed updates.");
+        if (app != SoftwareApp.Vatis) allowBeta = false;
+        var key = (app, allowBeta);
+        VendorService vendor = app == SoftwareApp.Vatis ? VendorService.Vatis : VendorService.GitHub;
+        Task<SoftwareRelease?> pending;
+        TaskCompletionSource<SoftwareRelease?>? start = null;
+        int generation;
+        lock (_catalogs)
         {
-            SoftwareApp.Vacs or SoftwareApp.TrackAudio or SoftwareApp.VatEfs => ReadGitHubAsync(app, cancellationToken),
-            SoftwareApp.Vatis => ReadVatisCatalogAsync(allowVatisBeta, cancellationToken),
-            _ => throw new NotSupportedException("This application does not support managed installation.")
-        };
+            if (!refresh && _catalogs.Values.TryGetValue(key, out var cached) && _utcNow() < cached.ExpiresAt)
+                return cached.Release;
+            if (_catalogs.Cooldowns.TryGetValue(vendor, out var blocked) && _utcNow() < blocked.RetryAtUtc)
+                throw blocked;
+            generation = _catalogs.Generations.GetValueOrDefault(key);
+            if (refresh)
+            {
+                // Installation preflight must contact the vendor again, including after a recent UI check.
+                _catalogs.Generations[key] = ++generation;
+                _catalogs.Values.Remove(key);
+                pending = Task.FromResult<SoftwareRelease?>(null);
+            }
+            else if (!_catalogs.Pending.TryGetValue(key, out pending!))
+            {
+                start = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                pending = start.Task;
+                _catalogs.Pending[key] = pending;
+            }
+        }
+        if (refresh)
+        {
+            try
+            {
+                var result = await FetchCatalogAsync(app, allowBeta, cancellationToken).ConfigureAwait(false);
+                lock (_catalogs)
+                    if (_catalogs.Generations.GetValueOrDefault(key) == generation)
+                        _catalogs.Values[key] = new(result, _utcNow() + CatalogLifetime);
+                return result;
+            }
+            catch (VendorRequestException ex) { RememberCooldown(ex); throw; }
+        }
+        if (start is not null) _ = PopulateAsync(app, allowBeta, generation, start);
+        return await pending.WaitAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task PopulateAsync(SoftwareApp app, bool allowBeta, int generation, TaskCompletionSource<SoftwareRelease?> completion)
+    {
+        var key = (app, allowBeta);
+        try
+        {
+            // One caller closing a dialog does not cancel another caller's shared request.
+            var result = await FetchCatalogAsync(app, allowBeta, CancellationToken.None).ConfigureAwait(false);
+            lock (_catalogs)
+            {
+                if (_catalogs.Generations.GetValueOrDefault(key) == generation)
+                    _catalogs.Values[key] = new(result, _utcNow() + CatalogLifetime);
+                _catalogs.Pending.Remove(key);
+                completion.TrySetResult(result);
+            }
+        }
+        catch (Exception ex)
+        {
+            if (ex is VendorRequestException vendorFailure) RememberCooldown(vendorFailure);
+            lock (_catalogs) { _catalogs.Pending.Remove(key); completion.TrySetException(ex); }
+            _ = completion.Task.Exception;
+        }
+    }
+
+    private void RememberCooldown(VendorRequestException exception)
+    {
+        if (exception is not { FailureKind: VendorFailureKind.RateLimited, RetryAtUtc: not null }) return;
+        lock (_catalogs)
+            if (!_catalogs.Cooldowns.TryGetValue(exception.Vendor, out var previous) || previous.RetryAtUtc < exception.RetryAtUtc)
+                _catalogs.Cooldowns[exception.Vendor] = exception;
+    }
+
+    private sealed class Catalogs
+    {
+        internal Dictionary<(SoftwareApp, bool), CachedCatalog> Values { get; } = new();
+        internal Dictionary<(SoftwareApp, bool), Task<SoftwareRelease?>> Pending { get; } = new();
+        internal Dictionary<VendorService, VendorRequestException> Cooldowns { get; } = new();
+        internal Dictionary<(SoftwareApp, bool), int> Generations { get; } = new();
+    }
+    private sealed record CachedCatalog(SoftwareRelease? Release, DateTimeOffset ExpiresAt);
 
     private async Task<SoftwareRelease?> ReadGitHubAsync(SoftwareApp app, CancellationToken cancellationToken)
     {
@@ -106,13 +213,6 @@ public sealed class SoftwareReleaseSource : ISoftwareReleaseSource
             throw InvalidCatalog("The vendor has not supplied a SHA-256 checksum for this installer.");
         return ValidatedRelease(app, latestVersion.Value, Text(asset, "browser_download_url"),
             fileName, digest[7..], Size(asset, "size")) with { IsPrerelease = IsBoolean(selected, "prerelease", true) };
-    }
-
-    private async Task<SoftwareRelease?> ReadVatisAsync(string installedVersion, CancellationToken cancellationToken)
-    {
-        if (!SoftwareVersion.TryParse(installedVersion, out var installed))
-            throw InvalidCatalog("The installed vATIS version cannot be compared safely.");
-        return await ReadVatisCatalogAsync(installed.PrereleaseLabel == "beta", cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<SoftwareRelease?> ReadVatisCatalogAsync(bool allowBeta, CancellationToken cancellationToken)
@@ -184,7 +284,7 @@ public sealed class SoftwareReleaseSource : ISoftwareReleaseSource
         try { return await ReadJsonCoreAsync(uri, timeout.Token); }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            throw new TimeoutException("The vendor's update catalog did not respond in time. Try checking again.");
+            throw new VendorRequestException(uri.Host == "api.github.com" ? VendorService.GitHub : VendorService.Vatis, VendorFailureKind.Timeout);
         }
     }
 
@@ -193,8 +293,13 @@ public sealed class SoftwareReleaseSource : ISoftwareReleaseSource
         using var request = new HttpRequestMessage(HttpMethod.Get, uri);
         request.Headers.UserAgent.ParseAdd("SwedenFirLaunchpad/2.0");
         request.Headers.Accept.ParseAdd("application/json");
-        using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, requestToken);
-        response.EnsureSuccessStatusCode();
+        HttpResponseMessage response;
+        try { response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, requestToken); }
+        catch (HttpRequestException)
+        { throw new VendorRequestException(uri.Host == "api.github.com" ? VendorService.GitHub : VendorService.Vatis, VendorFailureKind.Unavailable); }
+        using var responseLease = response;
+        if (!response.IsSuccessStatusCode)
+            throw VendorRequestException.FromResponse(response, uri.Host == "api.github.com" ? VendorService.GitHub : VendorService.Vatis, _utcNow());
         // Metadata redirects must stay at the exact endpoint. Package redirects are checked separately.
         if (response.RequestMessage?.RequestUri is { } finalUri && finalUri != uri)
             throw InvalidCatalog("The update catalog redirected to an unexpected address.");

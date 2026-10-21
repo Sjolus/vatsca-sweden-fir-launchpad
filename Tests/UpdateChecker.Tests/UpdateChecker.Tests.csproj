@@ -14,4 +14,8 @@
     <Compile Include="../../Models/ProfileOption.cs" Link="ProfileOption.cs" />
     <Compile Include="../../Models/ApplicationDescriptions.cs" Link="ApplicationDescriptions.cs" />
   </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../Services/VendorRequestException.cs" Link="Services/VendorRequestException.cs" />
+    <Compile Include="../../Services/VendorMetadataReader.cs" Link="Services/VendorMetadataReader.cs" />
+  </ItemGroup>
 </Project>

@@ -2,7 +2,7 @@
 
 Available in Launchpad 2.1.0 and later.
 
-Installing a new GNG package can leave older sector files, profiles and plugin DLLs behind. The installation result's **Review old files for cleanup…** action compares two complete packages and helps you move eligible old files into a backup. You can also open **Swedish GNG package → Details… → Clean up…** after a manual update. Cleanup does not install an update or remove the whole GNG package.
+Installing a new GNG package can leave older sector files, profiles and plugin DLLs behind. The installation result's **Review old files for cleanup…** action compares two complete packages and helps you move eligible old files into a backup. After a manual update, choose **Setup → Swedish GNG → Clean up old files…**. Cleanup does not install an update or remove the whole GNG package.
 
 ## Compare the packages
 
@@ -12,7 +12,7 @@ For manually selected ZIPs, keep AeroNav's original `ESAA-Full-Package_…zip` f
 
 Use **Download packages on AeroNav ↗** to open the [Swedish package page](https://files.aero-nav.com/ESAA) in your normal browser and sign in there. Check your Downloads folder or saved package ZIPs for the old version; AeroNav may no longer offer it. If you cannot obtain the matching old complete ZIP, leave those files in place. Launchpad will not guess which files belonged to that package.
 
-The cleanup window shows the reviewed EuroScope data folder. From the main window, this is the folder saved in **App settings**; from an installation result, it is the folder just updated. Check this is the copy you use. To change it, close cleanup and choose the correct folder first.
+The cleanup window shows the reviewed EuroScope data folder. This is the folder chosen under **Setup → Swedish GNG**, or the folder just updated when opening cleanup after installation. Check this is the copy you use. To change it, close cleanup and choose the correct folder first.
 
 Choose the old and new complete ZIPs, then **Compare packages**. Launchpad checks that the newer sector files are installed and compares the package contents with files in the data folder. Comparing changes nothing. Every file starts unchecked; the reason beside each file explains whether it can move or must stay.
 

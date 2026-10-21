@@ -75,6 +75,7 @@ public partial class GngUpdateWindow : Window
         ReviewPanel.Visibility = review ? Visibility.Visible : Visibility.Collapsed;
         CompletePanel.Visibility = state == GngUpdateFixtureState.Completion ? Visibility.Visible : Visibility.Collapsed;
         RuntimeInstallButton.Visibility = RuntimeInfoButton.Visibility = state == GngUpdateFixtureState.RuntimeFallback ? Visibility.Visible : Visibility.Collapsed;
+        OtherOptions.IsExpanded = state is GngUpdateFixtureState.Completion or GngUpdateFixtureState.RuntimeFallback;
         StartBrowserButton.Visibility = FreshDownloadButton.Visibility = state == GngUpdateFixtureState.RuntimeFallback ? Visibility.Collapsed : Visibility.Visible;
         StartBrowserButton.IsEnabled = FreshDownloadButton.IsEnabled = !downloading && !preparing && !checkingCache && !waitingForLogin;
         StartBrowserButton.Content = reference ? "Retry reference download" : "Download Swedish GNG";
@@ -102,7 +103,7 @@ public partial class GngUpdateWindow : Window
         };
         CleanupButton.Visibility = state == GngUpdateFixtureState.Completion ? Visibility.Visible : Visibility.Collapsed;
         OriginText.Text = browsing ? "https://files.aero-nav.com" : "Browser not started (synthetic)";
-        StartHeading.Text = state == GngUpdateFixtureState.RuntimeFallback ? "The embedded browser needs WebView2" : "Get your GNG package";
+        StartHeading.Text = state == GngUpdateFixtureState.RuntimeFallback ? "The embedded browser needs WebView2" : "Get Swedish GNG";
         PackageKindText.Text = reference
             ? "Update Only 2610/01 rev.3 is saved. Its matching Full Package will be kept for cleanup comparisons and will not be installed."
             : _syntheticNeedsFull
@@ -110,7 +111,7 @@ public partial class GngUpdateWindow : Window
             : "Existing Swedish GNG found — Update Only will be installed after review. A matching Full Package will also be kept for cleanup comparisons.";
         StartExplanation.Text = state == GngUpdateFixtureState.RuntimeFallback
             ? "Synthetic runtime fallback. Install Microsoft's WebView2 runtime explicitly, or use your normal browser and import the ZIP. This fixture never checks or installs a runtime."
-            : "Launchpad checks AeroNav's current version and matching saved packages first, then downloads what is missing. Sign in if asked. You review the changes before installing; your website sign-in stays in this browser.";
+            : "Use the latest package from AeroNav. Saved copies are reused; sign in only if needed.";
         PackageText.Text = "ESAA Update Only · 2610 / 01 rev. 3";
         PackageSummaryText.Text = state == GngUpdateFixtureState.CachedReview
             ? "Matching saved Update Only + Full reference · synthetic review · nothing downloaded"
@@ -327,6 +328,8 @@ internal static partial class LayoutMatrix
                         Require(!IsPresented(Required<Button>(window, "InstallButton")), "GNG must not offer installation before a review.");
                         LayoutValidation.CheckWindowContent(window);
                         window.SetSyntheticState(state);
+                        Required<Expander>(window, "StartOptions").IsExpanded = true;
+                        DrainBindings(); content.UpdateLayout();
                         Required<Button>(window, "FreshDownloadButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                         Require(window.SyntheticState == GngUpdateFixtureState.WaitingForLogin && window.SyntheticCacheBypassed && browser.Content is null,
                             "Fresh copies must explicitly bypass the synthetic cache check without opening a real browser.");
@@ -384,6 +387,8 @@ internal static partial class LayoutMatrix
                         Require(status.Text.Contains("separate review", StringComparison.Ordinal), "Cleanup must remain an inert, separate review step.");
                         break;
                     case GngUpdateFixtureState.RuntimeFallback:
+                        Required<Expander>(window, "OtherOptions").IsExpanded = true;
+                        DrainBindings(); content.UpdateLayout();
                         foreach (var name in new[] { "RuntimeInstallButton", "RuntimeInfoButton", "ImportButton", "ExternalBrowserButton" })
                             Require(IsPresented(Required<Button>(window, name)) && Required<Button>(window, name).IsEnabled,
                                 "Missing WebView2 must retain the explicit fallback action: " + name);
@@ -420,11 +425,17 @@ internal static partial class LayoutMatrix
             "Download tooltips must distinguish reuse from the explicit cache-bypass action.");
         if (!IsPresented(Required<FrameworkElement>(window, "StartPanel")) || state == GngUpdateFixtureState.RuntimeFallback) return;
         var panel = Required<FrameworkElement>(window, "StartPanel");
-        var startBounds = Bounds(start, panel);
+        var options = Required<Expander>(window, "StartOptions");
+        Require(IsPresented(options) && !options.IsExpanded && !IsPresented(fresh),
+            "Cache bypass belongs to collapsed download options rather than competing with the main download action.");
+        options.IsExpanded = true;
+        DrainBindings(); ((FrameworkElement)window.Content).UpdateLayout();
+        fresh.BringIntoView(); DrainBindings(); ((FrameworkElement)window.Content).UpdateLayout();
         var freshBounds = Bounds(fresh, panel);
-        Require(IsPresented(fresh) && freshBounds.Left >= startBounds.Right && Math.Abs(freshBounds.Top - startBounds.Top) < 1 &&
-            freshBounds.Right <= panel.ActualWidth && freshBounds.Height >= 24,
-            "Fresh copies must fit beside the main action without adding a row at minimum size.");
+        Require(IsPresented(fresh) && freshBounds.Left >= 0 && freshBounds.Right <= panel.ActualWidth && freshBounds.Height >= 24,
+            "Expanding download options must expose a usable fresh-copy action at minimum size.");
+        options.IsExpanded = false;
+        start.BringIntoView(); DrainBindings(); ((FrameworkElement)window.Content).UpdateLayout();
     }
 
     private static void CheckGngListLayoutChoicePresentation(GngUpdateWindow window, GngUpdateFixtureState state)

@@ -134,7 +134,7 @@ public sealed class SetupWizardState
         }
         if (!string.IsNullOrWhiteSpace(settings.SaamanDllPath)) SetNotUsed("SAAMAN", false);
         HasSavedActions = true;
-        _actions.Add("SAAMAN location saved. Enable it separately in Controller profile for the reviewed APP/ACC profile.");
+        _actions.Add("SAAMAN location saved. Turn on Use in APP / ACC under Setup → Applications to enable it.");
     }
 
     public void RecordInstallation(SetupWizardApplication app, string executablePath,

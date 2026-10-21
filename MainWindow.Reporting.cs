@@ -14,6 +14,25 @@ public partial class MainWindow
     private Guid _lastPresentationSupportId;
     private string? _lastInventorySignature;
     private long _lastInventoryCaptureTime;
+    private readonly ReportingViewTracker _reportedViews = new();
+
+    private void ReportView(ReportingView view)
+    {
+        var state = ReportingService.State;
+        if (IsLoaded && state.Preferences.Confirmed && state.Preferences.Usage &&
+            _reportedViews.Transition(view, state.SupportId)) ReportingEvents.View(view);
+    }
+
+    private void ReportWorkspaceView() => ReportView(_workspace switch
+    {
+        "Setup" => SetupWorkspace.SelectedSection switch
+        {
+            "Gng" => ReportingView.SetupGng, "Profile" => ReportingView.ControllerProfile,
+            "Preferences" => ReportingView.Preferences, "Activity" => ReportingView.ActivityRecovery,
+            _ => ReportingView.SetupApplications
+        },
+        _ => ReportingView.Apps
+    });
 
     // Reuse the normal version check; reporting never starts another network check.
     private async Task ReportCheckedInventoryAsync()
@@ -79,11 +98,17 @@ public partial class MainWindow
         { _lastPresentationReport = details; _lastPresentationSupportId = state.SupportId; }
     }
 
-    private void ReportSoftwareFailure(SoftwareApp application, Exception exception) => ReportingEvents.RecordFailure(exception,
-        Enum.TryParse<ReportingApplication>(application.ToString(), true, out var value) ? value : ReportingApplication.Launchpad,
-        ReportingOperation.Update);
+    private void ReportSoftwareFailure(SoftwareApp application, SoftwareUpdatePhase phase, Exception exception) => ReportingEvents.RecordFailure(exception,
+        ReportingEvents.ForSoftware(application), phase == SoftwareUpdatePhase.Checking ? ReportingOperation.Check : ReportingOperation.Update,
+        phase switch { SoftwareUpdatePhase.Checking => ReportingStage.Check, SoftwareUpdatePhase.Downloading => ReportingStage.Download,
+            SoftwareUpdatePhase.Verifying => ReportingStage.Verify, SoftwareUpdatePhase.Installing => ReportingStage.Apply, _ => ReportingStage.Prepare });
 
-    private void ReportSelfUpdateFailure(Exception exception) => ReportingEvents.RecordFailure(exception, ReportingApplication.Launchpad, ReportingOperation.Update);
+    private void ReportSelfUpdateFailure(LaunchpadUpdateStatus phase, Exception exception) => ReportingEvents.RecordFailure(exception, ReportingApplication.Launchpad,
+        phase == LaunchpadUpdateStatus.Checking ? ReportingOperation.Check : phase == LaunchpadUpdateStatus.Downloading ? ReportingOperation.Download : ReportingOperation.Update,
+        phase == LaunchpadUpdateStatus.Checking ? ReportingStage.Check : phase == LaunchpadUpdateStatus.Downloading ? ReportingStage.Download : ReportingStage.Apply);
+
+    private void ReportPublicCheckFailure(PublicUpdateCheck check, Exception exception) => ReportingEvents.RecordFailure(exception,
+        check == PublicUpdateCheck.Gng ? ReportingApplication.Gng : ReportingApplication.Launchpad, ReportingOperation.Check, ReportingStage.Check);
 
     private bool CanOpenReporting() => !_windowClosed && !_isChecking && !_softwareActionBusy && !_softwareUpdates.IsBusy &&
         !_selfUpdateActionBusy && _openDialogCount == 0 && IsEnabled;
@@ -98,6 +123,8 @@ public partial class MainWindow
     {
         if (!CanOpenReporting() || sender is not Button button) return;
         var menu = new ContextMenu { PlacementTarget = button, Placement = PlacementMode.Bottom };
+        var gettingStarted = new MenuItem { Header = "Getting started…" };
+        gettingStarted.Click += (_, _) => OpenGettingStarted();
         var report = new MenuItem { Header = "Report a problem…" };
         report.Click += (_, _) => OpenProblemReport(ReportingApplication.Launchpad);
         var privacy = new MenuItem { Header = "Privacy and support ID…" };
@@ -110,7 +137,7 @@ public partial class MainWindow
         {
             if (CanOpenReporting()) ShowOwnedDialog(new ReportingHistoryWindow { Owner = this });
         };
-        menu.Items.Add(report); menu.Items.Add(privacy); menu.Items.Add(history); menu.IsOpen = true;
+        menu.Items.Add(gettingStarted); menu.Items.Add(report); menu.Items.Add(privacy); menu.Items.Add(history); menu.IsOpen = true;
     }
 
     private void ReportProblem_Click(object sender, RoutedEventArgs e)

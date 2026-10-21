@@ -65,7 +65,7 @@ public static partial class SaamanProfileService
         if (policy.Enabled)
         {
             if (string.IsNullOrWhiteSpace(dll) || !Path.IsPathFullyQualified(dll))
-                throw new InvalidOperationException("Choose the installed SAAMAN.dll in Manage SAAMAN before enabling it.");
+                throw new InvalidOperationException("Choose the installed SAAMAN.dll in Setup → Applications before enabling it.");
             dll = SaamanFileSafety.Canonical(dll);
             RejectReparse(dll);
             if (!Names.Equals(Path.GetFileName(dll), DllName))
@@ -96,6 +96,25 @@ public static partial class SaamanProfileService
         var after = text == transformed ? before : bom.Concat(encoding.GetBytes(transformed)).ToArray();
         return new(Path.GetFullPath(dataFolder), policy, !before.SequenceEqual(after))
         { BeforeBytes = before, AfterBytes = after, BeforeHash = Hash(before), DllHash = dllHash, MaestroDependencies = maestroDependencies };
+    }
+
+    /// <summary>
+    /// Retarget an enabled profile without disabling SAAMAN or replacing the original
+    /// MAESTRO baseline. The previous DLL may have been moved and need not still exist.
+    /// </summary>
+    public static SaamanProfileChange BuildRelocationPlan(SaamanProfilePolicy current, string selectedDll, string dataFolder)
+    {
+        if (!current.Enabled) throw new InvalidOperationException("SAAMAN is not enabled in this profile.");
+        current = ValidatePolicy(current, dataFolder);
+        var plan = BuildPlan(new(current.ProfilePath, selectedDll, true) { StateRoot = current.StateRoot }, dataFolder);
+        var (_, _, plugins) = ParseProfile(Decode(plan.BeforeBytes).Text);
+        var active = plugins.Where(plugin => IsPlugin(plugin.Path, DllName)).ToArray();
+        if (active.Length == 0 || active.Any(plugin => !Names.Equals(
+                ResolvePluginPath(plugin.Path, dataFolder), current.DllPath)))
+            throw new InvalidOperationException("This profile no longer uses the saved SAAMAN location. Review its plugin entries before changing the DLL location.");
+        if (plan.Policy.StateDependency?.Hash is null || plan.Policy.MaestroState is null)
+            throw new InvalidOperationException("The original MAESTRO restoration record is missing. Restore its saved profile state before changing the SAAMAN location.");
+        return plan;
     }
 
     public static string GeneratePreview(SaamanProfileChange plan)
@@ -273,7 +292,7 @@ public static partial class SaamanProfileService
     internal static string ValidateDll(string path)
     {
         RejectReparse(path);
-        if (!File.Exists(path)) throw new FileNotFoundException("SAAMAN.dll is missing. Install or select it in Manage SAAMAN before enabling it.", path);
+        if (!File.Exists(path)) throw new FileNotFoundException("SAAMAN.dll is missing. Install or select it in Setup → Applications before enabling it.", path);
         using var parents = new SaamanFileSafety.DirectoryGuard(Path.GetDirectoryName(path)!, false);
         using var file = SaamanFileSafety.OpenRead(path);
         if (file.Length == 0 || file.Length > 64 * 1024 * 1024)
@@ -284,7 +303,7 @@ public static partial class SaamanProfileService
     private static byte[] ReadProfile(string path)
     {
         if (!File.Exists(path))
-            throw new FileNotFoundException("The selected APP/ACC profile is missing. Choose its reviewed .prf in Manage SAAMAN.", path);
+            throw new FileNotFoundException("The selected APP/ACC profile is missing. Check the data folder in Setup → Swedish GNG.", path);
         using var parents = new SaamanFileSafety.DirectoryGuard(Path.GetDirectoryName(path)!, false);
         using var file = SaamanFileSafety.OpenRead(path);
         if (file.Length > MaxProfileBytes) throw new IOException("The APP/ACC profile is too large to modify safely.");

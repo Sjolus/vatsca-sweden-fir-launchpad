@@ -2,6 +2,7 @@ using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Net;
 using Velopack;
 using Velopack.Locators;
 using Velopack.Logging;
@@ -13,6 +14,61 @@ using VatscaUpdateChecker.Services;
 // and exit are rejected by the locator. Apply/Restart is deliberately never invoked by this harness.
 var tests = new (string Name, Func<Fixture, Task> Run)[]
 {
+    ("cached GitHub source preserves stable SDK feed and package verification", async f =>
+    {
+        var asset = f.Package("2.5.2");
+        f.Feed(asset);
+        using var client = new HttpClient(new MetadataHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""
+                [{"name":"v3.0.0-beta.1","draft":false,"prerelease":true,"published_at":"2026-10-22T12:00:00Z","assets":[{"name":"releases.win-x64.json","browser_download_url":"https://example.invalid/never-request-beta"}]},
+                 {"name":"v9.0.0","draft":true,"prerelease":false,"published_at":"2026-10-23T12:00:00Z","assets":[{"name":"releases.win-x64.json","browser_download_url":"https://example.invalid/never-request-draft"}]},
+                 {"name":"v2.5.2","draft":false,"prerelease":false,"published_at":"2026-10-21T12:00:00Z","assets":[{"name":"releases.win-x64.json","browser_download_url":"https://example.invalid/stable/releases.win-x64.json"},{"name":"SwedenFirLaunchpad-2.5.2-full.nupkg","browser_download_url":"https://example.invalid/stable/package.nupkg"}]}]
+                """)
+        }));
+        var downloader = new SyntheticGithubDownloader(f.FeedDirectory, asset.FileName);
+        var service = f.Service(source: new LaunchpadGithubSource(new VendorMetadataReader(client), downloader));
+        Equal(LaunchpadUpdateStatus.Available, (await service.CheckAsync()).Status);
+        Equal(LaunchpadUpdateStatus.Ready, (await service.DownloadAsync()).Status);
+        Equal(1, downloader.Catalogs);
+        Equal(1, downloader.Packages);
+        Equal(0, f.Process.Calls);
+    }),
+    ("installed GitHub catalogs are cached without invoking any package downloader", async f =>
+    {
+        int calls = 0;
+        using var client = new HttpClient(new MetadataHandler(_ =>
+        {
+            calls++;
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("[]") };
+        }));
+        var source = new LaunchpadGithubSource(new VendorMetadataReader(client));
+        var service = f.Service(source: source);
+        Equal(LaunchpadUpdateStatus.NoFeed, (await service.CheckAsync()).Status);
+        Equal(LaunchpadUpdateStatus.NoFeed, (await service.CheckAsync()).Status);
+        Equal(1, calls);
+    }),
+    ("installed GitHub quota failures remain typed and do not repeat API requests", async f =>
+    {
+        int calls = 0;
+        using var client = new HttpClient(new MetadataHandler(_ =>
+        {
+            calls++;
+            var response = new HttpResponseMessage(HttpStatusCode.Forbidden);
+            response.Headers.Add("X-RateLimit-Remaining", "0");
+            return response;
+        }));
+        var service = f.Service(source: new LaunchpadGithubSource(new VendorMetadataReader(client)));
+        Exception? failure = null;
+        LaunchpadUpdateStatus? failureStage = null;
+        service.FailureObserved += (stage, error) => { failureStage = stage; failure = error; };
+        Equal(LaunchpadUpdateStatus.Error, (await service.CheckAsync()).Status);
+        True(failure is VendorRequestException { Vendor: VendorService.GitHub, FailureKind: VendorFailureKind.RateLimited, StatusCode: HttpStatusCode.Forbidden });
+        Equal(LaunchpadUpdateStatus.Checking, failureStage);
+        True(service.State.Message.Contains("limiting requests"));
+        Equal(LaunchpadUpdateStatus.Error, (await service.CheckAsync()).Status);
+        Equal(1, calls);
+    }),
     ("uninstalled build never accesses the feed", async f =>
     {
         var service = f.Service(installed: false);

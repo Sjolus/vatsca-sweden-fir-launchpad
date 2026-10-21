@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../MainWindow.SaamanSetup.cs" Link="MainWindow.SaamanSetup.cs" />
+    <Compile Include="../../Models/AppSettings.cs" Link="Models/AppSettings.cs" />
+    <Compile Include="../../Models/ApplicationPreferences.cs" Link="Models/ApplicationPreferences.cs" />
+    <Compile Include="../../Models/Saaman.cs" Link="Models/Saaman.cs" />
+    <Compile Include="../../Models/SaamanProfilePolicy.cs" Link="Models/SaamanProfilePolicy.cs" />
+    <Compile Include="../../Models/ReportingModels.cs" Link="Models/ReportingModels.cs" />
+    <Compile Include="../../Models/ActivityEntry.cs" Link="Models/ActivityEntry.cs" />
+  </ItemGroup>
+</Project>

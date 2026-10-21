@@ -19,6 +19,7 @@ internal static class CoordinatorTests
                     Assert(plan.DirectRemovalFiles.Files.Any(file => file.FullPath == reporting) == resetReporting);
                     var export = await f.Service.ApplyAsync(plan, null, default);
                     Assert(File.Exists(reporting) != resetReporting && File.Exists(settings) == resetReporting && File.Exists(browser));
+                    Assert(f.Service.ControllerProfileReset == !resetReporting);
                     RemovalFileService.VerifyBackup(plan.BackupFiles, export!);
                     if (resetReporting) Assert(plan.Review.Contains("Already submitted reports remain on the server"));
                 }
@@ -28,6 +29,7 @@ internal static class CoordinatorTests
                 using var f = new Case(); var source = f.File("roaming/VatscaUpdateChecker/settings.json", "FAKE");
                 var plan = f.Service.Preview([], new(true, false, true, false, false), f.Recovery);
                 Assert(plan.BackupFiles.Files.Count == 1 && File.Exists(source) && f.DeletedCredentials.Count == 0);
+                Assert(!f.Service.ControllerProfileReset);
                 Assert(!Directory.EnumerateFileSystemEntries(f.Recovery).Any()); await Task.CompletedTask;
             }),
             ("selected settings removed after a verified private recovery export", async () =>
@@ -36,6 +38,7 @@ internal static class CoordinatorTests
                 var other = f.File("roaming/VatscaUpdateChecker/VATIRISProfile/keep", "session");
                 var backup = await f.Service.ApplyAsync(f.Service.Preview([], new(true, false, false, false, false), f.Recovery), null, default);
                 Assert(!File.Exists(source) && File.Exists(other) && f.DeletedCredentials.Count == 0);
+                Assert(f.Service.ControllerProfileReset);
                 Assert(File.ReadAllText(Path.Combine(backup!, "Files", "0000", "settings.json")) == "FAKE-PRIVATE");
             }),
             ("VatEFS installer diagnostics are removed only with preferences and logs", async () =>
@@ -70,6 +73,7 @@ internal static class CoordinatorTests
                     await f.Service.ApplyAsync(plan, null, default);
                     Assert(File.ReadAllText(log) == "KEEP-DIAGNOSTICS");
                     Assert(File.Exists(download) == !selection.Downloads && File.Exists(recovery) == !selection.Backups);
+                    Assert(!f.Service.ControllerProfileReset);
                 }
             }),
             ("activity history is reset only with preferences and logs", async () =>
@@ -94,6 +98,7 @@ internal static class CoordinatorTests
                 File.WriteAllText(history, "NEW-ACTIVITY");
                 await Reject(() => f.Service.ApplyAsync(plan, null, default));
                 Assert(!f.Service.ActivityHistoryReset && File.ReadAllText(history) == "NEW-ACTIVITY");
+                Assert(!f.Service.ControllerProfileReset);
             }),
             ("preferences and logs reset removes current browser ownership receipts", async () =>
             {
@@ -111,6 +116,7 @@ internal static class CoordinatorTests
                 using var f = new Case();
                 await f.Service.ApplyAsync(f.Service.Preview([], new(false, false, true, false, false), null), null, default);
                 Assert(f.DeletedCredentials.SequenceEqual(new[] { CredentialManagerService.TargetVatsim, CredentialManagerService.TargetHoppie }));
+                Assert(f.Service.ControllerProfileReset);
             }),
             ("changed reviewed file prevents every destructive operation", async () =>
             {
@@ -126,6 +132,7 @@ internal static class CoordinatorTests
                 var plan = f.Service.Preview([], new(true, false, true, false, false), f.Recovery);
                 await Reject(() => f.Service.ApplyAsync(plan, null, new CancellationToken(true)));
                 Assert(File.Exists(file) && f.DeletedCredentials.Count == 0);
+                Assert(!f.Service.ControllerProfileReset);
             }),
             ("disposable downloads do not include recovery backups", async () =>
             {
@@ -134,9 +141,10 @@ internal static class CoordinatorTests
                 var verification = f.File(folder + "Verification/sample", "verify");
                 var backup = f.File(folder + "Backups/vATIS/Files/settings", "keep-backup");
                 var vatEfsBackup = f.File(folder + "VatEfsRecovery/dated/Files/settings", "keep-vatefs-backup");
+                var profileBackup = f.File("local/VatscaUpdateChecker/VatEfs/ProfileRecovery/dated/ESAA.prf", "FAKE-PROFILE-BACKUP");
                 var unknown = f.File(folder + "unknown/keep", "unknown");
                 await f.Service.ApplyAsync(f.Service.Preview([], new(false, false, false, true, false), null), null, default);
-                Assert(!File.Exists(download) && !File.Exists(verification) && File.Exists(backup) && File.Exists(vatEfsBackup) && File.Exists(unknown));
+                Assert(!File.Exists(download) && !File.Exists(verification) && File.Exists(backup) && File.Exists(vatEfsBackup) && File.Exists(profileBackup) && File.Exists(unknown));
             }),
             ("existing backups require their own explicit selection", async () =>
             {
@@ -148,13 +156,15 @@ internal static class CoordinatorTests
             {
                 using var f = new Case();
                 var backup = f.File("local/VatscaUpdateChecker/SoftwareUpdates/VatEfsRecovery/dated/export/Files/0000/settings.json", "FAKE-RECOVERY");
+                var profileBackup = f.File("local/VatscaUpdateChecker/VatEfs/ProfileRecovery/dated/ESAA.prf", "FAKE-PROFILE-BACKUP");
                 var download = f.File("local/VatscaUpdateChecker/SoftwareUpdates/" + Guid.NewGuid().ToString("N") + "/vatefs.msi", "FAKE-PACKAGE");
                 var browser = f.File("roaming/VatscaUpdateChecker/VatEFSProfile/session", "FAKE-SESSION");
                 var program = f.File("program-files/VatEFS/settings.json", "FAKE-CURRENT-SETTINGS");
                 var plan = f.Service.Preview([], new(false, false, false, false, true), null);
                 Assert(plan.BackupFiles.Files.Any(file => file.FullPath == backup));
+                Assert(plan.BackupFiles.Files.Any(file => file.FullPath == profileBackup));
                 await f.Service.ApplyAsync(plan, null, default);
-                Assert(!File.Exists(backup) && File.Exists(download) && File.Exists(browser) && File.Exists(program));
+                Assert(!File.Exists(backup) && !File.Exists(profileBackup) && File.Exists(download) && File.Exists(browser) && File.Exists(program));
             }),
             ("GNG temporary download cleanup preserves sign-in and recovery packages", async () =>
             {

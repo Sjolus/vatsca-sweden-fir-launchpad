@@ -7,13 +7,47 @@ using VatscaUpdateChecker.Models;
 
 namespace VatscaUpdateChecker.Services;
 
+public enum PublicUpdateCheck { Gng, GitHub }
+
 public static class UpdateChecker
 {
-    private static readonly HttpClient Http = new()
+    public static event Action<PublicUpdateCheck, Exception>? FailureObserved;
+
+    private static void ObserveFailure(PublicUpdateCheck check, Exception exception)
+    {
+        if (FailureObserved is { } observers)
+            foreach (Action<PublicUpdateCheck, Exception> observer in observers.GetInvocationList())
+                try { observer(check, exception); } catch { }
+    }
+    private static readonly HttpClient Http = new(new HttpClientHandler { AllowAutoRedirect = false })
     {
         Timeout = TimeSpan.FromSeconds(15),
         DefaultRequestHeaders = { { "User-Agent", "VatscaUpdateChecker/1.0" } }
     };
+    private static readonly VendorMetadataReader Metadata = new(Http, validate: ValidVersionPage);
+
+    internal static bool ValidVersionPage(Uri uri, string body)
+    {
+        if (uri.Host == "files.aero-nav.com")
+            return Regex.IsMatch(body, @"ESAA Update_Only</td><td>([^<]+)</td><td>(\d+)</td>");
+        try
+        {
+            using var document = JsonDocument.Parse(body);
+            if (uri.AbsolutePath.EndsWith("/latest", StringComparison.Ordinal))
+                return IsPublishedTag(document.RootElement);
+            return document.RootElement.ValueKind == JsonValueKind.Array &&
+                document.RootElement.EnumerateArray().All(release => release.ValueKind == JsonValueKind.Object &&
+                    release.TryGetProperty("draft", out var draft) && draft.ValueKind is JsonValueKind.True or JsonValueKind.False &&
+                    release.TryGetProperty("prerelease", out var prerelease) && prerelease.ValueKind is JsonValueKind.True or JsonValueKind.False &&
+                    release.TryGetProperty("tag_name", out var tag) && tag.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(tag.GetString()));
+        }
+        catch (JsonException) { return false; }
+    }
+
+    private static bool IsPublishedTag(JsonElement release) => release.ValueKind == JsonValueKind.Object &&
+        release.TryGetProperty("draft", out var draft) && draft.ValueKind == JsonValueKind.False &&
+        release.TryGetProperty("prerelease", out var prerelease) && prerelease.ValueKind == JsonValueKind.False &&
+        release.TryGetProperty("tag_name", out var tag) && tag.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(tag.GetString());
 
     // -------------------------------------------------------------------------
     // EuroScope application
@@ -78,7 +112,7 @@ public static class UpdateChecker
     // -------------------------------------------------------------------------
     public static Task CheckGng(CheckResult result, string euroscopeDataPath) =>
         CheckGng(result, euroscopeDataPath,
-            () => Http.GetStringAsync("https://files.aero-nav.com/ESAA"), GngUpdateService.RequireNoPendingUpdate);
+            () => Metadata.GetAsync(new("https://files.aero-nav.com/ESAA"), VendorService.AeroNav), GngUpdateService.RequireNoPendingUpdate);
 
     internal static async Task CheckGng(CheckResult result, string euroscopeDataPath,
         Func<Task<string>> fetchPackagePage, Action<string> requireNoPendingUpdate)
@@ -167,6 +201,7 @@ public static class UpdateChecker
             result.StatusMessage = ex.Message;
             result.Status = CheckStatus.Error;
             Logger.Log("CHECK", $"GNG Pack: error — {ex.Message}");
+            ObserveFailure(PublicUpdateCheck.Gng, ex);
         }
     }
 
@@ -252,6 +287,7 @@ public static class UpdateChecker
             result.StatusMessage = ex.Message;
             result.Status = CheckStatus.Error;
             Logger.Log("CHECK", $"{result.AppName} ({githubRepo}): error — {ex.Message}");
+            ObserveFailure(PublicUpdateCheck.GitHub, ex);
         }
     }
 
@@ -263,7 +299,7 @@ public static class UpdateChecker
         {
             try
             {
-                var json = await Http.GetStringAsync($"https://api.github.com/repos/{repo}/releases/latest")
+                var json = await Metadata.GetAsync(new($"https://api.github.com/repos/{repo}/releases/latest"), VendorService.GitHub)
                                       .ConfigureAwait(false);
                 using var doc = JsonDocument.Parse(json);
                 return doc.RootElement.GetProperty("tag_name").GetString();
@@ -274,14 +310,14 @@ public static class UpdateChecker
             }
         }
 
-        try
         {
-            var json = await Http.GetStringAsync($"https://api.github.com/repos/{repo}/releases?per_page=20")
+            var json = await Metadata.GetAsync(new($"https://api.github.com/repos/{repo}/releases?per_page=20"), VendorService.GitHub)
                                   .ConfigureAwait(false);
             using var doc = JsonDocument.Parse(json);
             foreach (var release in doc.RootElement.EnumerateArray())
             {
                 if (release.TryGetProperty("draft", out var draft) && draft.GetBoolean()) continue;
+                if (release.TryGetProperty("prerelease", out var prerelease) && prerelease.GetBoolean()) continue;
                 if (skipPreRelease && release.TryGetProperty("tag_name", out var tag))
                 {
                     var tagStr = tag.GetString() ?? string.Empty;
@@ -294,8 +330,6 @@ public static class UpdateChecker
                     return t.GetString();
             }
         }
-        catch (Exception ex) { Logger.Log("CHECK", $"FetchLatestTag ({repo}): error — {ex.Message}"); }
-
         return null;
     }
 

@@ -60,6 +60,43 @@ function assertVersionBar(card, version, count, total) {
   assert.ok(fractions.some(value => Math.abs(value - count / total) < 1e-9), 'Version fill represents its share of the whole sample');
   assert.ok(fractions.includes(1), 'The version track represents the whole sample');
 }
+
+test('task and navigation rendering separates requests, outcomes and missing results', () => {
+  const render=renderer(),data=usageFixture(),screen=render.renderUsageDashboard(data);
+  assert.match(screen.text,/Application start requests 148/);
+  assert.match(screen.text,/What gets done/);assert.match(screen.text,/16 Completed 2 Partly completed/);
+  assert.match(screen.text,/28 task starts from 19 installations · 25 have a matched result/);
+  assert.match(screen.text,/3 starts have no matching result\. 2 results have no matching start\. 4 records lack correlation fields/);
+  assert.match(screen.text,/It is not counted as a failure/);
+  assert.match(screen.text,/vATIS · Configure Swedish profile/);assert.match(screen.text,/SAAMAN · Configure plugin profile/);
+  assert.match(screen.text,/Where people go/);assert.match(screen.text,/Setup · Applications 24 19/);
+  assert.match(screen.text,/App settings 8 7/);assert.match(screen.text,/Earlier setup-guide choices/);
+  assertFiniteChart(screen);
+  const empty=render.renderUsageDashboard(emptyUsageFixture());
+  assert.match(empty.text,/No correlated task starts/);assert.match(empty.text,/No navigation observations yet/);
+  assert.doesNotMatch(empty.text,/success rate|0%|NaN|Infinity/);
+});
+
+test('inventory freshness describes the independent snapshot sample without implying a session', () => {
+  const render=renderer(),data=usageFixture(),screen=render.renderInventory(data);
+  assert.match(screen.text,/21 Last 24 hours 9 1–7 days old 0 Over 7 days old/);
+  assert.match(screen.text,/snapshots do not report whether EuroScope is running or connected/);
+  delete data.inventory.freshness;
+  assert.doesNotMatch(render.renderInventory(data).text,/Last 24 hours/,'older API responses do not invent age counts');
+});
+
+test('error rows use compact context and do not label every download as AeroNav', () => {
+  const render=renderer(),screen=render.renderErrorGroups([
+    {application:'saaman',operation:'download',stage:'download',error_code:'rate_limited',reason:'rate_limited',service:'github',http_status:403,launchpad_version:'2.6.0',affected_installations:2,count:9,first_seen:1,last_seen:2},
+    {application:'gng',operation:'download',stage:'check',error_code:'access_denied',reason:'conflict',service:'aero_nav',http_status:403,launchpad_version:'2.6.0',affected_installations:1,count:1,first_seen:2,last_seen:2},
+  ]);
+  assert.equal(walk(screen).filter(node=>node.tag==='th').length,8);
+  assert.equal((screen.text.match(/Rate limited/g)??[]).length,1,'identical problem and reason are shown once');
+  assert.match(screen.text,/download GitHub HTTP 403/);assert.match(screen.text,/AeroNav HTTP 403/);
+  assert.doesNotMatch(screen.text,/AeroNav download/);
+  assert.match(screen.text,/Access denied Conflicting configuration/);
+  assert.ok(walk(screen).some(node=>node.className==='error-context error-service'));
+});
 test('usage rendering distinguishes unavailable comparison and missing observations from zero', () => {
   const render = renderer(), data = emptyUsageFixture();
   data.cohort.returning_reason = 'retention';

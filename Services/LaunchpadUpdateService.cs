@@ -27,7 +27,7 @@ public sealed class LaunchpadUpdateService
     private VelopackAsset? _ready;
 
     public LaunchpadUpdateService()
-        : this(new GithubSource(RepositoryUrl, accessToken: null, prerelease: false), VelopackLocator.Current) { }
+        : this(new LaunchpadGithubSource(), VelopackLocator.Current) { }
 
     // An injected source/locator keeps regression checks entirely within synthetic installation directories.
     internal LaunchpadUpdateService(IUpdateSource source, IVelopackLocator locator)
@@ -51,7 +51,7 @@ public sealed class LaunchpadUpdateService
 
     public LaunchpadUpdateState State { get; private set; }
     public event EventHandler<LaunchpadUpdateState>? StateChanged;
-    public event Action<Exception>? FailureObserved;
+    public event Action<LaunchpadUpdateStatus, Exception>? FailureObserved;
 
     public async Task<LaunchpadUpdateState> CheckAsync(CancellationToken cancellationToken = default)
     {
@@ -177,8 +177,8 @@ public sealed class LaunchpadUpdateService
     private void ObserveFailure(Exception exception)
     {
         if (FailureObserved is { } observers)
-            foreach (Action<Exception> observer in observers.GetInvocationList())
-                try { observer(exception); } catch { }
+            foreach (Action<LaunchpadUpdateStatus, Exception> observer in observers.GetInvocationList())
+                try { observer(State.Status, exception); } catch { }
     }
 
     private LaunchpadUpdateState NewState(LaunchpadUpdateStatus status, string message, VelopackAsset? asset = null, int? percent = null) =>
@@ -276,6 +276,7 @@ public sealed class LaunchpadUpdateService
 
     private static string ErrorMessage(Exception ex, string action) => ex switch
     {
+        VendorRequestException => ex.Message,
         ChecksumFailedException or InvalidDataException => "The update could not be verified. Check for updates and download it again.",
         HttpRequestException or TaskCanceledException => $"Could not {action}. Check your connection and try again.",
         UnauthorizedAccessException => "The update folder is not writable. Check its permissions and try again.",

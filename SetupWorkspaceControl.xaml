@@ -1,0 +1,144 @@
+<UserControl x:Class="VatscaUpdateChecker.SetupWorkspaceControl"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="clr-namespace:VatscaUpdateChecker"
+ Foreground="{DynamicResource PrimaryText}" Background="{DynamicResource AppBg}" FontSize="{DynamicResource TextSize12}">
+ <UserControl.Resources>
+  <Style x:Key="Action" TargetType="Button" BasedOn="{StaticResource ThemedButton}"><Setter Property="Padding" Value="8,4"/><Setter Property="MinHeight" Value="28"/><Setter Property="Margin" Value="0,0,5,0"/></Style>
+  <Style x:Key="PluginInfo" TargetType="Button" BasedOn="{StaticResource ThemedButton}">
+   <Setter Property="Content" Value="ⓘ"/><Setter Property="MinWidth" Value="28"/><Setter Property="MinHeight" Value="28"/><Setter Property="Padding" Value="3"/><Setter Property="Margin" Value="6,0,0,0"/>
+   <Setter Property="FontSize" Value="{DynamicResource TextSize14}"/><Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/>
+   <Setter Property="ToolTipService.InitialShowDelay" Value="250"/><Setter Property="ToolTipService.ShowDuration" Value="60000"/>
+   <EventSetter Event="Click" Handler="PluginInfo_Open"/><EventSetter Event="GotKeyboardFocus" Handler="PluginInfo_Open"/><EventSetter Event="LostKeyboardFocus" Handler="PluginInfo_Close"/><EventSetter Event="Unloaded" Handler="PluginInfo_Close"/><EventSetter Event="PreviewKeyDown" Handler="PluginInfo_KeyDown"/>
+  </Style>
+  <Style x:Key="Section" TargetType="RadioButton">
+   <Setter Property="Margin" Value="0,0,0,6"/><Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
+   <Setter Property="ContentTemplate"><Setter.Value><DataTemplate><TextBlock Text="{Binding}" TextWrapping="Wrap"/></DataTemplate></Setter.Value></Setter>
+   <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="RadioButton">
+    <Border x:Name="Tab" Background="Transparent" Padding="6,8" BorderThickness="2,0,0,0" BorderBrush="Transparent"><ContentPresenter RecognizesAccessKey="True"/></Border>
+    <ControlTemplate.Triggers><Trigger Property="IsChecked" Value="True"><Setter TargetName="Tab" Property="Background" Value="{DynamicResource ApplicationSelectedBg}"/><Setter TargetName="Tab" Property="BorderBrush" Value="{DynamicResource ApplicationUpdateText}"/></Trigger><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Tab" Property="BorderBrush" Value="{DynamicResource ButtonFocusBorder}"/></Trigger></ControlTemplate.Triggers>
+   </ControlTemplate></Setter.Value></Setter>
+  </Style>
+  <Style x:Key="ThemedTextBox" TargetType="TextBox"><Setter Property="Background" Value="{DynamicResource InputBg}"/><Setter Property="Foreground" Value="{DynamicResource InputFg}"/><Setter Property="BorderBrush" Value="{DynamicResource InputBorder}"/><Setter Property="Padding" Value="6"/><Setter Property="HorizontalScrollBarVisibility" Value="Auto"/></Style>
+ </UserControl.Resources>
+ <Grid Margin="12,10">
+  <Grid.ColumnDefinitions><ColumnDefinition Width="142"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Margin="0,0,12,0">
+  <StackPanel>
+   <TextBlock Text="Setup" FontSize="{DynamicResource TextSize16}" FontWeight="SemiBold" Margin="0,0,0,12"/>
+   <RadioButton x:Name="ApplicationsTab" Content="Applications" GroupName="SetupSection" Tag="Applications" Style="{StaticResource Section}" Checked="Section_Checked" IsChecked="True"/>
+   <RadioButton x:Name="GngTab" Content="Swedish GNG" GroupName="SetupSection" Tag="Gng" Style="{StaticResource Section}" Checked="Section_Checked"/>
+   <RadioButton x:Name="ProfileTab" Content="Controller profile" GroupName="SetupSection" Tag="Profile" Style="{StaticResource Section}" Checked="Section_Checked"/>
+   <RadioButton x:Name="PreferencesTab" Content="Preferences" GroupName="SetupSection" Tag="Preferences" Style="{StaticResource Section}" Checked="Section_Checked"/>
+   <RadioButton x:Name="ActivityTab" Content="Activity &amp; recovery" GroupName="SetupSection" Tag="Activity" Style="{StaticResource Section}" Checked="Section_Checked"/>
+  </StackPanel>
+  </ScrollViewer>
+  <Grid Grid.Column="1">
+  <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+  <Border x:Name="SetupGuide" Grid.Row="0" Visibility="Collapsed" Background="{DynamicResource RowBg}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1" Padding="8" Margin="0,0,5,8">
+   <Grid>
+    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+    <TextBlock x:Name="GuideHeading" FontWeight="SemiBold" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,8,0"/>
+    <WrapPanel Grid.Column="1" HorizontalAlignment="Right">
+     <Button x:Name="GuideNextButton" Style="{StaticResource Action}" Click="GuideNext_Click" IsEnabled="{Binding ActionsEnabled, RelativeSource={RelativeSource AncestorType=local:SetupWorkspaceControl}}"/>
+     <Button x:Name="GuideLaterButton" Content="Later" Style="{StaticResource Action}" Click="GuideLater_Click" IsEnabled="{Binding ActionsEnabled, RelativeSource={RelativeSource AncestorType=local:SetupWorkspaceControl}}"/>
+    </WrapPanel>
+    <TextBlock x:Name="GuideMessage" Grid.Row="1" Grid.ColumnSpan="2" Foreground="{DynamicResource SecondaryText}" TextWrapping="Wrap" Margin="0,5,0,0"/>
+   </Grid>
+  </Border>
+  <ScrollViewer x:Name="SetupSectionScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+   <StackPanel Margin="0,0,5,0">
+    <TextBlock x:Name="SetupNotice" Text="Use your existing applications, or install the ones you need." Foreground="{DynamicResource SecondaryText}" TextWrapping="Wrap" Margin="0,0,0,10" AutomationProperties.LiveSetting="Polite"/>
+    <StackPanel x:Name="ApplicationsPanel">
+     <DockPanel Margin="0,0,0,8">
+      <Button DockPanel.Dock="Right" Content="Find installed apps…" Style="{StaticResource Action}" Click="Discover_Click" IsEnabled="{Binding ActionsEnabled, RelativeSource={RelativeSource AncestorType=local:SetupWorkspaceControl}}"/>
+      <TextBlock Text="Programs you use" FontSize="{DynamicResource TextSize14}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+     </DockPanel>
+     <ItemsControl x:Name="ApplicationsList">
+      <ItemsControl.ItemTemplate><DataTemplate>
+       <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="0,5">
+        <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+         <StackPanel Margin="0,0,8,0">
+          <DockPanel>
+           <Button x:Name="ApplicationNameButton" Content="{Binding Name}" FontWeight="SemiBold" Margin="0,0,8,0" Padding="0" Background="Transparent" Foreground="{DynamicResource PrimaryText}" BorderThickness="0" Click="PluginInfo_Open" GotKeyboardFocus="PluginInfo_Open" LostKeyboardFocus="PluginInfo_Close" Unloaded="PluginInfo_Close" PreviewKeyDown="PluginInfo_KeyDown" AutomationProperties.Name="{Binding Name, StringFormat=About {0}}" AutomationProperties.HelpText="{Binding Purpose}">
+            <Button.ToolTip><ToolTip Placement="Bottom" Padding="10" Background="{DynamicResource InputBg}" Foreground="{DynamicResource InputFg}" BorderBrush="{DynamicResource InputBorder}"><TextBlock Text="{Binding Purpose}" TextWrapping="Wrap" MaxWidth="320"/></ToolTip></Button.ToolTip>
+           </Button>
+           <TextBlock Text="{Binding Status}" Foreground="{DynamicResource ApplicationSecondaryText}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Status}"/>
+          </DockPanel>
+          <TextBlock Text="{Binding LocationText}" Foreground="{DynamicResource ApplicationSecondaryText}" TextTrimming="CharacterEllipsis" ToolTip="{Binding LocationText}" Margin="0,3,0,0"/>
+         </StackPanel>
+         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+          <Button x:Name="LocationButton" Content="{Binding LocationAction}" Style="{StaticResource Action}" Click="Change_Click" AutomationProperties.Name="{Binding Name, StringFormat=Change {0} location}" IsEnabled="{Binding ActionsEnabled, RelativeSource={RelativeSource AncestorType=local:SetupWorkspaceControl}}"/>
+          <Button x:Name="ManageApplicationButton" Content="{Binding ManageText}" Click="Manage_Click" AutomationProperties.Name="{Binding Name, StringFormat=Manage {0}}">
+           <Button.Style><Style TargetType="Button" BasedOn="{StaticResource Action}"><Style.Triggers><DataTrigger Binding="{Binding ManageText}" Value=""><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding CanManage}" Value="False"><Setter Property="IsEnabled" Value="False"/></DataTrigger><DataTrigger Binding="{Binding ActionsEnabled, RelativeSource={RelativeSource AncestorType=local:SetupWorkspaceControl}}" Value="False"><Setter Property="IsEnabled" Value="False"/></DataTrigger></Style.Triggers></Style></Button.Style>
+          </Button>
+         </StackPanel>
+         <StackPanel x:Name="PluginOptions" Grid.Row="1" Grid.ColumnSpan="2" Margin="0,5,0,0">
+          <StackPanel.Style><Style TargetType="StackPanel"><Style.Triggers><DataTrigger Binding="{Binding Plugin}" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></StackPanel.Style>
+          <DockPanel LastChildFill="False">
+           <CheckBox x:Name="PluginChoice" IsChecked="{Binding Plugin.Enabled, Mode=OneWay}" Click="Plugin_Click" Foreground="{DynamicResource PrimaryText}" VerticalContentAlignment="Center" AutomationProperties.HelpText="{Binding Plugin.Help}">
+            <CheckBox.Style><Style TargetType="CheckBox"><Style.Triggers><DataTrigger Binding="{Binding Plugin.CanChange}" Value="False"><Setter Property="IsEnabled" Value="False"/></DataTrigger><DataTrigger Binding="{Binding ActionsEnabled, RelativeSource={RelativeSource AncestorType=local:SetupWorkspaceControl}}" Value="False"><Setter Property="IsEnabled" Value="False"/></DataTrigger></Style.Triggers></Style></CheckBox.Style>
+            <CheckBox.Content><TextBlock Text="{Binding Plugin.Label}" TextWrapping="Wrap"/></CheckBox.Content>
+            <AutomationProperties.Name><MultiBinding StringFormat="{}{0}: {1}"><Binding Path="Name"/><Binding Path="Plugin.Label"/></MultiBinding></AutomationProperties.Name>
+           </CheckBox>
+           <Button x:Name="PluginInfoButton" Style="{StaticResource PluginInfo}" AutomationProperties.Name="{Binding Name, StringFormat=About {0} in EuroScope}" AutomationProperties.HelpText="{Binding Plugin.Help}">
+            <Button.ToolTip><ToolTip Placement="Bottom" Padding="12" Background="{DynamicResource InputBg}" Foreground="{DynamicResource InputFg}" BorderBrush="{DynamicResource InputBorder}"><TextBlock Text="{Binding Plugin.Help}" TextWrapping="Wrap" MaxWidth="340"/></ToolTip></Button.ToolTip>
+           </Button>
+          </DockPanel>
+          <TextBlock x:Name="PluginBlockReason" Text="{Binding Plugin.BlockReason}" Foreground="{DynamicResource SecondaryText}" TextWrapping="Wrap" Margin="0,4,0,0">
+           <TextBlock.Style><Style TargetType="TextBlock"><Style.Triggers><DataTrigger Binding="{Binding Plugin.BlockReason}" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding Plugin.BlockReason}" Value=""><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding Plugin.NeedsGng}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
+          </TextBlock>
+          <Button x:Name="PluginGngButton" Content="Set up GNG" Click="PluginGng_Click" HorizontalAlignment="Left" Margin="0,4,0,0" ToolTip="{Binding Plugin.BlockReason}" AutomationProperties.Name="{Binding Name, StringFormat=Set up Swedish GNG before enabling {0}}" IsEnabled="{Binding ActionsEnabled, RelativeSource={RelativeSource AncestorType=local:SetupWorkspaceControl}}">
+           <Button.Style><Style TargetType="Button" BasedOn="{StaticResource Action}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Plugin.NeedsGng}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Button.Style>
+          </Button>
+         </StackPanel>
+         <StackPanel x:Name="PluginFeedbackPanel" Grid.Row="2" Grid.ColumnSpan="2" Margin="0,5,0,0">
+          <StackPanel.Style><Style TargetType="StackPanel"><Style.Triggers><DataTrigger Binding="{Binding Feedback}" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></StackPanel.Style>
+          <TextBlock x:Name="PluginFeedbackText" Text="{Binding Feedback.Message}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite">
+           <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Foreground" Value="{DynamicResource SecondaryText}"/><Style.Triggers><DataTrigger Binding="{Binding Feedback.Warning}" Value="True"><Setter Property="Foreground" Value="{DynamicResource WarningFg}"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
+          </TextBlock>
+          <ProgressBar x:Name="PluginProgress" Value="{Binding Feedback.Percent, Mode=OneWay, TargetNullValue=0}" Minimum="0" Maximum="100" Height="4" Margin="0,6,0,0" AutomationProperties.Name="{Binding Name, StringFormat='{}{0} progress'}">
+           <ProgressBar.Style><Style TargetType="ProgressBar"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Feedback.Busy}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding Feedback.Percent}" Value="{x:Null}"><Setter Property="IsIndeterminate" Value="True"/></DataTrigger></Style.Triggers></Style></ProgressBar.Style>
+          </ProgressBar>
+          <WrapPanel>
+           <Button x:Name="PluginCancelButton" Content="Cancel" Click="PluginCancel_Click" Margin="0,6,5,0"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource Action}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Feedback.CanCancel}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Button.Style></Button>
+           <Button x:Name="PluginRetrySaveButton" Content="Retry saving" Click="PluginRetrySave_Click" Margin="0,6,5,0" IsEnabled="{Binding ActionsEnabled, RelativeSource={RelativeSource AncestorType=local:SetupWorkspaceControl}}"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource Action}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Feedback.CanRetrySave}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Button.Style></Button>
+           <Button x:Name="PluginRuntimeButton" Content="Install WebView2…" Click="PluginRuntime_Click" Margin="0,6,5,0" IsEnabled="{Binding ActionsEnabled, RelativeSource={RelativeSource AncestorType=local:SetupWorkspaceControl}}"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource Action}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Feedback.RuntimeRequired}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Button.Style></Button>
+          </WrapPanel>
+         </StackPanel>
+        </Grid>
+       </Border>
+      </DataTemplate></ItemsControl.ItemTemplate>
+     </ItemsControl>
+    </StackPanel>
+    <StackPanel x:Name="GngPanel" Visibility="Collapsed">
+     <TextBlock Text="Swedish GNG package" FontSize="{DynamicResource TextSize16}" FontWeight="SemiBold"/>
+     <TextBlock Text="Sector data, radar screens and plugins for Sweden." Foreground="{DynamicResource SecondaryText}" Margin="0,5,0,14"/>
+     <TextBlock Text="EuroScope data folder" FontWeight="SemiBold"/>
+     <TextBox x:Name="GngLocation" IsReadOnly="True" Style="{StaticResource ThemedTextBox}" Margin="0,6,0,8"/>
+     <WrapPanel><Button x:Name="GngLocationButton" Content="Location…" Style="{StaticResource Action}" Click="GngLocation_Click"/><Button x:Name="GngPackageButton" Content="Get / update package…" Style="{StaticResource Action}" Click="Gng_Click"/></WrapPanel>
+     <TextBlock x:Name="GngDestinationHint" Text="New installs use %APPDATA%\EuroScope." Foreground="{DynamicResource SecondaryText}" TextWrapping="Wrap" Margin="0,8,0,0" Visibility="Collapsed"/>
+     <TextBlock x:Name="GngSummary" Foreground="{DynamicResource SecondaryText}" TextWrapping="Wrap" Margin="0,12,0,14"/>
+     <WrapPanel x:Name="GngMaintenanceActions"><Button Content="Check fonts…" Style="{StaticResource Action}" Click="Fonts_Click"/><Button Content="Clean up old files…" Style="{StaticResource Action}" Click="Cleanup_Click"/></WrapPanel>
+    </StackPanel>
+    <Border x:Name="LocationReview" Visibility="Collapsed" Background="{DynamicResource RowBg}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1" Padding="10" Margin="0,12,0,0">
+     <StackPanel>
+      <TextBlock x:Name="LocationHeading" FontSize="{DynamicResource TextSize14}" FontWeight="SemiBold"/>
+      <TextBlock Text="Current" Foreground="{DynamicResource SecondaryText}" Margin="0,8,0,3"/>
+      <TextBox x:Name="PreviousLocation" IsReadOnly="True" Style="{StaticResource ThemedTextBox}"/>
+      <TextBlock Text="Selected" Foreground="{DynamicResource SecondaryText}" Margin="0,8,0,3"/>
+      <TextBox x:Name="ProposedLocation" IsReadOnly="True" Style="{StaticResource ThemedTextBox}"/>
+      <TextBlock x:Name="LocationValidation" TextWrapping="Wrap" Margin="0,8,0,8" AutomationProperties.LiveSetting="Polite"/>
+      <CheckBox x:Name="AcceptLocationWarning" Content="I recognise this location and want to use it." Foreground="{DynamicResource PrimaryText}" Visibility="Collapsed" Checked="Warning_Changed" Unchecked="Warning_Changed" Margin="0,0,0,8"/>
+      <WrapPanel><Button x:Name="SaveLocationButton" Content="Use this location" Style="{StaticResource Action}" Click="SaveLocation_Click"/><Button Content="Cancel" Style="{StaticResource Action}" Click="CancelLocation_Click"/></WrapPanel>
+     </StackPanel>
+    </Border>
+   </StackPanel>
+  </ScrollViewer>  <local:PreferencesWorkspaceControl x:Name="PreferencesPanel" Grid.Row="1" Visibility="Collapsed"/>
+  <DockPanel x:Name="ProfilePanel" Grid.Row="1" Visibility="Collapsed">
+   <local:ControllerProfileControl x:Name="ControllerProfilePanel"/>
+  </DockPanel>
+  <local:ActivityWorkspaceControl x:Name="ActivityPanel" Grid.Row="1" Visibility="Collapsed" Margin="-12,-10,-12,-10"/>
+  </Grid>
+ </Grid>
+</UserControl>

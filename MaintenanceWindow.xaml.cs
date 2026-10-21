@@ -32,6 +32,7 @@ public partial class MaintenanceWindow : Window
     private bool _applying;
     private bool _reportingSuspended;
     public bool MadeChanges { get; private set; }
+    public bool ControllerProfileReset { get; private set; }
     public bool RestartRequired { get; private set; }
 
     public MaintenanceWindow(AppSettings settings, bool uninstallLaunchpad = false)
@@ -249,6 +250,7 @@ public partial class MaintenanceWindow : Window
         finally
         {
             if (_service.ActivityHistoryReset) ActivityHistoryService.ResetCompleted();
+            ControllerProfileReset |= _service.ControllerProfileReset;
             RestartRequired |= _service.RestartRequired;
             _finished |= RestartRequired;
             _applying = false;

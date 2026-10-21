@@ -36,6 +36,7 @@ public sealed class FreshSoftwareInstallService
     private readonly FreshSoftwareInstallEnvironment _environment;
     private readonly ISoftwareInstaller _installer;
     private readonly Func<SoftwareApp, bool, CancellationToken, Task<SoftwareRelease?>> _releaseSource;
+    private readonly Func<SoftwareApp, bool, CancellationToken, Task<SoftwareRelease?>> _refreshReleaseSource;
     private readonly Action<string> _validateVatis;
     private readonly Action<SoftwareRelease> _validateVatisRelease;
     private readonly Func<SoftwareRelease, string, string, IProgress<string>?, CancellationToken, Func<Task>, Task<SoftwareInstallResult>> _installVatis;
@@ -48,13 +49,16 @@ public sealed class FreshSoftwareInstallService
 
     /// <param name="http">Caller-owned HTTP client; automatic redirects must be disabled.</param>
     public FreshSoftwareInstallService(HttpClient http, string? cacheRoot = null)
-        : this(http, new(), new SoftwareReleaseSource(http).GetLatestFreshAsync, null, cacheRoot) { }
+        : this(http, new(), new SoftwareReleaseSource(http).GetLatestFreshAsync, null, cacheRoot)
+    { _refreshReleaseSource = new SoftwareReleaseSource(http).RefreshLatestFreshAsync; }
 
     internal FreshSoftwareInstallService(HttpClient http, FreshSoftwareInstallEnvironment environment,
         Func<SoftwareApp, bool, CancellationToken, Task<SoftwareRelease?>> source, ISoftwareInstaller? installer = null,
-        string? cacheRoot = null, TimeSpan? downloadTimeout = null)
+        string? cacheRoot = null, TimeSpan? downloadTimeout = null,
+        Func<SoftwareApp, bool, CancellationToken, Task<SoftwareRelease?>>? refreshSource = null)
     {
         _http = http; _environment = environment; _releaseSource = source;
+        _refreshReleaseSource = refreshSource ?? source;
         _installer = installer ?? new SoftwareInstaller(environment.Software);
         _cacheRoot = SoftwareInstaller.FullPath(cacheRoot ?? Path.Combine(environment.LocalAppData, "VatscaUpdateChecker", "FreshInstalls"));
         _downloadTimeout = downloadTimeout ?? TimeSpan.FromMinutes(20);
@@ -130,7 +134,7 @@ public sealed class FreshSoftwareInstallService
                     : app == SoftwareApp.VatEfs ? "The MSI product, version, upgrade identity and installation layout are checked. The package is not represented as having a trusted publisher signature."
                     : "The installer product/version is checked. VACS/TrackAudio packages are not represented as having a trusted publisher signature."));
                 if (app == SoftwareApp.VatEfs)
-                    text.AppendLine("Close every EuroScope instance and VatEFS backend before installing. The MSI installs the plugin and flight-strip application together. Your EuroScope profiles and external settings are not changed. After installation, use Controller profile to review enabling the plugin.");
+                    text.AppendLine("Close every EuroScope instance and VatEFS backend before installing. The MSI installs the plugin and flight-strip application together. Your EuroScope profiles and external settings are not changed. Use in EuroScope under Setup → Applications controls the plugin.");
                 text.AppendLine(destination == null ? "No existing known settings need an export." : "Private settings recovery export: " + destination);
                 text.AppendLine("Existing known settings remain in place. External/custom settings are not discovered. Launchpad does not delete a previous installation or start the client as part of installation.");
                 text.AppendLine("Required shared runtimes must be installed through their separate explicit action. Preparation can be cancelled; once the vendor installer starts, wait for completion. No Windows restart is requested.");
@@ -276,7 +280,7 @@ public sealed class FreshSoftwareInstallService
     }
     private async Task ValidateReleaseUnchangedAsync(FreshSoftwareInstallPlan plan, CancellationToken token)
     {
-        var current = await _releaseSource(plan.App, plan.AllowVatisBeta, token).ConfigureAwait(false);
+        var current = await _refreshReleaseSource(plan.App, plan.AllowVatisBeta, token).ConfigureAwait(false);
         if (current != plan.Release) throw new IOException("The official release changed after review. Check and review the new package before installing.");
     }
     private static void ValidateRelease(SoftwareApp app, SoftwareRelease release, bool allowBeta)
@@ -336,7 +340,8 @@ public sealed class FreshSoftwareInstallService
                     if (redirects >= 5 || response.Headers.Location == null) throw new InvalidDataException("The installer download redirected unexpectedly.");
                     uri = new Uri(uri, response.Headers.Location); continue;
                 }
-                response.EnsureSuccessStatusCode();
+                if (!response.IsSuccessStatusCode)
+                    throw VendorRequestException.FromResponse(response, release.App == SoftwareApp.Vatis ? VendorService.Vatis : VendorService.GitHub, DateTimeOffset.UtcNow);
                 if (response.Content.Headers.ContentLength is { } size && size != release.Size) throw new InvalidDataException("The installer size differs from the reviewed official release.");
                 await using var source = await response.Content.ReadAsStreamAsync(deadline.Token).ConfigureAwait(false);
                 await using var output = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);

@@ -42,6 +42,26 @@ public partial class MainWindow
         UpdateSoftwareActions();
     }
 
+    private void ResetChangedSoftwareChecks(AppSettings previous)
+    {
+        foreach (var row in _results.Where(r => r.HasSoftwareUpdate))
+        {
+            var kind = PathKind(row.AppName);
+            if (string.Equals(ConfiguredPathValidationService.PathFor(kind, previous), ConfiguredPathValidationService.PathFor(kind, _settings), StringComparison.OrdinalIgnoreCase)) continue;
+            ResetSoftwareCheck(row);
+        }
+        UpdateSoftwareActions();
+    }
+
+    private static void ResetSoftwareCheck(CheckResult row)
+    {
+        row.SoftwareUpdate = null;
+        row.LatestIsPrerelease = false;
+        row.Status = CheckStatus.Unknown;
+        row.StatusMessage = "Location saved. Check for updates to inspect this copy.";
+        row.InstalledVersion = row.LatestVersion = "—";
+    }
+
     private void SoftwareUpdate_StateChanged(SoftwareUpdateState state)
     {
         if (_windowClosed) return;
@@ -82,14 +102,17 @@ public partial class MainWindow
     {
         RestartNotice.Visibility = _setupRestartRequired ? Visibility.Visible : Visibility.Collapsed;
         var allowed = CanRunSoftwareAction();
-        foreach (var row in _results.Where(r => r.HasSoftwareUpdate || r.HasEuroScopeManagement || r.HasFontsCheck || r.IsLocalUrl)) row.SoftwareActionsAllowed = allowed;
+        foreach (var row in _results) row.SoftwareActionsAllowed = allowed;
         var busy = _isChecking || _softwareActionBusy || _softwareUpdates.IsBusy;
         AppConfigButton.IsEnabled = !busy && !_setupRestartRequired;
-        SettingsButton.IsEnabled = !busy;
         CheckButton.IsEnabled = !_isChecking && !busy;
         MaintenanceButton.IsEnabled = CanRunSoftwareAction() && CanRunSelfUpdateAction();
-        SetupButton.IsEnabled = CanRunSoftwareAction() && CanRunSelfUpdateAction();
-        ActivityButton.IsEnabled = !_windowClosed && !busy && !_selfUpdateActionBusy && _openDialogCount == 0 && IsEnabled;
+        SetupTab.IsEnabled = AppsTab.IsEnabled = ActivityNoticeButton.IsEnabled =
+            !_windowClosed && !busy && !_selfUpdateActionBusy && _openDialogCount == 0 && IsEnabled;
+        // Keep an in-progress inline operation's Cancel button reachable.
+        SetupWorkspace.IsEnabled = !_windowClosed && IsEnabled && _openDialogCount == 0;
+        SetupWorkspace.SetActionsEnabled(allowed && CanRunSelfUpdateAction());
+        if (_workspace != "Apps") RefreshWorkspace();
         RefreshBulkActionAvailability();
     }
 
@@ -122,6 +145,7 @@ public partial class MainWindow
         var requestedUpdate = row.SoftwareUpdate?.CanUpdate == true;
         if (requestedUpdate) ReportingEvents.Start(ReportingEvents.ForSoftware(app), ReportingOperation.Update);
         var previousVersion = row.SoftwareUpdate?.InstalledVersion;
+        bool pathSaveFailed = false;
         _softwareActionBusy = true;
         UpdateSelfUpdateActionEnabled();
         try
@@ -145,7 +169,15 @@ public partial class MainWindow
                     case SoftwareApp.VatEfs: _settings.VatEfsPath = Path.GetDirectoryName(installed.ExePath)!; break;
                 }
                 try { SettingsService.Save(_settings); }
-                catch { row.StatusMessage = "The update succeeded, but the application path could not be saved. Set the path in Settings before reopening Launchpad."; }
+                catch
+                {
+                    pathSaveFailed = true;
+                    ReportingService.RecordError(ReportingErrorCode.SettingsSaveFailed, new ReportingDetails
+                    { OperationId = ReportingEvents.CurrentOperationId(ReportingEvents.ForSoftware(app), ReportingOperation.Update),
+                        Application = ReportingEvents.ForSoftware(app), Operation = ReportingOperation.Update,
+                        Stage = ReportingStage.Apply, Reason = ReportingReason.SaveFailed });
+                    row.StatusMessage = "The update succeeded, but the application path could not be saved. Set it in Setup → Applications before reopening Launchpad.";
+                }
             }
         }
         catch (OperationCanceledException) { }
@@ -159,8 +191,11 @@ public partial class MainWindow
             if (requestedUpdate)
             {
                 var result = _softwareUpdates.GetState(app);
+                var reported = ReportingEvents.SoftwareUpdateResult(result, pathSaveFailed, _softwareUpdates.RestartRequired, previousVersion);
+                ReportingEvents.Complete(ReportingEvents.ForSoftware(app), ReportingOperation.Update,
+                    reported.Outcome!.Value, reported.Reason, reported);
                 ActivityHistoryService.Record(ActivityHistoryService.ForSoftware(app), ActivityOperation.Update,
-                    result.Phase == SoftwareUpdatePhase.Completed ? ActivityOutcome.Completed :
+                    result.Phase == SoftwareUpdatePhase.Completed ? pathSaveFailed ? ActivityOutcome.NeedsAttention : ActivityOutcome.Completed :
                     result.Phase == SoftwareUpdatePhase.Cancelled ? ActivityOutcome.Cancelled : ActivityOutcome.Stopped,
                     result.LatestVersion, result.BackupFolder, restartRequired: _softwareUpdates.RestartRequired, previousVersion: previousVersion);
             }
@@ -204,7 +239,7 @@ public partial class MainWindow
         if (_softwareActionBusy || _softwareUpdates.IsBusy || _openDialogCount > 0)
         {
             e.Cancel = true;
-            LastCheckedText.Text = "Finish the current operation and close its dialog before closing Launchpad. You can minimize it.";
+            LastCheckedText.Text = "Wait for the current operation to finish before closing Launchpad. You can minimize it.";
         }
         base.OnClosing(e);
     }

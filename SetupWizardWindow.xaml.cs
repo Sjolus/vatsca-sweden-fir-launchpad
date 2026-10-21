@@ -415,7 +415,7 @@ public partial class SetupWizardWindow : Window
             if (ShowChild(window) == true)
             {
                 _state.AcceptControllerProfile(window.Settings);
-                SaveCompletedAction("Controller profile saved. Any file changes reported by that dialog have already taken effect.");
+                SaveCompletedAction(window.SaveResultMessage);
             }
             else StatusText.Text = "Controller profile closed. No saved profile was returned.";
         }
@@ -469,8 +469,8 @@ public partial class SetupWizardWindow : Window
                 };
                 _state.RecordInstallation(wizardApp, result.ExecutablePath, result.RestartRequired, result.BackupFolder);
                 SaveCompletedAction(app == SoftwareApp.VatEfs
-                    ? "VatEFS installation completed and its folder was saved. Use Controller profile to enable its EuroScope plugin; its browser opens after the plugin starts."
-                    : "Installation completed and the program location was saved. You can open it later from Launchpad.");
+                    ? "VatEFS installation completed and its folder was saved. Turn on Use in EuroScope under Setup → Applications; its browser opens after the plugin starts."
+                    : "Installation completed and the program location was saved. " + window.ConfigurationMessage);
             }
             else
             {

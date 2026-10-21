@@ -17,6 +17,28 @@ if (args.Length != 0)
 // All installation, network and process behavior is synthetic. No installers are ever executed.
 var tests = new (string Name, Func<Task> Body)[]
 {
+    ("failure callbacks distinguish catalog checking from package download", async () =>
+    {
+        using var f = new Fixture();
+        SoftwareUpdatePhase? observed = null;
+        f.Service.FailureObserved += (_, phase, _) => observed = phase;
+        f.Source.OnGet = _ => throw new VendorRequestException(VendorService.GitHub, VendorFailureKind.Forbidden, HttpStatusCode.Forbidden);
+        await f.Check(); Equal(SoftwareUpdatePhase.Checking, observed);
+        f.Source.OnGet = null;
+        await f.Check();
+        f.Handler.Respond = (_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.Forbidden));
+        await f.Update(); Equal(SoftwareUpdatePhase.Downloading, observed);
+        Equal(0, f.Installer.Installs);
+    }),
+    ("installation asks for fresh release metadata at both apply boundaries", async () =>
+    {
+        using var f = new Fixture();
+        await f.Check();
+        Equal(0, f.Source.RefreshCalls);
+        await f.Update();
+        Equal(2, f.Source.RefreshCalls);
+        Equal(1, f.Installer.Installs);
+    }),
     ("constructing and checking never installs", async () =>
     {
         using var f = new Fixture();
@@ -396,10 +418,13 @@ sealed class FakeSource(SoftwareRelease release) : ISoftwareReleaseSource
 {
     public SoftwareRelease? Release = release;
     public int Calls;
+    public int RefreshCalls;
     public string? LastInstalledVersion;
     public Func<CancellationToken, Task>? OnGet;
     public async Task<SoftwareRelease?> GetLatestAsync(SoftwareApp app, string installedVersion, CancellationToken token)
     { Calls++; LastInstalledVersion = installedVersion; if (OnGet != null) await OnGet(token); return Release; }
+    public Task<SoftwareRelease?> RefreshLatestAsync(SoftwareApp app, string installedVersion, CancellationToken token)
+    { RefreshCalls++; return GetLatestAsync(app, installedVersion, token); }
 }
 
 sealed class FakeInstaller(SoftwareInstallation installation, string backupPath) : ISoftwareInstaller

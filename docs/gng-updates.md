@@ -2,7 +2,7 @@
 
 Available in Launchpad 2.1.0 and later.
 
-Open **Swedish GNG package → Details… → Set up / update…**. The setup guide includes a GNG step before Controller profile and Fonts, returning there after installation. Version checks never download or install a package automatically.
+Open **Setup → Swedish GNG → Get / update package…**. This section also contains font checks and old-file cleanup. Version checks never download or install a package automatically.
 
 ## Get the package
 
@@ -85,7 +85,7 @@ To undo a managed update, choose **Restore backup…** in GNG setup and select t
 
 Cleanup has its own **Restore a backup…** action and separate `CleanupBackups` folder. If undoing both cleanup and an installation, restore archived dependencies before returning to profiles that need them.
 
-The **Activity** view links recorded GNG operations to their recovery folders. **Review GNG recovery…** opens the relevant GNG window and suggests the selected backup when you choose Restore. An outstanding failed installation takes priority. You still review and confirm the restore, and the original data-folder and EuroScope process checks apply.
+**Setup → Activity & recovery** links recorded GNG operations to their recovery folders. **Review GNG recovery…** opens the relevant GNG window and suggests the selected backup when you choose Restore. An outstanding failed installation takes priority. You still review and confirm the restore, and the original data-folder and EuroScope process checks apply.
 
 In **Remove / reset…**, deleting **cached downloads** leaves installation history and its original ZIPs intact. Deleting **recovery backups** removes GNG installation history, retained ZIPs and cleanup backups as well as existing client recovery backups. Resetting **browser sessions** clears the dedicated sign-in session separately.
 

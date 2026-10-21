@@ -8,15 +8,20 @@ namespace VatscaUpdateChecker;
 
 public partial class InstallationDiscoveryWindow : Window
 {
-    private sealed class Choice(InstallationCandidate candidate) : INotifyPropertyChanged
+    private sealed class Choice(InstallationDiscoveryOption option, InstallationDiscoverySelection selection) : INotifyPropertyChanged
     {
-        public InstallationCandidate Candidate { get; } = candidate;
-        public bool Selected { get; set; }
+        public InstallationDiscoveryOption Option { get; } = option;
+        public InstallationCandidate Candidate => Option.Candidate;
+        public string Path => Option.Path;
         public bool CanSelect { get; private set; }
-        public string VerificationText { get; private set; } = "Checking the program or folder…";
+        public string VerificationText { get; private set; } = "Checking this location…";
+        public string DetailsLabel { get; private set; } = "Checking location…";
         public Brush VerificationBrush { get; private set; } = Brushes.Gray;
-        public string Path => Candidate.Id is AtcRemovalApp.Gng or AtcRemovalApp.VatEfs
-            ? Candidate.DataPath ?? "" : Candidate.ExecutablePath;
+        public string StateLabel => Option.IsCurrent ? (selection.IsSelected(Option) ? "Current location" : "Will be replaced")
+            : selection.IsSelected(Option) ? "Selected change" : selection.HasCurrent(Candidate.Id) ? "Other copy found" : "Found on this PC";
+        public string ActionText => Option.IsCurrent ? "Keep current" : selection.IsSelected(Option) ? "Undo change"
+            : selection.HasCurrent(Candidate.Id) ? "Use this copy instead" : "Use this copy";
+        public bool CanChoose => Option.IsCurrent ? !selection.IsSelected(Option) : selection.IsSelected(Option) || CanSelect;
         public string LocationKind => Candidate.Id switch
         {
             AtcRemovalApp.Gng => "EuroScope folder containing Swedish GNG data",
@@ -27,12 +32,13 @@ public partial class InstallationDiscoveryWindow : Window
         {
             "CurrentUser" => "Installed for your Windows account",
             "AllUsers" or "LocalMachine" => "Installed for all Windows accounts",
+            "Configured" => "Previously chosen in Launchpad",
             "Unknown" => "Installation type not confirmed",
             _ => ""
         };
         public string SupportText => Candidate.CanManage
-            ? "Launchpad checks update and removal support separately when you use those actions."
-            : "This copy may need manual updates or removal. Choosing it here only tells Launchpad where it is.";
+            ? "Updates and removal are checked separately when requested."
+            : "Choosing a location does not enable managed updates or removal for an unsupported copy.";
         public ConfiguredPathKind Kind => Candidate.Id switch
         {
             AtcRemovalApp.EuroScope => ConfiguredPathKind.EuroScopeExecutable,
@@ -44,48 +50,59 @@ public partial class InstallationDiscoveryWindow : Window
             _ => throw new InvalidOperationException("This application has no selectable location.")
         };
         public event PropertyChangedEventHandler? PropertyChanged;
+        public void RefreshSelection()
+        {
+            foreach (var name in new[] { nameof(StateLabel), nameof(ActionText), nameof(CanChoose) })
+                PropertyChanged?.Invoke(this, new(name));
+        }
         public void SetResult(ConfiguredPathValidation result, Brush text, Brush warning)
         {
             CanSelect = result.Status is PathValidationStatus.Verified or PathValidationStatus.Warning;
-            if (!CanSelect) Selected = false;
             VerificationText = result.Message;
+            DetailsLabel = result.Status switch
+            {
+                PathValidationStatus.Invalid => "Location unavailable — details",
+                PathValidationStatus.Warning => "Check location — details",
+                _ => "Details"
+            };
             VerificationBrush = result.Status is PathValidationStatus.Invalid or PathValidationStatus.Warning ? warning : text;
-            foreach (var name in new[] { nameof(CanSelect), nameof(Selected), nameof(VerificationText), nameof(VerificationBrush) })
+            foreach (var name in new[] { nameof(CanSelect), nameof(CanChoose), nameof(VerificationText), nameof(VerificationBrush), nameof(DetailsLabel) })
                 PropertyChanged?.Invoke(this, new(name));
         }
     }
 
     private readonly Choice[] _choices;
+    private readonly AppSettings _current;
+    private readonly InstallationDiscoverySelection _selection;
     private readonly ConfiguredPathValidationService _validator = new();
     private bool _checking, _closed;
     public IReadOnlyList<InstallationCandidate> SelectedCandidates { get; private set; } = Array.Empty<InstallationCandidate>();
-    public bool ReplaceExisting => ReplaceConfigured.IsChecked == true;
 
-    public InstallationDiscoveryWindow(IReadOnlyList<InstallationCandidate> candidates)
+    public InstallationDiscoveryWindow(IReadOnlyList<InstallationCandidate> candidates, AppSettings? current = null)
     {
         InitializeComponent();
         MinHeight = Math.Min(MinHeight, SystemParameters.WorkArea.Height);
         MinWidth = Math.Min(MinWidth, SystemParameters.WorkArea.Width);
         Height = Math.Min(Height, SystemParameters.WorkArea.Height);
         Width = Math.Min(Width, SystemParameters.WorkArea.Width);
-        _choices = candidates.Select(c => new Choice(c)).ToArray();
+        _current = current?.Copy() ?? new();
+        _selection = new(_current, candidates);
+        _choices = _selection.Options.Select(o => new Choice(o, _selection)).ToArray();
         CandidatesList.ItemsSource = _choices;
-        UseButton.IsEnabled = false;
         Closed += (_, _) => _closed = true;
         if (_choices.Length == 0)
-            ResultText.Text = "Nothing was found in the usual locations. If you already installed an application, choose its program file in Settings. Otherwise, return to setup to install it.";
+            ResultText.Text = "No installed copies found. Choose a location in Settings, or install a missing application in Setup.";
         else Loaded += async (_, _) =>
         {
-            if (await VerifyAsync(_choices))
-                ResultText.Text = "Choose the programs and folders you use. Unrecognised results need your confirmation in Settings; wrong or missing locations cannot be selected.";
+            if (await VerifyAsync(_choices)) UpdateSummary();
         };
     }
 
     private async Task<bool> VerifyAsync(Choice[] choices)
     {
         _checking = true;
-        UseButton.IsEnabled = CandidatesList.IsEnabled = ReplaceConfigured.IsEnabled = false;
-        ResultText.Text = "Checking the selected files and folders without starting any applications…";
+        UseButton.IsEnabled = CandidatesList.IsEnabled = false;
+        ResultText.Text = "Checking the files and folders…";
         try
         {
             var results = await Task.Run(() => choices.Select(c => _validator.Validate(c.Kind, c.Path)).ToArray());
@@ -96,34 +113,49 @@ public partial class InstallationDiscoveryWindow : Window
         }
         catch
         {
-            if (!_closed) ResultText.Text = "The locations could not be checked. Cancel and search again, or choose files and folders in Settings.";
+            if (!_closed) ResultText.Text = "The locations could not be checked. Your current choices are kept.";
             return false;
         }
         finally
         {
             _checking = false;
-            if (!_closed)
-            {
-                CandidatesList.IsEnabled = ReplaceConfigured.IsEnabled = true;
-                UseButton.IsEnabled = _choices.Any(c => c.CanSelect);
-            }
+            if (!_closed) CandidatesList.IsEnabled = UseButton.IsEnabled = true;
         }
+    }
+
+    private void Choose_Click(object sender, RoutedEventArgs e)
+    {
+        if (_checking || (sender as FrameworkElement)?.DataContext is not Choice choice || !choice.CanChoose) return;
+        if (!choice.Option.IsCurrent && _selection.IsSelected(choice.Option)) _selection.Undo(choice.Option);
+        else _selection.Choose(choice.Option);
+        foreach (var item in _choices) item.RefreshSelection();
+        UpdateSummary();
+    }
+
+    private void UpdateSummary()
+    {
+        int count = _selection.Changes.Count;
+        ResultText.Text = count == 0 ? "Your current locations are kept. Choose a different copy only if you want to change one."
+            : $"{count} location{(count == 1 ? "" : "s")} selected for change. Other locations stay as they are.";
+        if (InstallationDiscoverySelection.RequiresVatEfsProfileRelocation(_current, _selection.ApplyTo(_current)))
+            ResultText.Text += "\nVatEFS is enabled. Its EuroScope profiles will use the selected copy; close EuroScope first.";
+        UseButton.Content = count == 0 ? "Done" : "Use selected locations";
     }
 
     private async void Use_Click(object sender, RoutedEventArgs e)
     {
         if (_checking) return;
-        var selected = _choices.Where(c => c.Selected && c.CanSelect).ToArray();
-        if (selected.Length == 0) { ResultText.Text = "Tick a program or folder you want to use, or choose Cancel."; return; }
-        if (selected.GroupBy(c => c.Candidate.Id).Any(g => g.Count() > 1))
-        { ResultText.Text = "Choose only one copy of each program or data folder."; return; }
-        if (!await VerifyAsync(selected) || _closed) return;
-        if (selected.Any(c => !c.CanSelect))
+        var selected = _choices.Where(c => !c.Option.IsCurrent && _selection.IsSelected(c.Option)).ToArray();
+        if (selected.Length > 0)
         {
-            ResultText.Text = "A location changed or could not be recognised as a usable choice. Check the explanation beside it before continuing.";
-            return;
+            if (!await VerifyAsync(selected) || _closed) return;
+            if (selected.Any(c => !c.CanSelect))
+            {
+                ResultText.Text = "A selected location is no longer usable. Undo that change or choose another copy.";
+                return;
+            }
         }
-        SelectedCandidates = selected.Select(c => c.Candidate).ToArray();
+        SelectedCandidates = _selection.Changes;
         DialogResult = true;
     }
 

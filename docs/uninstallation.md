@@ -1,6 +1,6 @@
 # Removing applications and resetting settings
 
-Open **Remove / reset…** to remove applications, delete their settings, or uninstall Launchpad. Removing an application and deleting its data are separate choices.
+Open **Setup → Activity & recovery → Remove / reset…** to remove applications, delete their settings, or uninstall Launchpad. Removing an application and deleting its data are separate choices.
 
 ## Review the selection
 

@@ -26,4 +26,7 @@
   <ItemGroup>
     <Compile Include="../../Services/VatEfsMsiTrust.cs" Link="VatEfsMsiTrust.cs" />
   </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../Services/VendorRequestException.cs" Link="Services/VendorRequestException.cs" />
+  </ItemGroup>
 </Project>

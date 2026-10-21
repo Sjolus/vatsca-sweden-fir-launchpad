@@ -24,7 +24,7 @@ public partial class MainWindow
                 {
                     _settings.EuroscopeExePath = result.ExecutablePath;
                     try { SettingsService.Save(_settings); }
-                    catch { LastCheckedText.Text = failureMessage = "EuroScope installation succeeded, but its path could not be saved. Set it in Settings."; }
+                    catch { LastCheckedText.Text = failureMessage = "EuroScope installation succeeded, but its location could not be saved. Choose it under Setup → Applications."; }
                 }
                 // Failed replacement can still have removed the previous executable/data.
                 // Refresh launch visibility and profile choices on every outcome.
@@ -45,7 +45,7 @@ public partial class MainWindow
                         "Restart Windows before further installation or controller-profile changes.";
             }
         }
-        if (adopt && !_windowClosed) OpenSettings(discover: true);
+        if (adopt && !_windowClosed) DiscoverInstallations_Click(sender, e);
         else if (remove && !_windowClosed) Maintenance_Click(sender, e);
     }
 }

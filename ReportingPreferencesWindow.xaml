@@ -40,7 +40,7 @@
                     <TextBlock Text="Send automatic error reports" FontWeight="SemiBold" TextWrapping="Wrap"/>
                 </CheckBox>
                 <TextBlock Margin="22,5,0,14" Foreground="{DynamicResource SecondaryText}" TextWrapping="Wrap"
-                           Text="Limited technical details when something fails: Launchpad version, application, action and error category. Software-version context is included only if version sharing is also enabled. This works without usage statistics."/>
+                           Text="When something fails: Launchpad version, application, action, error category, online service and HTTP status. Software-version context needs version sharing. This works without usage statistics."/>
                 <TextBlock x:Name="ChoiceExplanation" TextWrapping="Wrap" Margin="0,0,0,14"/>
                 <Expander Header="What is sent?" Foreground="{DynamicResource PrimaryText}" Margin="0,0,0,16">
                     <StackPanel Margin="0,8,0,0">
