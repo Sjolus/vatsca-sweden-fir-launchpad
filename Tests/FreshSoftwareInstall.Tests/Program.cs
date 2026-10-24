@@ -313,8 +313,12 @@ sealed class Fixture : IDisposable
         {
             LocalAppData = Dir("Local"), ReadRegistrations = _ => Registrations.ToArray(), IsRunning = _ => Running,
             PrerequisiteProblem = _ => Problem,
-            ReadBinary = path => new(Path.GetFileName(path) is "Update.exe" or "Squirrel.exe" ? "0.0.1251" : version,
-                BadProduct ? "Unrelated" : app == SoftwareApp.Vacs ? "vacs" : app == SoftwareApp.TrackAudio ? "TrackAudio" : "vATIS"),
+            ReadBinary = path =>
+            {
+                var isUpdater = Path.GetFileName(path) is "Update.exe" or "Squirrel.exe";
+                return new(isUpdater ? "0.0.1251" : version,
+                    BadProduct ? "Unrelated" : isUpdater ? "Velopack" : app == SoftwareApp.Vacs ? "vacs" : app == SoftwareApp.TrackAudio ? "TrackAudio" : "vATIS");
+            },
             VerifyPublisher = (_, publisher) => { if (publisher != "Justin Shannon") throw new Exception("Unexpected publisher"); TrustChecks++; if (BadSignature) throw new InvalidDataException("Untrusted synthetic signature"); },
             RunAsync = _ => throw new Exception("Unexpected production process runner")
         };

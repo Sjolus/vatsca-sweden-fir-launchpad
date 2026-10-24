@@ -15,9 +15,10 @@ changed installations and releases, running-client checks, download verification
 limits, cancellation, concurrent operations, backup retention and post-install verification.
 Adapter checks inspect command arguments; vendor behavior requires integration testing.
 
-An optional read-only check accepts an already downloaded official vATIS
-`org.vatsim.vatis-4.1.0-beta.19-full.nupkg`. It checks the pinned official digest and package
-contents using production validation:
+An optional read-only check accepts an already downloaded official vATIS beta.19 or
+beta.20 full package, retaining its original `org.vatsim.vatis-<version>-full.nupkg`
+filename. It checks the pinned official size/digest and package contents using production
+validation:
 
 ```powershell
 dotnet run --project Tests/SoftwareUpdate.Tests/SoftwareUpdate.Tests.csproj -c Release -- --verify-vatis-package <absolute-package-path>

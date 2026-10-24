@@ -7,7 +7,7 @@
     <DefaultItemExcludes>$(DefaultItemExcludes);artifacts\**;reporting-service\**</DefaultItemExcludes>
     <UseWPF>true</UseWPF>
     <StartupObject>VatscaUpdateChecker.Program</StartupObject>
-    <Version>2.6.0</Version>
+    <Version>2.6.1</Version>
     <AssemblyName>VatscaUpdateChecker</AssemblyName>
     <AssemblyTitle>Sweden FIR Launchpad</AssemblyTitle>
     <Product>Sweden FIR Launchpad</Product>
