@@ -99,9 +99,8 @@ public sealed class SoftwareInstaller : ISoftwareInstaller
         {
             RequireFile(updater);
             var helper = _environment.ReadBinary(updater);
-            if (NormalizeVersion(helper.ProductVersion) != "0.0.1251")
-                throw new InvalidDataException("This vATIS updater version has not been verified for background upgrades.");
             _environment.VerifyPublisher(updater, "Justin Shannon");
+            RequireVatisUpdater(helper);
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException or System.Security.SecurityException or InvalidOperationException or CryptographicException)
         {
@@ -165,9 +164,9 @@ public sealed class SoftwareInstaller : ISoftwareInstaller
                     await source.CopyToAsync(output, cancellationToken).ConfigureAwait(false);
                 _environment.VerifyPublisher(destination, "Justin Shannon");
                 var identity = _environment.ReadBinary(destination);
-                if (name == "vATIS.exe" && (NormalizeVersion(identity.ProductVersion) != release.Version || identity.ProductName != "vATIS") ||
-                    name == "Squirrel.exe" && NormalizeVersion(identity.ProductVersion) != "0.0.1251")
-                    throw new InvalidDataException("The package contains an unsupported vATIS executable/updater.");
+                if (name == "vATIS.exe" && (NormalizeVersion(identity.ProductVersion) != release.Version || identity.ProductName != "vATIS"))
+                    throw new InvalidDataException("The vATIS executable does not match the selected release.");
+                if (name == "Squirrel.exe") RequireVatisUpdater(identity);
             }
         }
         finally
@@ -245,8 +244,8 @@ public sealed class SoftwareInstaller : ISoftwareInstaller
         RequireStopped(installation);
         var command = BuildCommand(installation, packagePath);
         // Keep verified input paths from being replaced while the vendor process opens/uses them.
-        // The supported 0.0.1251 apply command replaces current only; updating the root helper is a
-        // separate update-self command. Its fast hooks do not replace this helper, so this lock is safe.
+        // Reviewed 0.0.1251 and 1.2.161 apply commands leave this root helper in place.
+        // Package extraction skips Squirrel.exe, and vATIS exits its fast hooks before normal startup.
         using var helperLock = installation.UpdaterPath == null ? null : new FileStream(installation.UpdaterPath, FileMode.Open, FileAccess.Read, FileShare.Read);
         Revalidate(installation);
         RequireStopped(installation);
@@ -378,6 +377,15 @@ public sealed class SoftwareInstaller : ISoftwareInstaller
     {
         if (manifest.Id != VatisId || manifest.Version != version || manifest.Channel != "win" || manifest.MainExe != "vATIS.exe" || manifest.Os != "win")
             throw new InvalidDataException("The vATIS package identity/version/channel does not match the installation.");
+    }
+    private static void RequireVatisUpdater(SoftwareBinary helper)
+    {
+        if (!helper.ProductName.Equals("Velopack", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("The vATIS updater product identity is not recognized.");
+        // These versions have reviewed silent apply, no-restart and fast-hook behavior.
+        // Publisher verification remains mandatory at each caller; newer helpers need review.
+        if (NormalizeVersion(helper.ProductVersion) is not ("0.0.1251" or "1.2.161"))
+            throw new SoftwareUpdateCompatibilityException("This vATIS release uses an updater that Launchpad does not support yet. Update Launchpad before trying again.");
     }
     private static string VersionForMessage(string version) => version.Length <= 64 ? version : version[..64] + "…";
 

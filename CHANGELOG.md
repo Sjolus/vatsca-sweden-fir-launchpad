@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.6.1] — 2026-10-24
+
+- Fix vATIS beta.20 updates being rejected because its package uses a newer updater. Keep signature checks and the complete installation backup.
+- Explain when a future vATIS updater needs a Launchpad compatibility update instead of suggesting repeated retries.
+
 ## [2.6.0] — 2026-10-21
 
 - Bring application locations, GNG, controller details and preferences together under Setup. Move Activity & recovery out of the main toolbar and place help beside the window controls.

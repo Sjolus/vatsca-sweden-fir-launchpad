@@ -10,7 +10,7 @@ if (args.Length != 0)
         await InstallerTests.VerifyDownloadedVatisAsync(args[1]);
         return 0;
     }
-    Console.Error.WriteLine("Usage: no arguments for offline tests, or --verify-vatis-package <official-beta.19-nupkg>");
+    Console.Error.WriteLine("Usage: no arguments for offline tests, or --verify-vatis-package <official-beta.19-or-beta.20-nupkg>");
     return 2;
 }
 
@@ -214,8 +214,20 @@ var tests = new (string Name, Func<Task> Body)[]
     ("untrusted vendor package blocks backup and installation", async () =>
     {
         using var f = new Fixture(); f.Installer.OnVerify = _ => throw new InvalidDataException("Synthetic signature rejected");
-        await f.Check(); Equal(SoftwareUpdatePhase.Error, (await f.Update()).Phase);
+        await f.Check(); var result = await f.Update(); Equal(SoftwareUpdatePhase.Error, result.Phase);
+        Equal("Synthetic signature rejected Check again before retrying.", result.Message);
         Equal(0, f.Installer.Backups); Equal(0, f.Installer.Installs);
+    }),
+    ("unsupported vATIS updater explains compatibility without suggesting a pointless retry", async () =>
+    {
+        using var f = new Fixture(SoftwareApp.Vatis);
+        const string message = "This vATIS release uses an updater that Launchpad does not support yet. Update Launchpad before trying again.";
+        f.Installer.OnVerify = _ => throw new SoftwareUpdateCompatibilityException(message);
+        await f.Check(); var result = await f.Update();
+        Equal(SoftwareUpdatePhase.Error, result.Phase); Equal(message, result.Message);
+        Equal(0, f.Installer.Backups); Equal(0, f.Installer.Installs);
+        True(result.Release is null && result.BackupFolder is null && !f.Service.IsBusy);
+        Equal(0, Directory.GetFileSystemEntries(f.Cache).Length);
     }),
     ("server length mismatch is rejected", async () =>
     {

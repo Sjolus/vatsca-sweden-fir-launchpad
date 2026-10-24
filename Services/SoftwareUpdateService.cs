@@ -351,7 +351,8 @@ public sealed class SoftwareUpdateService
         return SetState(GetState(app) with
         {
             Phase = SoftwareUpdatePhase.Error,
-            Message = ex.Message + (RestartRequired ? " Restart Windows before further changes." : " Check again before retrying.")
+            Message = ex.Message + (RestartRequired ? " Restart Windows before further changes." :
+                ex is SoftwareUpdateCompatibilityException ? "" : " Check again before retrying.")
                 + (GetState(app).BackupFolder is { } backup ? " Settings backup: " + backup : ""),
             Release = null,
             ProgressPercent = null

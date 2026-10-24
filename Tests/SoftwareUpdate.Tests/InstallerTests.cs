@@ -85,20 +85,26 @@ internal static class InstallerTests
                 using var f = new Fixture(SoftwareApp.TrackAudio); f.Prerequisite = "Missing synthetic VC runtime";
                 Assert(!f.Inspect().CanUpdate && f.Inspect().Reason!.Contains("runtime")); return Task.CompletedTask;
             }),
-            ("vATIS root and signed helper recognized", () =>
+            ("vATIS root and both reviewed signed helpers recognized", () =>
             {
-                using var f = new Fixture(SoftwareApp.Vatis); Assert(f.Inspect().CanUpdate && f.TrustChecks == 2);
-                Assert(!f.Installer.Inspect(f.App, Path.Combine(f.TestRoot, "elsewhere.exe")).CanUpdate);
+                foreach (var version in new[] { "0.0.1251", "1.2.161" })
+                {
+                    using var f = new Fixture(SoftwareApp.Vatis);
+                    f.WriteBinary(Path.Combine(f.Root, "Update.exe"), "Velopack", version);
+                    Assert(f.Inspect().CanUpdate && f.TrustChecks == 2);
+                    Assert(!f.Installer.Inspect(f.App, Path.Combine(f.TestRoot, "elsewhere.exe")).CanUpdate);
+                }
                 return Task.CompletedTask;
             }),
             ("missing unsupported or untrusted vATIS helper retains verified client version without update permission", async () =>
             {
-                foreach (var variant in new[] { "missing", "unsupported", "untrusted" })
+                foreach (var variant in new[] { "missing", "unsupported", "wrong-product", "untrusted" })
                 {
                     using var f = new Fixture(SoftwareApp.Vatis);
                     var helper = Path.Combine(f.Root, "Update.exe");
                     if (variant == "missing") File.Delete(helper);
-                    if (variant == "unsupported") f.WriteBinary(helper, "Velopack", "1.2.161");
+                    if (variant == "unsupported") f.WriteBinary(helper, "Velopack", "9.9.9");
+                    if (variant == "wrong-product") f.WriteBinary(helper, "Other product", "1.2.161");
                     if (variant == "untrusted") f.RejectHelperTrust = true;
                     var detected = f.Inspect();
                     Assert(!detected.CanUpdate && detected.Version == f.Version && detected.RootPath == f.Root &&
@@ -166,9 +172,17 @@ internal static class InstallerTests
             }),
             ("vATIS package validates both manifests and executable trust", async () =>
             {
-                using var f = new Fixture(SoftwareApp.Vatis); var release = f.CreatePackage();
-                await f.Installer.VerifyPackageAsync(release, f.PackagePath, default); Assert(f.TrustChecks == 2);
-                f.RejectTrust = true; await Reject(() => f.Installer.VerifyPackageAsync(release, f.PackagePath, default));
+                foreach (var helperVersion in new[] { "0.0.1251", "1.2.161" })
+                {
+                    using var f = new Fixture(SoftwareApp.Vatis) { PackageHelperVersion = helperVersion };
+                    var release = f.CreatePackage();
+                    await f.Installer.VerifyPackageAsync(release, f.PackagePath, default); Assert(f.TrustChecks == 2);
+                    f.RejectHelperTrust = true;
+                    await Reject(() => f.Installer.VerifyPackageAsync(release, f.PackagePath, default));
+                    f.RejectHelperTrust = false;
+                    f.RejectTrust = true;
+                    await Reject(() => f.Installer.VerifyPackageAsync(release, f.PackagePath, default));
+                }
             }),
             ("vATIS verification rejects linked cache parents before extracting files", async () =>
             {
@@ -187,7 +201,7 @@ internal static class InstallerTests
             }),
             ("vATIS wrong package identity and channel rejected", async () =>
             {
-                foreach (var variant in new[] { "wrong-id", "wrong-channel", "wrong-version", "wrong-helper", "wrong-main" })
+                foreach (var variant in new[] { "wrong-id", "wrong-channel", "wrong-version", "wrong-helper", "wrong-helper-product", "wrong-main", "wrong-main-product" })
                 {
                     using var f = new Fixture(SoftwareApp.Vatis); var release = f.CreatePackage(variant);
                     await Reject(() => f.Installer.VerifyPackageAsync(release, f.PackagePath, default));
@@ -259,6 +273,44 @@ internal static class InstallerTests
                     f.OnRun = () => f.SetVersion(release.Version);
                     var result = await f.Installer.InstallAsync(before, release, f.PackagePath, null);
                     Assert(result.ExecutablePath == f.Exe && f.RunCount == 1 && !f.Running);
+                }
+            }),
+            ("vATIS beta.20 migration and subsequent update retain root helper and user data", async () =>
+            {
+                foreach (var (helperVersion, fromVersion, toVersion) in new[]
+                {
+                    ("0.0.1251", "4.1.0-beta.19", "4.1.0-beta.20"),
+                    ("1.2.161", "4.1.0-beta.20", "4.1.0-beta.21")
+                })
+                {
+                    using var f = new Fixture(SoftwareApp.Vatis)
+                    {
+                        VatisTargetVersion = toVersion,
+                        PackageHelperVersion = "1.2.161"
+                    };
+                    f.SetVersion(fromVersion);
+                    var helperPath = Path.Combine(f.Root, "Update.exe");
+                    f.WriteBinary(helperPath, "Velopack", helperVersion);
+                    var originalHelper = File.ReadAllBytes(helperPath);
+                    var before = f.Inspect();
+                    var release = f.CreatePackage();
+                    var backup = await f.Installer.BackupAsync(before, null, default) ?? throw new Exception("Missing backup");
+                    var locked = false;
+                    f.OnRun = () =>
+                    {
+                        try { using var denied = new FileStream(helperPath, FileMode.Open, FileAccess.Write, FileShare.ReadWrite); }
+                        catch (IOException) { locked = true; }
+                        f.SetVersion(release.Version);
+                    };
+                    var result = await f.Installer.InstallAsync(before, release, f.PackagePath, null);
+                    Assert(result.ExecutablePath == f.Exe && f.RunCount == 1 && locked && !f.Running);
+                    Assert(f.LastCommand is { Elevate: false } command && command.Executable == helperPath &&
+                        command.Arguments.SequenceEqual(new[] { "--silent", "apply", "--norestart", "--package", f.PackagePath }));
+                    Assert(f.Inspect().Version == toVersion && f.Inspect().CanUpdate);
+                    Assert(File.ReadAllBytes(helperPath).SequenceEqual(originalHelper));
+                    Assert(File.ReadAllBytes(Path.Combine(backup, "Files", "Update.exe")).SequenceEqual(originalHelper));
+                    foreach (var relative in new[] { "AppConfig.json", "Profiles/synthetic.json" })
+                        Assert(File.ReadAllBytes(Path.Combine(backup, "Files", relative)).SequenceEqual(File.ReadAllBytes(Path.Combine(f.Root, relative))));
                 }
             }),
             ("installer successful exit without expected update is failure", async () =>
@@ -342,11 +394,17 @@ internal static class InstallerTests
         });
         try
         {
-            var release = new SoftwareRelease(SoftwareApp.Vatis, "4.1.0-beta.19",
-                new Uri("https://vatis.app/downloads/windows/org.vatsim.vatis-4.1.0-beta.19-full.nupkg"),
-                "org.vatsim.vatis-4.1.0-beta.19-full.nupkg", "29903D495EA7CCD8C64DA60104EB84E2E23B547EC09E11A0037A2856E3BAD248", 33176430);
+            var fileName = Path.GetFileName(packagePath);
+            var reviewed = fileName switch
+            {
+                "org.vatsim.vatis-4.1.0-beta.19-full.nupkg" => (Version: "4.1.0-beta.19", Sha256: "29903D495EA7CCD8C64DA60104EB84E2E23B547EC09E11A0037A2856E3BAD248", Size: 33176430L),
+                "org.vatsim.vatis-4.1.0-beta.20-full.nupkg" => (Version: "4.1.0-beta.20", Sha256: "656EA06BAFC93C2EFD7E8F82F9A28C7174CC7E2ECF2DC262EE18CFC59F4ED828", Size: 52926856L),
+                _ => throw new InvalidDataException("Choose the original beta.19 or beta.20 full package filename.")
+            };
+            var release = new SoftwareRelease(SoftwareApp.Vatis, reviewed.Version,
+                new Uri("https://vatis.app/downloads/windows/" + fileName), fileName, reviewed.Sha256, reviewed.Size);
             await installer.VerifyPackageAsync(release, packagePath, default);
-            Console.WriteLine("PASS official vATIS beta.19 package: SHA256, size, manifests, signed main/updater identity. No execution.");
+            Console.WriteLine($"PASS official vATIS {reviewed.Version} package: SHA256, size, manifests, signed main/updater identity. No execution.");
         }
         finally { DeleteSyntheticRoot(staging, "Launchpad-vATIS-package-verification-"); }
     }
@@ -376,7 +434,9 @@ internal static class InstallerTests
         public string PackagePath => Path.Combine(TestRoot, "download.bin");
         public string ManifestPath => Path.Combine(Root, "current", "sq.version");
         public string Version { get; private set; }
-        public string TargetVersion => App switch { SoftwareApp.Vacs => "2.8.0", SoftwareApp.Vatis => "4.1.0-beta.19", _ => "1.4.0" };
+        public string VatisTargetVersion { get; init; } = "4.1.0-beta.19";
+        public string PackageHelperVersion { get; init; } = "0.0.1251";
+        public string TargetVersion => App switch { SoftwareApp.Vacs => "2.8.0", SoftwareApp.Vatis => VatisTargetVersion, _ => "1.4.0" };
         public SoftwareRegistration Registration { get; private set; }
         public List<SoftwareRegistration> Registrations { get; } = [];
         public SoftwareInstaller Installer { get; }
@@ -384,6 +444,7 @@ internal static class InstallerTests
         public string? Prerequisite;
         public int RunCount, TrustChecks, ExitCode;
         public Action? OnRun;
+        public SoftwareInstallCommand? LastCommand;
         private string ProductName => App switch { SoftwareApp.Vacs => "vacs", SoftwareApp.Vatis => "vATIS", _ => "TrackAudio" };
         public Fixture(SoftwareApp app, string scope = "CurrentUser")
         {
@@ -407,9 +468,9 @@ internal static class InstallerTests
             {
                 LocalAppData = TestRoot, ReadRegistrations = _ => Registrations,
                 ReadBinary = path => { var fields = File.ReadAllText(path).Split('|'); return new(fields[1], fields[0]); },
-                VerifyPublisher = (path, publisher) => { TrustChecks++; Assert(publisher == "Justin Shannon"); if (RejectTrust || RejectHelperTrust && Path.GetFileName(path) == "Update.exe") throw new InvalidDataException("Synthetic bad signature"); },
+                VerifyPublisher = (path, publisher) => { TrustChecks++; Assert(publisher == "Justin Shannon"); if (RejectTrust || RejectHelperTrust && Path.GetFileName(path) is "Update.exe" or "Squirrel.exe") throw new InvalidDataException("Synthetic bad signature"); },
                 IsRunning = _ => Running, PrerequisiteProblem = _ => Prerequisite,
-                RunAsync = _ => { RunCount++; OnRun?.Invoke(); return Task.FromResult(ExitCode); }
+                RunAsync = command => { LastCommand = command; RunCount++; OnRun?.Invoke(); return Task.FromResult(ExitCode); }
             });
         }
         public SoftwareInstallation Inspect() => Installer.Inspect(App, Exe);
@@ -436,8 +497,8 @@ internal static class InstallerTests
                 var manifest = Manifest(variant == "wrong-version" ? "4.1.0-beta.18" : TargetVersion,
                     variant == "wrong-id" ? "other" : "org.vatsim.vatis", variant == "wrong-channel" ? "osx" : "win");
                 Add("org.vatsim.vatis.nuspec", manifest); Add("lib/app/sq.version", manifest);
-                Add("lib/app/vATIS.exe", "vATIS|" + (variant == "wrong-main" ? "4.1.0-beta.17" : TargetVersion));
-                Add("lib/app/Squirrel.exe", "Velopack|" + (variant == "wrong-helper" ? "1.2.161" : "0.0.1251"));
+                Add("lib/app/vATIS.exe", (variant == "wrong-main-product" ? "Other product|" : "vATIS|") + (variant == "wrong-main" ? "4.1.0-beta.17" : TargetVersion));
+                Add("lib/app/Squirrel.exe", (variant == "wrong-helper-product" ? "Other product|" : "Velopack|") + (variant == "wrong-helper" ? "9.9.9" : PackageHelperVersion));
                 if (variant == "traversal") Add("../outside.txt", "bad");
                 if (variant == "duplicate") Add("LIB/APP/VATIS.EXE", "duplicate");
                 if (variant == "symlink") Add("link", "target", unchecked((int)0xA0000000));
