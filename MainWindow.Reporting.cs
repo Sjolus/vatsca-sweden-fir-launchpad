@@ -123,8 +123,6 @@ public partial class MainWindow
     {
         if (!CanOpenReporting() || sender is not Button button) return;
         var menu = new ContextMenu { PlacementTarget = button, Placement = PlacementMode.Bottom };
-        var gettingStarted = new MenuItem { Header = "Getting started…" };
-        gettingStarted.Click += (_, _) => OpenGettingStarted();
         var report = new MenuItem { Header = "Report a problem…" };
         report.Click += (_, _) => OpenProblemReport(ReportingApplication.Launchpad);
         var privacy = new MenuItem { Header = "Privacy and support ID…" };
@@ -137,7 +135,7 @@ public partial class MainWindow
         {
             if (CanOpenReporting()) ShowOwnedDialog(new ReportingHistoryWindow { Owner = this });
         };
-        menu.Items.Add(gettingStarted); menu.Items.Add(report); menu.Items.Add(privacy); menu.Items.Add(history); menu.IsOpen = true;
+        menu.Items.Add(report); menu.Items.Add(privacy); menu.Items.Add(history); menu.IsOpen = true;
     }
 
     private void ReportProblem_Click(object sender, RoutedEventArgs e)

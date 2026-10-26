@@ -88,7 +88,7 @@ var tests = new List<(string Name, Action Test)>
         True(SetupGuide.Present(settings, "Profile") is null);
         True(!SetupGuide.Next(settings, "Profile").Changed);
     }),
-    ("Later retains choices and its checkpoint while Help resumes it", () =>
+    ("Later retains choices and its checkpoint while manual reopening resumes it", () =>
     {
         var settings = Existing();
         settings.PatchVatEfs = true; settings.PatchSaaman = true;
@@ -105,7 +105,7 @@ var tests = new List<(string Name, Action Test)>
         True(settings.SetupGuideActive && !settings.SetupWizardDismissed);
         Equal(UnrelatedSettings(before), UnrelatedSettings(settings));
     }),
-    ("Help restarts a finished guide without altering installed apps or saved identity", () =>
+    ("manual reopening restarts a finished guide without altering installed apps or saved identity", () =>
     {
         var settings = Existing();
         settings.SetupGuideSection = "Profile";
