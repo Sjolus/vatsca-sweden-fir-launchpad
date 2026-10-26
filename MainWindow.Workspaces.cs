@@ -67,7 +67,7 @@ public partial class MainWindow
 
     private void LeaveSetupGuideForLater()
     {
-        if (SetupGuide.Later(_settings)) SaveSessionSettings("Setup paused. Use Help → Getting started to continue when ready.");
+        if (SetupGuide.Later(_settings)) SaveSessionSettings("Setup paused. Open the setup guide in Setup → Preferences to continue when ready.");
         ShowWorkspace("Apps");
         UpdateAppConfigButton();
     }

@@ -11,6 +11,7 @@ public partial class MainWindow
         _preferencesWorkspace = control;
         control.PreferencesChanged += SaveWorkspacePreferences;
         control.RetrySaveRequested += () => SaveWorkspacePreferences(null);
+        control.SetupGuideRequested += OpenGettingStarted;
         control.PrivacyRequested += () =>
         {
             if (CanOpenReporting()) ShowOwnedDialog(new ReportingPreferencesWindow { Owner = this });

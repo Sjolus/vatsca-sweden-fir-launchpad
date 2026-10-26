@@ -17,6 +17,9 @@
     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
     <StackPanel x:Name="PreferenceContent" Margin="0,0,5,0">
         <TextBlock Text="Preferences" FontSize="{DynamicResource TextSize16}" FontWeight="SemiBold" Margin="0,0,0,12"/>
+        <Button x:Name="SetupGuideButton" Content="Open setup guide" Style="{StaticResource PreferenceAction}"
+                HorizontalAlignment="Left" Click="SetupGuide_Click"
+                ToolTip="Step through applications, Swedish GNG and controller details. Your existing settings are kept."/>
         <CheckBox x:Name="CheckOnStartupChoice" Style="{StaticResource PreferenceChoice}" Click="Preference_Click"
                   ToolTip="Checks for new versions. Downloads and installations still need your approval.">
             <TextBlock Text="Check for updates when Launchpad opens" TextWrapping="Wrap"/>

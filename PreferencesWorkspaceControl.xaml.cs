@@ -11,6 +11,7 @@ public partial class PreferencesWorkspaceControl : UserControl
 
     public event Action<AppSettings>? PreferencesChanged;
     public event Action? RetrySaveRequested;
+    public event Action? SetupGuideRequested;
     public event Action? PrivacyRequested;
     public event Action? ReportsRequested;
 
@@ -78,6 +79,7 @@ public partial class PreferencesWorkspaceControl : UserControl
     }
 
     private void RetrySave_Click(object sender, RoutedEventArgs e) => RetrySaveRequested?.Invoke();
+    private void SetupGuide_Click(object sender, RoutedEventArgs e) => SetupGuideRequested?.Invoke();
     private void Privacy_Click(object sender, RoutedEventArgs e) => PrivacyRequested?.Invoke();
     private void Reports_Click(object sender, RoutedEventArgs e) => ReportsRequested?.Invoke();
 }

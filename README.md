@@ -18,7 +18,7 @@ The release packages use a self-signed development certificate. Windows may show
 
 ## Set up your tools
 
-Open **Setup** to manage your applications, Swedish GNG package and controller profile. First launch shows a short guide in this same view, with a next step for each section. It resumes after restarting until you choose **Finish setup** or **Later**. Reopen it from **? → Getting started…**. Existing setups keep their saved locations; install only what you need.
+Open **Setup** to manage your applications, Swedish GNG package and controller profile. First launch shows a short guide in this same view, with a next step for each section. It resumes after restarting until you choose **Finish setup** or **Later**. Reopen it from **Setup → Preferences → Open setup guide**. Existing setups keep their saved locations; install only what you need.
 
 1. **Applications:** find installed copies, change a location, or install a missing application. Saving a location keeps its existing configuration.
 2. **Swedish GNG:** choose your data folder, get or update the package, and check fonts. File changes are reviewed before installation.
