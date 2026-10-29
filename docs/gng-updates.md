@@ -1,14 +1,14 @@
 # Installing and updating Swedish GNG
 
-Available in Launchpad 2.1.0 and later.
+Choose **Update** on the Swedish GNG row in Apps. For a first installation, open **Setup → Swedish GNG → Install Swedish GNG**. Both use the same flow inside Launchpad. Version checks never download or install a package automatically.
 
-Open **Setup → Swedish GNG → Get / update package…**. This section also contains font checks and old-file cleanup. Version checks never download or install a package automatically.
+Setup shows your package version, the latest checked version, its saved folder and font status. **Maintenance** contains ZIP import, fresh downloads, old-file cleanup and location changes.
 
 ## Get the package
 
-Check the destination at the top of the window. This is your EuroScope **data folder**, usually `%APPDATA%\EuroScope`, containing the `ESAA` folder and Swedish profiles. It is separate from the folder containing `EuroScope.exe`. If no data folder is configured, choose one; Launchpad saves that choice only after a successful installation.
+Check the destination shown in the review. This is your EuroScope **data folder**, usually `%APPDATA%\EuroScope`, containing the `ESAA` folder and Swedish profiles. It is separate from the folder containing `EuroScope.exe`. A new installation uses that standard data folder. Launchpad saves it after installation succeeds, or if the selected package already matches the files there. To keep an existing package, choose **Use existing folder…** in Setup instead.
 
-Choose **Download Swedish GNG**. Launchpad first checks AeroNav's public AIRAC, package number and revision, then looks for matching saved ZIPs. If the required packages are cached and valid, it goes straight to the installation review without opening the browser or asking you to sign in. If only one package is saved, only the missing one is downloaded. **Download fresh copies** bypasses the cache.
+Choosing Install or Update first checks AeroNav's public AIRAC, package number and revision, then looks for matching saved ZIPs. If the required packages are cached and valid, Launchpad goes straight to the installation review without opening the browser or asking you to sign in. If only one package is saved, only the missing one is downloaded. **Maintenance → Download fresh copies** bypasses the cache.
 
 Complete the website's sign-in if a download is needed. AeroNav controls access through VATSIM and Navigraph accounts. Launchpad uses a separate browser session and does not read your normal browser's credentials or copy them into its settings.
 
@@ -18,29 +18,39 @@ Once the [Swedish package page](https://files.aero-nav.com/ESAA) makes downloads
 
 The panel above the browser shows which package is downloading, its percentage and size, and the Cancel action. The website is covered by a muted, locked panel during transfer and package checks, leaving progress and cancellation visible. Sign-in remains interactive whenever needed. After the first download, Launchpad checks the ZIP before starting the Full reference. Once both are downloaded, it checks your destination and prepares the installation review. Any error stays visible there with the next action.
 
-Opening the window alone does not start a download. Cancelling stops that request; it does not restart on its own. If the website changes or Launchpad cannot identify the requested ZIP, it leaves your installation unchanged and offers a retry or normal-browser import. It does not substitute another country's package or a different package type. If only the cleanup-reference download fails, the downloaded Update Only ZIP is retained while you retry or import the missing reference.
+Opening Setup alone does not start a download. Cancelling stops the request; it does not restart on its own. If the website changes or Launchpad cannot identify the requested ZIP, it leaves your installation unchanged and offers a retry or normal-browser import. It does not substitute another country's package or a different package type. If only the cleanup-reference download fails, the downloaded Update Only ZIP is retained while you retry or import the missing reference.
 
-If sign-in does not work inside Launchpad, choose **Open in browser ↗**, download there and use **Import ZIP…**. Keep the original `ESAA-Full-Package_…zip` or `ESAA-Update-Only_…zip` filename. Browser-added duplicate numbers are accepted; renamed or repacked archives are not.
+If sign-in does not work inside Launchpad, choose **Open in browser ↗**, download there and use **Import ZIP…**. Keep the original `ESAA-Full-Package_…zip`, `ESAA-Update-Only_…zip` or `ESAA-Testing_…zip` filename. Browser-added duplicate numbers are accepted; renamed or repacked archives are not.
 
 For a manual download, choose **ESAA Update_Only → zip** for a routine update, or **ESAA Full_Package → zip** for installation or repair. Update Only needs an existing GNG installation with the unchanged plugins its ZIP omits. A standalone Update Only import can be installed without a cleanup reference; it cannot supply a complete-package cleanup comparison.
 
 If Cloudflare verification keeps spinning during VATSIM sign-in, use that browser/import route rather than waiting indefinitely. Signing in through your normal browser does not sign the embedded browser in; download the ZIP there and bring the file back to Launchpad. Installation review, preservation, recovery and optional cleanup still happen in Launchpad.
 
-The embedded browser needs Microsoft WebView2. If it is missing, the window offers a separately confirmed runtime installation, which may ask for administrator permission. Restart Windows if requested. ZIP import works without the embedded browser.
+The embedded browser needs Microsoft WebView2. If it is missing, Launchpad offers a separately confirmed runtime installation, which may ask for administrator permission. Restart Windows if requested. ZIP import works without the embedded browser.
+
+Testing packages require an explicit **Maintenance → Import ZIP…** selection. They must contain the complete package and retain AeroNav's original Testing filename. The review warns that it is a testing package, and Launchpad marks a verified testing installation in the Apps list. Normal downloads and saved-package reuse select stable packages only; a Testing ZIP cannot serve as a Full Package reference for cleanup.
+
+The usual version checks still apply to testing packages. To return to an older stable package, restore the testing installation's backup first. Import does not bypass downgrade protection.
 
 ## Review and install
 
-The preview shows additions, replacements and merges by default, with counts of files to change, files already matching and personal files kept. Select **Show unchanged files** to include the files that will not be modified. This only changes the list you see, not what will be installed. Read the warnings and check the destination before selecting the confirmation and choosing **Install reviewed package**.
+The review starts with a short summary. **Ready to install** confirms that Launchpad's installation checks passed. **Check before installing** explains anything it could not confirm, or anything needing your attention, such as customized files being replaced or a selected profile missing from the package. These checks do not certify plugin compatibility or readiness to control.
 
-The review leads with a short explanation of what changes, what stays and where recovery files go. Package details remain available underneath. Its file comparison highlights additions and removals, retains the `+`/`−` markers, and offers **Next change** to jump between groups; the Before / After views remain available.
+Choose **Install update** to proceed, or **Cancel** to leave without installing. A Testing ZIP uses **Install testing package**. If every file already matches, Launchpad shows **GNG already matches** and **Done**. It leaves the files and existing recovery history unchanged.
 
-Close every EuroScope instance before installing or restoring GNG. Launchpad disables those actions while it detects a EuroScope process, including one started outside Launchpad or with no visible window. Downloads and review remain available. Once EuroScope closes, confirm the review again. Launchpad rechecks before changing files; if EuroScope starts during an installation, further changes stop and recovery may need to be completed after closing it.
+Most controllers can use the summary and follow any warnings there. The information icon beside **View details** explains its purpose: advanced file review, particularly for heavily customised EuroScope setups. Hover, click or focus the icon with the keyboard to read it.
 
-**Keep my list positions and visibility** is on by default. For matching EuroScope and TopSky lists, it keeps the X/Y position and whether the whole list is shown. Columns, individual list items, sorting and other settings follow the new package. New lists use package defaults; retired lists are not brought back. Clear the option to use the package's list layout instead. Changing it rebuilds the preview and clears your installation confirmation.
+**View details** opens the **Files** tab. Search by filename or change, or filter to changed profiles, changed plugins or all files. The default list includes only files that will change. Choose **View…**, double-click a row or press Enter to compare that file. **Previous file** and **Next file** follow the filtered list in its current order. **Back to files** preserves your search, selection and position; **Back to summary** returns to the installation summary. Viewing or filtering files does not change what will be installed.
+
+The **Options** tab contains the destination and list-layout setting. **Technical notes** contains explanations and the backup location.
+
+Close every EuroScope instance before installing or restoring GNG. Launchpad disables those actions while it detects a EuroScope process, including one started outside Launchpad or with no visible window. Downloads and review remain available. Closing EuroScope does not start installation; you still choose Install or Update. Launchpad rechecks before changing files; if EuroScope starts during an installation, further changes stop and recovery may need to be completed after closing it.
+
+**Keep my list positions and visibility**, under **View details → Options**, is on by default. For matching EuroScope and TopSky lists, it keeps the X/Y position and whether the whole list is shown. Columns, individual list items, sorting and other settings follow the new package. New lists use package defaults; retired lists are not brought back. Clear the option to use the package's list layout instead. Changing it rebuilds the preview before you can install.
 
 Launchpad follows the existing profiles' list settings paths within the reviewed data folder. If a custom path is missing, outside that folder, or profiles disagree about the same list's placement, preservation stops for review. The option remains available so you can explicitly choose the package defaults instead.
 
-Choose **View…** beside a file to see its expected changes. Text files offer a compact diff and a **Before / After** view; profiles and list settings show the merged result that will be installed. Sign-in values and other recognized credentials are hidden. Personal files, binaries and text files exceeding 2 MiB or 20,000 lines show a summary with sizes and file hashes instead. Viewing a comparison does not change any files or approve installation. If a reviewed file, source setting or ZIP has changed, choose the package again to prepare a fresh review.
+Text files offer a compact diff and a **Before / After** view; profiles and list settings show the merged result that will be installed. Sign-in values and other recognized credentials are hidden. Personal files, binaries and text files exceeding 2 MiB or 20,000 lines show a summary with sizes and file hashes instead. If a reviewed file, source setting or ZIP has changed, prepare a fresh review before installing.
 
 The installer treats files differently according to their purpose:
 
@@ -57,11 +67,11 @@ When a package supplies RDF, updated profiles use that DLL and drop old AFV/RDF 
 
 Launchpad rechecks the ZIP, previewed files and required plugins before applying changes. A changed file requires a fresh review. Older generations are refused. Full and Update Only ZIPs can have different build timestamps for the same AIRAC/revision; a package with an earlier timestamp is refused too. Use a suitable package or restore the last managed update first.
 
-Installation shows progress and cannot be cancelled once it starts. It does not launch EuroScope, install Windows fonts or apply credentials. Afterward, use **Check fonts** and review **Controller profile**, then choose a profile supplied by the new package before controlling.
+Installation shows progress and cannot be cancelled once it starts. It does not launch EuroScope, install Windows fonts or apply credentials. The result shows any remaining font or controller-profile work. Complete those items and choose the profile you use before controlling.
 
 ## Optional old-file cleanup
 
-When a complete package reference is available, **Review old files for cleanup…** opens a separate preview. Launchpad fills in its verified old and new complete ZIPs when available, including references retained alongside Update Only installs. Your first managed installation may still need the original old ZIP. Without it, leave old files in place.
+After installation, **Advanced: recovery and cleanup** contains the backup and offers **Clean up old files…** when a verified comparison finds eligible old files. Cleanup is also available under **Setup → Swedish GNG → Maintenance**. Launchpad fills in its verified old and new complete ZIPs when available, including references retained alongside Update Only installs, and prepares the comparison. Your first managed installation may still need the original old ZIP. Without it, leave old files in place.
 
 Matching AIRAC and revision alone do not prove that a Full Package reference describes every installed file. Cleanup still checks the actual installed replacement sectors and files. If the Full and Update Only packages differ in ways it cannot verify, it keeps the old files and explains why.
 
@@ -81,11 +91,11 @@ Installation and cleanup backups must be on the same local volume as the EuroSco
 
 A failed installation attempts to restore the files it changed. Read the result before trying again. If recovery is incomplete, keep the backup and resolve the reported files before using EuroScope. Launchpad reports the pending recovery and blocks EuroScope launch and further GNG installation for that folder.
 
-To undo a managed update, choose **Restore backup…** in GNG setup and select the dated installation folder shown in its result. Recovery must target the same data folder and starts with the most recent managed installation, or the pending failed operation. Restore can replace unchanged installed files with their originals and remove unchanged files added by the update. Files edited since installation are kept and reported for attention. Preserve those edits elsewhere, resolve the listed conflicts and retry recovery. Keep each backup's manifest, package and file structure together.
+To undo a managed update, open **Setup → Activity & recovery**, select the GNG operation and choose **Review restore…**. Launchpad uses the recorded backup when it is available; otherwise, select the dated installation folder. Recovery must target the same data folder and starts with the most recent managed installation, or the pending failed operation. Restore can replace unchanged installed files with their originals and remove unchanged files added by the update. Files edited since installation are kept and reported for attention. Preserve those edits elsewhere, resolve the listed conflicts and retry recovery. Keep each backup's manifest, package and file structure together.
 
 Cleanup has its own **Restore a backup…** action and separate `CleanupBackups` folder. If undoing both cleanup and an installation, restore archived dependencies before returning to profiles that need them.
 
-**Setup → Activity & recovery** links recorded GNG operations to their recovery folders. **Review GNG recovery…** opens the relevant GNG window and suggests the selected backup when you choose Restore. An outstanding failed installation takes priority. You still review and confirm the restore, and the original data-folder and EuroScope process checks apply.
+An outstanding failed installation takes priority over other recovery choices. You still review and confirm the restore, and the original data-folder and EuroScope process checks apply. Restoring does not start a package download.
 
 In **Remove / reset…**, deleting **cached downloads** leaves installation history and its original ZIPs intact. Deleting **recovery backups** removes GNG installation history, retained ZIPs and cleanup backups as well as existing client recovery backups. Resetting **browser sessions** clears the dedicated sign-in session separately.
 

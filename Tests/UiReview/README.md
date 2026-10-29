@@ -3,7 +3,7 @@
 This fixture uses production XAML, themes and presentation models with synthetic settings
 and inert button handlers. It covers the main window, Settings, Controller profile,
 maintenance, discovery, recent activity, EuroScope management, fresh client setup, the setup wizard and
-GNG cleanup, GNG setup/update, reporting choices, last-sent summaries and manual report previews/receipts. Reporting views use synthetic IDs and inert handlers, without linking storage or transport. Both GNG windows use inert file rows; installation,
+GNG cleanup, GNG setup/update, reporting choices, last-sent summaries and manual report previews/receipts. Reporting views use synthetic IDs and inert handlers, without linking storage or transport. GNG file filtering and asynchronous preview navigation use the production code with a synthetic text provider. Installation,
 archive and restore cannot touch files. The production GNG browser host is a lazy
 `ContentControl` that remains empty here; WebView2 and download/runtime services are not linked.
 
@@ -34,6 +34,10 @@ the fixture never saves settings or opens reporting windows.
 First-run captures include completely blank and partly configured installations, with
 inline guidance, prerequisite links and the same embedded sections as normal use.
 
+`--check-gng` runs the focused GNG matrix, including a 150-file investigation and
+asynchronous navigation. Add `--snapshots` to capture the embedded summary, Files
+workspace and compact diff without showing windows.
+
 Add `--snapshots artifacts/ui-review` to render the measured application and workflow layouts
 as PNGs. Cleanup and GNG fresh/existing start, sign-in waiting, package/reference download progress, preparation between downloads, cancellation, review,
 completion and runtime-fallback states capture both themes at default and minimum size,
@@ -41,7 +45,7 @@ without showing windows or initializing a browser. The website area is a labelle
 placeholder; these captures do not establish authenticated browser behavior.
 Keep generated files in ignored output folders.
 
-GNG review checks also link the production EuroScope-blocking presentation with synthetic process states. They verify the visible reason, disabled install/restore actions and renewed confirmation after the block clears, without enumerating or starting processes.
+GNG review checks also link the production EuroScope-blocking presentation with synthetic process states. They verify the visible reason and disabled install/restore actions, without enumerating or starting processes. Clearing the block never starts installation.
 
 ## Coverage
 
@@ -82,12 +86,13 @@ Assertions cover:
   reuses its prepared preview, and retains both footer actions at larger text sizes.
 - All six setup pages, the explicit GNG step and its restart guard; advancing the guide
   never implies a download or installation.
-- GNG destination/recovery readability, explicit confirmation, package-change reset,
-  minimum-size file review, runtime fallback routes and guarded main-window actions.
+- Compact GNG ready, attention and EuroScope-blocked summaries, with the install action
+  beside the summary. View details exposes destinations, file changes and list settings;
+  failed rechecks clear stale comparisons while keeping correction options reachable.
 - Explicit Download Swedish GNG and retry/stop controls, a readable origin, download
   progress and cancellation reachability; simulated states never perform downloads.
-- Matching saved-package lookup and cached review remain inert and require confirmation.
-  Download fresh copies fits beside the default action and explicitly bypasses reuse;
+- Matching saved-package lookup and cached review remain inert and require an explicit install action.
+  Download fresh copies stays in download options and explicitly bypasses reuse;
   both actions lock during lookup, pending requests and active work.
 - Stop during reference preparation, retained-update reference retry/import, and Start
   over remain reachable without automatically enabling the installation action.
@@ -98,20 +103,27 @@ Assertions cover:
   after cancellation or failure. An opaque replacement panel and dimmed toolbar keep
   attention on progress and Stop/Cancel outside their bounds. The fixture uses an inert
   placeholder and never creates native browser content.
-- Production GNG review filtering (linked shared partial and file model): changes-only
-  by default, counts, optional unchanged/personal entries, reset for each plan and
-  an explicit zero-change message. Snapshots include changes-only, all and zero-change reviews.
-- The production file-preview dialog, preview model and pure text-diff helper use
+- Production GNG review filtering: path/action search, changed profiles, changed plugins
+  and all files, with honest empty-result messages. The 150-file case checks equal row
+  heights, virtualization and a file list without an outer scrollbar. Options and
+  Technical notes have their own tabs.
+- Production asynchronous file navigation with a synthetic provider: filtered/sorted
+  order, Previous/Next boundaries, Back retaining search/selection/scroll, delayed
+  completions, cancellation and superseded plans. The interactive host has a direct
+  **GNG: investigate 150 files** entry.
+- The production file-preview control, preview model and pure text-diff helper use
   synthetic sanitized text: Changes and Before / After tabs, exact proposed text,
   selectable monospace panes, highlighted additions/removals, Next change navigation,
   binary/personal/large summaries and minimum-size scrolling.
+- At 150% text and 600 × 400 content, Next change must visibly show the changed line;
+  selecting an off-screen line alone does not pass.
 - Synthetic Lists.txt and Plugin.txt previews keep `m_X`, `m_Y` and `m_Visible`
-  while showing changed package columns. The merged-list review row wraps its action
-  and explanation, and its View button remains reachable at minimum size. This checks
+  while showing changed package columns. File rows stay one line, with full path/action
+  tooltips and a reachable View button at minimum size. This checks
   presentation of the expected merged result; service tests verify the merge itself.
 - List-layout preservation starts checked and is available before preview and after
   a synthetic preservation failure. The fixture checks disabled busy states, opting
-  out to package defaults and clearing confirmation when the preview changes.
+  out to package defaults and rebuilding the plan when the preview changes.
 - Metadata-only package choice notices before download: Update Only plus a Full cleanup
   reference for a synthetic existing installation; Full for a fresh/incomplete setup.
 

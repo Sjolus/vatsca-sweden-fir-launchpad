@@ -15,7 +15,7 @@ public sealed record SetupPluginOption(bool Enabled, string Label, string Help, 
 public sealed record SetupPluginFeedback(string Message, bool Warning = false, bool Busy = false,
     double? Percent = null, bool CanCancel = false, bool CanRetrySave = false, bool RuntimeRequired = false);
 
-public enum SetupWorkspaceAction { Discover, ChangeLocation, Manage, ControllerProfile, Saaman, SaamanGuide, Fonts, Gng, Cleanup, TogglePlugin, PluginCancel, PluginRetrySave, PluginRuntime, GuideNext, GuideLater }
+public enum SetupWorkspaceAction { Discover, ChangeLocation, Manage, ControllerProfile, Saaman, SaamanGuide, Fonts, Gng, Cleanup, TogglePlugin, PluginCancel, PluginRetrySave, PluginRuntime, GuideNext, GuideLater, GngImport, GngFresh, GngCheck, GngCancel }
 public sealed class SetupWorkspaceRequest(SetupWorkspaceAction action, string? application = null, bool? enabled = null) : EventArgs
 {
     public SetupWorkspaceAction Action { get; } = action;

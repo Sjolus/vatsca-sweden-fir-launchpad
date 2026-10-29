@@ -231,6 +231,8 @@
         </ScrollViewer>
         </DockPanel>
         <local:SetupWorkspaceControl x:Name="SetupWorkspace" Visibility="Collapsed"/>
+        <ContentControl x:Name="GngFlowHost" Visibility="Collapsed" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
+                        Background="{DynamicResource AppBg}" AutomationProperties.Name="Swedish GNG operation"/>
 
         </Grid>
     </DockPanel>

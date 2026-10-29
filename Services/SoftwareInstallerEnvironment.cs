@@ -7,6 +7,7 @@ namespace VatscaUpdateChecker.Services;
 
 internal sealed record SoftwareBinary(string ProductVersion, string ProductName);
 internal sealed record SoftwareRegistration(string RootPath, string RestoreRootPath, string Scope, string Version, string MainBinaryName);
+internal sealed record VacsInstallerDestinations(string? LegacyRoot, string? Version300Root);
 internal sealed record SoftwareInstallCommand(string Executable, IReadOnlyList<string> Arguments, bool Elevate)
 {
     public bool IsMsi { get; init; }
@@ -19,6 +20,7 @@ internal sealed class SoftwareInstallerEnvironment
     public string LocalAppData { get; init; } = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
     public string ProgramFiles { get; init; } = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
     public Func<string?> Vacs3MachineDestination { get; init; } = ReadVacs3MachineDestination;
+    public Func<string, VacsInstallerDestinations> ReadVacsDestinations { get; init; } = ReadVacsInstallerDestinations;
     public Func<SoftwareApp, IReadOnlyList<SoftwareRegistration>> ReadRegistrations { get; init; } = ReadWindowsRegistrations;
     public Func<string, SoftwareBinary> ReadBinary { get; init; } = ReadFileIdentity;
     public Action<string, string> VerifyPublisher { get; init; } = SoftwareInstallerNative.VerifyPublisher;
@@ -73,8 +75,35 @@ internal sealed class SoftwareInstallerEnvironment
         return registrations.Distinct().ToArray();
     }
 
-    internal static string VacsDestinationKey(string version) => SoftwareInstaller.VacsExecutableName(version) == "vacs.exe"
-        ? @"Software\The vacs Project\vacs" : @"Software\vacs\vacs";
+    internal static string VacsDestinationKey(string version)
+    {
+        _ = SoftwareInstaller.VacsExecutableName(version);
+        // Only 3.0.0 used the publisher-derived key. 3.0.1 restored the original key.
+        return SoftwareInstaller.NormalizeVersion(version) == "3.0.0"
+            ? @"Software\The vacs Project\vacs" : @"Software\vacs\vacs";
+    }
+
+    private static VacsInstallerDestinations ReadVacsInstallerDestinations(string scope)
+    {
+        var hive = scope switch
+        {
+            "CurrentUser" => RegistryHive.CurrentUser,
+            "AllUsers" => RegistryHive.LocalMachine,
+            _ => throw new InvalidDataException("The VACS installation scope is not recognized.")
+        };
+        // The Windows x64 NSIS installer reads its location keys in the 64-bit view.
+        using var root = RegistryKey.OpenBaseKey(hive, RegistryView.Registry64);
+        return new(ReadDestination(root, @"Software\vacs\vacs"), ReadDestination(root, @"Software\The vacs Project\vacs"));
+    }
+
+    private static string? ReadDestination(RegistryKey root, string keyPath)
+    {
+        using var key = root.OpenSubKey(keyPath, writable: false);
+        var value = key?.GetValue("");
+        if (value is null) return null;
+        if (value is not string path) throw new InvalidDataException("The VACS installer destination is not recognized.");
+        return string.IsNullOrWhiteSpace(path) ? null : Unquote(path);
+    }
 
     private static string? ReadVacs3MachineDestination()
     {

@@ -643,14 +643,10 @@ public partial class MainWindow : Window
         switch (result.State)
         {
             case FontsState.Unknown:
-                MessageBox.Show(
-                    "Set the EuroScope data folder in Setup → Swedish GNG to enable font checking.",
-                    "Fonts", MessageBoxButton.OK, MessageBoxImage.Information);
+                LastCheckedText.Text = "Choose your Swedish GNG folder in Setup to check its fonts.";
                 break;
             case FontsState.AllOk:
-                MessageBox.Show(
-                    "All required fonts are installed and match the GNG Pack version.",
-                    "Fonts", MessageBoxButton.OK, MessageBoxImage.Information);
+                LastCheckedText.Text = "All required GNG fonts are installed.";
                 break;
             case FontsState.NeedsAction:
                 FontService.InstallMissing(result);
@@ -663,5 +659,6 @@ public partial class MainWindow : Window
         var fresh = FontService.Check(_settings.EuroscopeDataPath);
         _results[1].FontsState   = fresh.State;
         _results[1].FontsTooltip = fresh.Tooltip;
+        SetupWorkspace.SetGngState(_results[1]);
     }
 }

@@ -14,6 +14,21 @@ public sealed record GngUpdateFile(string RelativePath, string Action, string De
     internal bool WritesFile => Action is not "Keep personal file" and not "Unchanged";
 }
 
+/// <summary>Read-only installation checks gathered while building the package plan.</summary>
+public sealed record GngReviewContext
+{
+    public bool HasExistingFiles { get; init; }
+    public bool HasVerifiedBaseline { get; init; }
+    public bool ReinstallsGeneration { get; init; }
+    public int CustomizedReplacementCount { get; init; }
+    public int UnmatchedReplacementCount { get; init; }
+    public int PreservedCustomPluginCount { get; init; }
+    public int RdfOverrideCount { get; init; }
+    public int UnverifiedDependencyCount { get; init; }
+    public IReadOnlyList<string> UnchangedProfiles { get; init; } = [];
+    internal IReadOnlyList<string> ClassifiedWarnings { get; init; } = [];
+}
+
 public sealed record GngUpdatePlan(
     string PackageName, string Version, string DataFolder, string PackagePath,
     IReadOnlyList<GngUpdateFile> Files, IReadOnlyList<string> Warnings)
@@ -23,6 +38,8 @@ public sealed record GngUpdatePlan(
     internal IReadOnlyList<string> ProtectedPaths { get; init; } = [];
     internal IReadOnlyList<GngUpdateDependency> Dependencies { get; init; } = [];
     public bool PreserveListLayout { get; init; } = true;
+    public bool IsTestingPackage { get; init; }
+    public GngReviewContext? ReviewContext { get; init; }
     public SaamanProfilePolicy? SaamanPolicy { get; init; }
     public string? ReferencePackageName { get; init; }
     internal string? ReferencePackagePath { get; init; }

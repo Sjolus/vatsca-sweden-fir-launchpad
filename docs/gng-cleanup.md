@@ -1,20 +1,18 @@
 # Clean up old GNG files
 
-Available in Launchpad 2.1.0 and later.
-
-Installing a new GNG package can leave older sector files, profiles and plugin DLLs behind. The installation result's **Review old files for cleanup…** action compares two complete packages and helps you move eligible old files into a backup. After a manual update, choose **Setup → Swedish GNG → Clean up old files…**. Cleanup does not install an update or remove the whole GNG package.
+Installing a new GNG package can leave older sector files, profiles and plugin DLLs behind. **Clean up old files…** compares two complete packages and helps you move eligible old files into a backup. Open it after an update or from **Setup → Swedish GNG → Maintenance**. Cleanup stays inside Launchpad and does not install an update or remove the whole GNG package.
 
 ## Compare the packages
 
 Install the newer GNG package first. Cleanup needs the original **complete** ZIP downloads for the version you replaced and the version you installed. After a managed update, Launchpad supplies its verified cached ZIPs when available, including complete references retained alongside Update Only installations. On your first managed installation, you may need to select the old ZIP yourself. The files still start unchecked.
 
-For manually selected ZIPs, keep AeroNav's original `ESAA-Full-Package_…zip` filenames; browser-added duplicate numbers are accepted. **Update Only** ZIPs, renamed downloads and ZIPs made from your own installation cannot establish which files the package retired. A standalone Update Only import without a matching complete reference cannot supply that comparison. Cleanup must also verify the installed replacement sectors against the complete reference; it refuses comparison when package differences prevent that proof.
+For manually selected ZIPs, keep AeroNav's original `ESAA-Full-Package_…zip` filenames; browser-added duplicate numbers are accepted. **Update Only** and **Testing** ZIPs, renamed downloads and ZIPs made from your own installation cannot establish which files the package retired. A standalone Update Only import without a matching complete reference cannot supply that comparison. Cleanup must also verify the installed replacement sectors against the complete reference; it refuses comparison when package differences prevent that proof.
 
 Use **Download packages on AeroNav ↗** to open the [Swedish package page](https://files.aero-nav.com/ESAA) in your normal browser and sign in there. Check your Downloads folder or saved package ZIPs for the old version; AeroNav may no longer offer it. If you cannot obtain the matching old complete ZIP, leave those files in place. Launchpad will not guess which files belonged to that package.
 
-The cleanup window shows the reviewed EuroScope data folder. This is the folder chosen under **Setup → Swedish GNG**, or the folder just updated when opening cleanup after installation. Check this is the copy you use. To change it, close cleanup and choose the correct folder first.
+The cleanup view shows the reviewed EuroScope data folder. This is the folder chosen under **Setup → Swedish GNG**, or the folder just updated when opening cleanup after installation. Check this is the copy you use. To change it, go **Back** and choose the correct folder first.
 
-Choose the old and new complete ZIPs, then **Compare packages**. Launchpad checks that the newer sector files are installed and compares the package contents with files in the data folder. Comparing changes nothing. Every file starts unchecked; the reason beside each file explains whether it can move or must stay.
+When both verified package ZIPs are available, comparison starts automatically. Otherwise, expand **Package sources and backup**, choose the old and new complete ZIPs, then **Compare packages**. Launchpad checks that the newer sector files are installed and compares the package contents with files in the data folder. Comparing changes nothing. Every file starts unchecked; the reason beside each file explains whether it can move or must stay.
 
 The preview can include:
 
@@ -42,7 +40,7 @@ Wait for the operation to finish. The result shows how many files moved, any fil
 
 ## Restore a backup
 
-Open cleanup and choose **Restore a backup…**; the package ZIPs are not needed. Select the dated folder inside `CleanupBackups`, keeping its `cleanup-manifest.json` and file structure intact.
+In **Setup → Activity & recovery**, select the cleanup operation and choose **Review restore…**. Launchpad uses its recorded backup. You can also open cleanup and choose **Restore a backup…**, then select the dated folder inside `CleanupBackups`. Keep its `cleanup-manifest.json` and file structure intact. The package ZIPs are not needed.
 
 The confirmation shows the destination. It must be the same configured EuroScope data folder from which the files were archived. Close EuroScope first. Restore verifies each file and moves it out of the backup into its original relative path. Existing destination files are never overwritten; any skipped files stay in the backup for manual review. Running restore again will skip files already restored.
 

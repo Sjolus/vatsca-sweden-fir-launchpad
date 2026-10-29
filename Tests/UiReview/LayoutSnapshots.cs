@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -137,7 +137,8 @@ internal static partial class LayoutSnapshots
                     $"{(dark ? "dark" : "light")}-gng-update-{state.ToString().ToLowerInvariant()}-{(minimum ? "minimum" : "default")}.png"));
                 if (state == GngUpdateFixtureState.Review)
                 {
-                    ((CheckBox)window.FindName("ShowUnchangedFiles")).IsChecked = true;
+                    ((Button)window.FindName("ViewDetailsButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    ((ComboBox)window.FindName("FileFilterBox")).SelectedIndex = 3;
                     Save(window, Path.Combine(outputDirectory,
                         $"{(dark ? "dark" : "light")}-gng-update-reviewall-{(minimum ? "minimum" : "default")}.png"));
                     window.SetSyntheticReviewRows(GngUpdateWindow.UnchangedRows());
@@ -306,6 +307,8 @@ internal static partial class LayoutSnapshots
 
     private static void Save(Window window, string path)
     {
+        // Measure before draining: DataGrid columns schedule their first sizing callback during layout.
+        LayoutValidation.CheckWindowContent(window);
         // DataGrid star columns finish sizing through a deferred dispatcher callback.
         Dispatcher.CurrentDispatcher.Invoke(() => { }, DispatcherPriority.ApplicationIdle);
         LayoutValidation.CheckWindowContent(window);

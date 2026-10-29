@@ -21,6 +21,7 @@ public partial class MainWindow
         if (Equals(tab.Tag, "Apps")) AppsWorkspace_Click(sender, e);
         else SetupWizard_Click(sender, e);
         PresentWorkspace(_workspace);
+        UpdateGngPresentation();
     }
 
     private void RowAction_Click(object sender, RoutedEventArgs e)
@@ -28,6 +29,8 @@ public partial class MainWindow
         if (sender is not FrameworkElement { DataContext: CheckResult row } || !row.RowActionEnabled) return;
         switch (row.RowAction)
         {
+            case CheckRowAction.GngCancel: _gngUpdateFlow?.CancelPreparation(); break;
+            case CheckRowAction.GngContinue: ReturnToGngFlow(); break;
             case CheckRowAction.Setup: OpenApplicationSetup(row); break;
             case CheckRowAction.SoftwareCancel: SoftwareCancel_Click(sender, e); break;
             case CheckRowAction.SoftwareUpdate:

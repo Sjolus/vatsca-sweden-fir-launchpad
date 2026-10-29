@@ -9,6 +9,49 @@ File.WriteAllText(fakeExe, "Synthetic existence fixture; never executed.");
 var passed = 0;
 try
 {
+    Run("GNG preparation retains progress and cancellation while other actions are blocked", () =>
+    {
+        var row = new CheckResult { AppName = "EuroScope (GNG Pack)", HasFontsCheck = true,
+            SoftwareActionsAllowed = false, ApplicationActionsAllowed = false,
+            GngOperation = new("Downloading package 1 of 2", "Downloading…", Busy: true, CanCancel: true, Percent: 42) };
+        Equal(CheckRowAction.GngCancel, row.RowAction);
+        Equal(true, row.RowActionEnabled);
+        Equal(true, row.RowProgressVisible);
+        Equal(false, row.RowProgressIndeterminate);
+        Equal(42d, row.RowProgressValue);
+        Equal("Downloading…", row.RowStatusText);
+        row.GngOperation = new("Rechecking files", "Installing…", Busy: true);
+        Equal(CheckRowAction.None, row.RowAction);
+        Equal(true, row.RowProgressIndeterminate);
+    });
+    Run("GNG review remains reachable and clearing it restores the real update state", () =>
+    {
+        var row = new CheckResult { AppName = "EuroScope (GNG Pack)", HasFontsCheck = true,
+            LaunchPath = temporary, Status = CheckStatus.UpdateAvailable, SoftwareActionsAllowed = false,
+            GngOperation = new("Close EuroScope to install", "Ready to review", NeedsAttention: true) };
+        Equal(CheckRowAction.GngContinue, row.RowAction);
+        Equal(true, row.RowActionEnabled);
+        Equal(false, row.RowProgressVisible);
+        row.GngOperation = null;
+        Equal(CheckRowAction.GngUpdate, row.RowAction);
+        Equal(false, row.RowActionEnabled);
+        row.SoftwareActionsAllowed = true;
+        Equal(true, row.RowActionEnabled);
+    });
+    Run("a managed GNG testing package is not labelled as a published release", () =>
+    {
+        var row = new CheckResult { AppName = "EuroScope (GNG Pack)", HasFontsCheck = true,
+            LaunchPath = temporary, GngIsTesting = true, Status = CheckStatus.UpToDate };
+        Equal("Testing package", row.RowStatusText);
+        Equal("Neutral", row.RowStatusKind);
+        Equal(CheckRowAction.None, row.RowAction);
+        row.Status = CheckStatus.UpdateAvailable;
+        Equal("Update available", row.RowStatusText);
+        Equal(CheckRowAction.GngUpdate, row.RowAction);
+        row.GngIsTesting = false;
+        row.Status = CheckStatus.Installed;
+        Equal("Installed", row.RowStatusText);
+    });
     Run("Apps groups EuroScope components without changing operation indices", () =>
     {
         var source = AppRows();

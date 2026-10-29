@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using VatscaUpdateChecker.Models;
+using VatscaUpdateChecker.Services;
 
 namespace VatscaUpdateChecker;
 
@@ -22,6 +23,13 @@ public partial class SetupWorkspaceControl : UserControl
     private PathValidationStatus _validation;
     private bool _guideVisible;
     private bool _noticeIsDefault = true;
+    private bool _gngHasFolder;
+    private bool _gngChecking;
+    private bool _gngOperationActive;
+    private bool _gngNeedsAttention;
+    private bool _gngCanCancel;
+    private bool _showGngOperation;
+    private SetupWorkspaceAction _gngPrimaryAction = SetupWorkspaceAction.Gng;
 
     public SetupWorkspaceControl() => InitializeComponent();
 
@@ -35,11 +43,45 @@ public partial class SetupWorkspaceControl : UserControl
     {
         GngLocation.Text = gngPath;
         GngSummary.Text = gngSummary;
-        bool newPackage = string.IsNullOrWhiteSpace(gngPath);
-        GngLocationButton.Content = newPackage ? "Use existing folder…" : "Location…";
-        GngPackageButton.Content = newPackage ? "Install Swedish GNG…" : "Get / update package…";
-        GngDestinationHint.Visibility = newPackage ? Visibility.Visible : Visibility.Collapsed;
-        GngMaintenanceActions.Visibility = newPackage ? Visibility.Collapsed : Visibility.Visible;
+        _gngHasFolder = !string.IsNullOrWhiteSpace(gngPath);
+        GngAdoptButton.Visibility = GngDestinationHint.Visibility = _gngHasFolder ? Visibility.Collapsed : Visibility.Visible;
+        GngLocationButton.Visibility = GngCheckFontsButton.Visibility = GngCleanupButton.Visibility = _gngHasFolder ? Visibility.Visible : Visibility.Collapsed;
+        _gngPrimaryAction = _gngHasFolder ? SetupWorkspaceAction.GngCheck : SetupWorkspaceAction.Gng;
+        GngPackageButton.Content = _gngHasFolder ? "Check for updates" : "Install Swedish GNG";
+    }
+    public void SetGngState(CheckResult row, string? operationStatus = null)
+    {
+        GngInstalledVersion.Text = _gngHasFolder ? row.DisplayInstalledVersion : "Not installed";
+        GngLatestVersion.Text = row.DisplayLatestVersion;
+        _gngChecking = row.Status == CheckStatus.Checking;
+        _gngOperationActive = row.GngOperation is not null;
+        _gngNeedsAttention = row.GngOperation?.NeedsAttention == true;
+        _gngCanCancel = row.GngOperation?.CanCancel == true;
+        bool missingFolder = _gngHasFolder && row.InstalledVersion == "Folder not found";
+        bool install = !_gngHasFolder || row.Status == CheckStatus.NotConfigured || row.InstalledVersion == "No SCT file found";
+        _gngPrimaryAction = _gngNeedsAttention ? SetupWorkspaceAction.Gng : missingFolder ? SetupWorkspaceAction.ChangeLocation
+            : install || row.Status == CheckStatus.UpdateAvailable ? SetupWorkspaceAction.Gng : SetupWorkspaceAction.GngCheck;
+        GngPackageButton.Content = _gngNeedsAttention ? "Continue" : _gngChecking ? "Checking…" : missingFolder ? "Choose folder…" : install ? "Install Swedish GNG"
+            : row.Status == CheckStatus.UpdateAvailable ? "Update GNG" : "Check for updates";
+        GngPackageButton.Visibility = _gngOperationActive && !_gngNeedsAttention ? Visibility.Collapsed : Visibility.Visible;
+        GngCancelButton.Visibility = _gngCanCancel ? Visibility.Visible : Visibility.Collapsed;
+        GngProgress.Visibility = row.GngOperation?.Busy == true ? Visibility.Visible : Visibility.Collapsed;
+        GngProgress.IsIndeterminate = row.GngOperation?.Percent is null;
+        GngProgress.Value = row.GngOperation?.Percent ?? 0;
+        GngSummary.Text = !string.IsNullOrWhiteSpace(operationStatus) ? operationStatus
+            : row.GngOperation is { } operation ? operation.Message
+            : !_gngHasFolder ? "Install the Swedish package, or choose the copy you already use." : row.RowStatusText;
+        GngSummary.SetResourceReference(TextBlock.ForegroundProperty, row.GngOperation?.Warning == true ? "WarningFg" : "SecondaryText");
+        GngFontsStatus.Text = !_gngHasFolder ? "Checked after installation" : row.FontsState switch
+        {
+            FontsState.AllOk => "Up to date",
+            FontsState.NeedsAction => "Missing or outdated",
+            _ => "Not checked"
+        };
+        GngFontsStatus.SetResourceReference(TextBlock.ForegroundProperty, row.FontsState == FontsState.NeedsAction && _gngHasFolder ? "WarningFg" : "SecondaryText");
+        GngFontsStatus.ToolTip = _gngHasFolder && !string.IsNullOrWhiteSpace(row.FontsTooltip) ? row.FontsTooltip : null;
+        GngFontsButton.Visibility = _gngHasFolder && row.FontsState == FontsState.NeedsAction ? Visibility.Visible : Visibility.Collapsed;
+        UpdateGngActions();
     }
     public void SetGuide(SetupGuidePresentation? guide)
     {
@@ -61,6 +103,17 @@ public partial class SetupWorkspaceControl : UserControl
         PreferencesTab.IsChecked = section == "Preferences";
         ActivityTab.IsChecked = section == "Activity";
     }
+    public void SetGngOperationContent(FrameworkElement? content)
+    {
+        GngOperationHost.Content = content;
+        if (content is null) _showGngOperation = false;
+        PresentSectionContent();
+    }
+    public void ShowGngOperation(bool show)
+    {
+        _showGngOperation = show && GngOperationHost.Content is not null;
+        PresentSectionContent();
+    }
     public void ShowNotice(string message)
     {
         _noticeIsDefault = false;
@@ -68,13 +121,22 @@ public partial class SetupWorkspaceControl : UserControl
         UpdateNoticeVisibility();
     }
     private void UpdateNoticeVisibility() => SetupNotice.Visibility =
-        _guideVisible && _noticeIsDefault ? Visibility.Collapsed : Visibility.Visible;
+        _noticeIsDefault && (_guideVisible || SelectedSection == "Gng") ? Visibility.Collapsed : Visibility.Visible;
     public void SetActionsEnabled(bool enabled)
     {
         ActionsEnabled = enabled;
-        GngPanel.IsEnabled = ProfilePanel.IsEnabled = LocationReview.IsEnabled = enabled;
+        ProfilePanel.IsEnabled = LocationReview.IsEnabled = enabled;
+        UpdateGngActions();
         PreferencesPanel.SetActionsEnabled(enabled);
         ControllerProfilePanel.SetActionsEnabled(enabled);
+    }
+    private void UpdateGngActions()
+    {
+        bool normalActions = ActionsEnabled && !_gngOperationActive;
+        GngPackageButton.IsEnabled = _gngNeedsAttention || normalActions && !_gngChecking;
+        GngCancelButton.IsEnabled = _gngCanCancel;
+        foreach (var button in new[] { GngAdoptButton, GngLocationButton, GngImportButton, GngFreshButton, GngCheckFontsButton, GngCleanupButton, GngFontsButton })
+            button.IsEnabled = normalActions;
     }
     public void ReviewLocation(string name, string previous, ConfiguredPathValidation result)
     {
@@ -95,17 +157,26 @@ public partial class SetupWorkspaceControl : UserControl
     {
         if (ApplicationsPanel is null || PreferencesPanel is null || ActivityPanel is null || ProfilePanel is null) return;
         var section = (sender as FrameworkElement)?.Tag as string;
-        ApplicationsPanel.Visibility = section == "Applications" ? Visibility.Visible : Visibility.Collapsed;
-        GngPanel.Visibility = section == "Gng" ? Visibility.Visible : Visibility.Collapsed;
-        ProfilePanel.Visibility = section == "Profile" ? Visibility.Visible : Visibility.Collapsed;
-        SetupSectionScroll.Visibility = section is "Applications" or "Gng" ? Visibility.Visible : Visibility.Collapsed;
-        PreferencesPanel.Visibility = section == "Preferences" ? Visibility.Visible : Visibility.Collapsed;
-        ActivityPanel.Visibility = section == "Activity" ? Visibility.Visible : Visibility.Collapsed;
-        if (section is not null && SelectedSection != section)
+        if (section is null) return;
+        bool changed = SelectedSection != section;
+        SelectedSection = section;
+        PresentSectionContent();
+        UpdateNoticeVisibility();
+        if (changed)
         {
-            SelectedSection = section;
             SectionChanged?.Invoke();
         }
+    }
+    private void PresentSectionContent()
+    {
+        var section = SelectedSection;
+        ApplicationsPanel.Visibility = section == "Applications" ? Visibility.Visible : Visibility.Collapsed;
+        GngPanel.Visibility = section == "Gng" ? Visibility.Visible : Visibility.Collapsed;
+        ProfilePanel.Visibility = !_showGngOperation && section == "Profile" ? Visibility.Visible : Visibility.Collapsed;
+        SetupSectionScroll.Visibility = !_showGngOperation && (section is "Applications" or "Gng") ? Visibility.Visible : Visibility.Collapsed;
+        PreferencesPanel.Visibility = !_showGngOperation && section == "Preferences" ? Visibility.Visible : Visibility.Collapsed;
+        ActivityPanel.Visibility = !_showGngOperation && section == "Activity" ? Visibility.Visible : Visibility.Collapsed;
+        GngOperationHost.Visibility = _showGngOperation ? Visibility.Visible : Visibility.Collapsed;
     }
     private void Request(SetupWorkspaceAction action, object? sender = null, string? key = null) =>
         Requested?.Invoke(this, new(action, key ?? ((sender as FrameworkElement)?.DataContext as SetupWorkspaceApplication)?.Key));
@@ -113,7 +184,11 @@ public partial class SetupWorkspaceControl : UserControl
     private void Change_Click(object sender, RoutedEventArgs e) => Request(SetupWorkspaceAction.ChangeLocation, sender);
     private void Manage_Click(object sender, RoutedEventArgs e) => Request(SetupWorkspaceAction.Manage, sender);
     private void GngLocation_Click(object sender, RoutedEventArgs e) => Request(SetupWorkspaceAction.ChangeLocation, key: "EuroScope (GNG Pack)");
-    private void Gng_Click(object sender, RoutedEventArgs e) => Request(SetupWorkspaceAction.Gng);
+    private void Gng_Click(object sender, RoutedEventArgs e) => Request(_gngPrimaryAction,
+        key: _gngPrimaryAction == SetupWorkspaceAction.ChangeLocation ? "EuroScope (GNG Pack)" : null);
+    private void GngImport_Click(object sender, RoutedEventArgs e) => Request(SetupWorkspaceAction.GngImport);
+    private void GngFresh_Click(object sender, RoutedEventArgs e) => Request(SetupWorkspaceAction.GngFresh);
+    private void GngCancel_Click(object sender, RoutedEventArgs e) => Request(SetupWorkspaceAction.GngCancel);
     private void Cleanup_Click(object sender, RoutedEventArgs e) => Request(SetupWorkspaceAction.Cleanup);
     private void Fonts_Click(object sender, RoutedEventArgs e) => Request(SetupWorkspaceAction.Fonts);
     private void Controller_Click(object sender, RoutedEventArgs e) => Request(SetupWorkspaceAction.ControllerProfile);

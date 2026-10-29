@@ -27,6 +27,7 @@ public partial class MainWindow
             if (_workspace != "Setup") return;
             if (SetupGuide.RememberSection(_settings, SetupWorkspace.SelectedSection)) SaveSessionSettings("Setup progress saved.");
             PresentWorkspace(_workspace);
+            UpdateGngPresentation();
             ReportWorkspaceView();
             RefreshWorkspace();
         };
@@ -84,6 +85,7 @@ public partial class MainWindow
         if (page == "Setup" && SetupGuide.RememberSection(_settings, SetupWorkspace.SelectedSection))
             SaveSessionSettings("Setup progress saved.");
         PresentWorkspace(page);
+        UpdateGngPresentation();
         ReportWorkspaceView();
         RefreshWorkspace();
     }
@@ -100,6 +102,7 @@ public partial class MainWindow
             (string.IsNullOrWhiteSpace(_settings.VatsimCid) ? "Not configured" : "CID " + _settings.VatsimCid + " · " + _settings.VatsimName) +
                 (_controllerProfileNeedsReview ? " · Review controller profile" : ""),
             _settings.PatchSaaman, _settings.PatchVatEfs);
+        SetupWorkspace.SetGngState(_results[1], _gngUpdateFlow?.Status ?? _gngCleanupFlow?.Status);
         RefreshPreferencesWorkspace();
         RefreshControllerProfileWorkspace();
         if (_workspace == "Setup" && SetupWorkspace.SelectedSection == "Activity")
@@ -126,6 +129,8 @@ public partial class MainWindow
     {
         if (request.Action == SetupWorkspaceAction.PluginCancel && request.Application == "SAAMAN")
         { CancelSaamanOperation(); return; }
+        if (request.Action == SetupWorkspaceAction.Gng && HasGngFlow) { ReturnToGngFlow(); return; }
+        if (request.Action == SetupWorkspaceAction.GngCancel) { _gngUpdateFlow?.CancelPreparation(); return; }
         if (!CanRunSoftwareAction() || !CanRunSelfUpdateAction()) return;
         try
         {
@@ -166,6 +171,9 @@ public partial class MainWindow
                     }
                     break;
                 case SetupWorkspaceAction.Gng: GngUpdate_Click(source, args); break;
+                case SetupWorkspaceAction.GngImport: await StartGngFlowAsync("Import"); break;
+                case SetupWorkspaceAction.GngFresh: await StartGngFlowAsync("Fresh"); break;
+                case SetupWorkspaceAction.GngCheck: await CheckGngFromSetupAsync(); break;
                 case SetupWorkspaceAction.Cleanup: GngCleanup_Click(source, args); break;
                 case SetupWorkspaceAction.Fonts: Fonts_Click(source, args); break;
                 case SetupWorkspaceAction.ControllerProfile: AppConfig_Click(source, args); RefreshWorkspace(); break;

@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.6.4] — 2026-10-29
+
+- Recognize VACS 3.0.1 after its Windows registration change. Check both old installation locations before updating, keeping conflicting copies on the manual route.
+- Simplify GNG updates with a short installation summary inside the main window. Highlight customised files and checks needing attention, with an information button explaining the optional advanced review.
+- Give file comparisons more space. Add search, profile/plugin filters and Previous/Next file navigation; returning to the list keeps its search, sorting and scroll position.
+- Keep GNG progress visible when switching Apps and Setup. Show outstanding font or controller-profile tasks after installation, with cleanup and recovery under advanced options.
+- Accept original complete AeroNav Testing ZIPs through manual import and label verified testing installations. Normal downloads still use published packages and retain downgrade protection.
+- Refresh installed GNG status after installation or restoration. Leave files and recovery history unchanged when the package already matches.
+- Fix retrying list-position preservation after a cancelled comparison, and keep installation disabled when a file comparison becomes stale.
+
 ## [2.6.3] — 2026-10-29
 
 - Fix controller Save & apply rejecting newer vATIS 4.1 releases. Accept numbered beta/RC builds and stable 4.1.x patches from beta.19 onward, with publisher and settings-format checks retained.

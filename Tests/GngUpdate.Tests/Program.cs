@@ -8,6 +8,14 @@ using VatscaUpdateChecker.Services;
 
 if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("These checks require Windows path semantics.");
 Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+var validateIndex = Array.IndexOf(args, "--validate-only");
+if (validateIndex >= 0)
+{
+    if (validateIndex + 1 >= args.Length) throw new ArgumentException("--validate-only requires an original ZIP path.");
+    Console.WriteLine("Validated package " + GngUpdateService.ValidatePackage(args[validateIndex + 1], args.Contains("--allow-testing", StringComparer.Ordinal)));
+    return;
+}
+
 var previewIndex = Array.IndexOf(args, "--preview");
 if (previewIndex >= 0)
 {
@@ -59,6 +67,8 @@ sealed class Suite(string fixturesDirectory, string? filter)
         FilePreviewTests.Run(Test);
         EuroScopeProcessGuardTests.Run(Test);
         SaamanGngTests.Run(Test);
+        TestingPackageTests.Run(Test);
+        ReviewAssessmentTests.Run(Test);
     ListLayoutTests.Run(Test);
     BackendListLayoutTests.Run(Test);
     PackageCacheTests.Run(Test);

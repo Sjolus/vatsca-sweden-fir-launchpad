@@ -1,8 +1,59 @@
+using System.IO;
+
 namespace VatscaUpdateChecker.Models;
+
+public sealed record GngReviewAssessment(bool NeedsAttention, string Heading, IReadOnlyList<string> Points);
 
 /// <summary>Separates routine package rules from notes about this particular installation.</summary>
 public static class GngReviewNotes
 {
+    public static GngReviewAssessment Assess(GngUpdatePlan plan, string? selectedProfile = null)
+    {
+        var points = new List<string>();
+        bool needsAttention = false;
+        void Flag(string point) { needsAttention = true; points.Add(point); }
+        var context = plan.ReviewContext;
+        if (plan.IsTestingPackage) Flag("This is a testing package, not a published stable release.");
+        if (context is null)
+            Flag("Some installation checks could not be confirmed. Open View details before installing.");
+        else
+        {
+            if (context.HasExistingFiles && !context.HasVerifiedBaseline)
+                Flag("We can’t compare your current files with their original package. Custom changes may be replaced; originals will be backed up.");
+            int customized = Math.Max(context.CustomizedReplacementCount, plan.Files.Count(file => file.Action == "Replace customized default"));
+            if (customized > 0)
+                Flag($"{customized} customized {(customized == 1 ? "package file will" : "package files will")} be replaced. Your originals will be backed up.");
+            if (context.HasVerifiedBaseline && context.UnmatchedReplacementCount > 0)
+                Flag($"{context.UnmatchedReplacementCount} existing {(context.UnmatchedReplacementCount == 1 ? "file could" : "files could")} not be compared with the original package and will be replaced. Your originals will be backed up.");
+            if (context.PreservedCustomPluginCount > 0)
+                Flag($"{context.PreservedCustomPluginCount} {(context.PreservedCustomPluginCount == 1 ? "plugin is" : "plugins are")} kept outside the package. Compatibility is not checked.");
+            if (context.HasVerifiedBaseline && context.UnverifiedDependencyCount > 0)
+                Flag($"{context.UnverifiedDependencyCount} installed {(context.UnverifiedDependencyCount == 1 ? "plugin could" : "plugins could")} not be matched to the original package. {(context.UnverifiedDependencyCount == 1 ? "It will" : "They will")} be kept; compatibility is unverified.");
+            if (context.RdfOverrideCount > 0)
+                Flag("Your local TopSky settings override the package's RDF setting. They will be kept.");
+            if (!string.IsNullOrWhiteSpace(selectedProfile) && !plan.Files.Any(file =>
+                Path.GetExtension(file.RelativePath).Equals(".prf", StringComparison.OrdinalIgnoreCase) && SamePath(file.RelativePath, selectedProfile, plan.DataFolder)))
+                Flag("Your selected launch profile is not in this package and will stay unchanged.");
+            if (context.ReinstallsGeneration && plan.Files.Any(file => file.WritesFile))
+                Flag("This version is already present. Installing will repair missing files and refresh package defaults.");
+            if (plan.Warnings.Except(context.ClassifiedWarnings, StringComparer.Ordinal).Any())
+                Flag("Some update details need a closer look. Open View details before installing.");
+            int addedProfiles = plan.Files.Count(file => file.Action == "Add profile");
+            if (addedProfiles > 0)
+                points.Add($"{addedProfiles} new EuroScope {(addedProfiles == 1 ? "profile will" : "profiles will")} need your controller details.");
+        }
+        if (!plan.PreserveListLayout) Flag("List positions and visibility will reset to the package defaults.");
+        if (!needsAttention)
+            points.Insert(0, "Installation checks passed. No issues found.");
+        return new(needsAttention, needsAttention ? "Check before installing" : "Ready to install", points);
+    }
+
+    private static bool SamePath(string first, string second, string root)
+    {
+        try { return string.Equals(Path.GetFullPath(first, root), Path.GetFullPath(second, root), StringComparison.OrdinalIgnoreCase); }
+        catch (Exception error) when (error is ArgumentException or IOException or NotSupportedException) { return false; }
+    }
+
     private static readonly string[] RoutinePrefixes =
     [
         "Package defaults, radar screens and shared plugin/settings files will be refreshed.",

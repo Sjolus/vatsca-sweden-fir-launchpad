@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
 using VatscaUpdateChecker.Models;
+using VatscaUpdateChecker.Services;
 
 namespace VatscaUpdateChecker;
 
@@ -78,6 +79,7 @@ internal static class WorkspaceLayoutReview
                     setup.ShowSection("Applications");
                     CheckLocationChoices(window, setup);
                     CheckRequests(setup);
+                    CheckGngActions(window, setup, empty);
                     CheckPluginChoices(window, setup, empty);
                     count += 6;
                 }
@@ -192,6 +194,13 @@ internal static class WorkspaceLayoutReview
         });
         setup.SetSummary(empty ? "" : @"C:\Synthetic\EuroScope", empty ? "No package folder chosen." : "Installed package 2610/01 rev.3.",
             empty ? "Not configured" : "Controller details saved. Review before applying changes.", !empty, !empty);
+        setup.SetGngState(new CheckResult
+        {
+            AppName = "EuroScope (GNG Pack)", HasFontsCheck = true,
+            InstalledVersion = empty ? "—" : "2610/01 rev.3", LatestVersion = empty ? "—" : "2611/01 rev.1",
+            Status = empty ? CheckStatus.NotConfigured : CheckStatus.UpdateAvailable,
+            FontsState = empty ? FontsState.Unknown : FontsState.AllOk
+        });
         SetupWorkspaceApplication App(string key, string name, string path) =>
             new(key, name, empty ? "" : path, key is "VatEFS" or "SAAMAN" ? empty ? "Off" : "Enabled" : empty ? "Not chosen" : "Location saved",
                 key == "SAAMAN" ? empty ? "" : "Update" : empty ? "Install…" : key == "EuroScope" ? "Manage…" : "Updates…",
@@ -242,7 +251,10 @@ internal static class WorkspaceLayoutReview
         foreach (var row in list.Items.Cast<SetupWorkspaceApplication>())
             Equal(empty, string.IsNullOrWhiteSpace(row.Path));
         Equal(true, Required<TextBox>(setup, "GngLocation").IsReadOnly);
-        Equal(empty ? Visibility.Collapsed : Visibility.Visible, Required<FrameworkElement>(setup, "GngMaintenanceActions").Visibility);
+        Equal(empty ? Visibility.Visible : Visibility.Collapsed, Required<Button>(setup, "GngAdoptButton").Visibility);
+        Equal(empty ? Visibility.Collapsed : Visibility.Visible, Required<Button>(setup, "GngCleanupButton").Visibility);
+        Equal(empty ? "Not installed" : "2610/01 rev.3", Required<TextBlock>(setup, "GngInstalledVersion").Text);
+        Equal(empty ? "Not checked" : "2611/01 rev.1", Required<TextBlock>(setup, "GngLatestVersion").Text);
     }
 
     private static void CheckLocationChoices(Window window, SetupWorkspaceControl setup)
@@ -294,6 +306,112 @@ internal static class WorkspaceLayoutReview
         foreach (string section in Sections) Equal(true, Required<RadioButton>(setup, section + "Tab").IsEnabled);
         setup.SetActionsEnabled(true);
 
+    }
+
+    private static void CheckGngActions(Window window, SetupWorkspaceControl setup, bool empty)
+    {
+        SetupWorkspaceRequest? request = null;
+        EventHandler<SetupWorkspaceRequest> observe = (_, value) => request = value;
+        setup.Requested += observe;
+        try
+        {
+            setup.ShowSection("Gng");
+            Equal(false, Required<Expander>(setup, "GngMaintenance").IsExpanded);
+            Equal(empty ? "Install Swedish GNG" : "Update GNG", Required<Button>(setup, "GngPackageButton").Content?.ToString());
+            Required<Button>(setup, "GngPackageButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Equal(SetupWorkspaceAction.Gng, request!.Action);
+            Required<Expander>(setup, "GngMaintenance").IsExpanded = true;
+            LayoutValidation.CheckWindowContent(window);
+            CheckControlLayout(setup);
+            foreach (var (name, action) in new[]
+            {
+                ("GngImportButton", SetupWorkspaceAction.GngImport),
+                ("GngFreshButton", SetupWorkspaceAction.GngFresh)
+            })
+            {
+                var button = Required<Button>(setup, name);
+                Equal(true, button.IsTabStop && button.Focusable && button.IsEnabled);
+                button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Equal(action, request!.Action);
+            }
+            var existing = new CheckResult { AppName = "EuroScope (GNG Pack)", HasFontsCheck = true,
+                InstalledVersion = "2610/01 rev.3", LatestVersion = "2610/01 rev.3", Status = CheckStatus.UpToDate,
+                FontsState = FontsState.NeedsAction };
+            setup.SetSummary(@"C:\Synthetic\EuroScope", "", "", false, false);
+            setup.SetGngState(existing);
+            Equal("Check for updates", Required<Button>(setup, "GngPackageButton").Content?.ToString());
+            Required<Button>(setup, "GngPackageButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Equal(SetupWorkspaceAction.GngCheck, request!.Action);
+            Equal(Visibility.Visible, Required<Button>(setup, "GngFontsButton").Visibility);
+            Required<Button>(setup, "GngFontsButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Equal(SetupWorkspaceAction.Fonts, request!.Action);
+            existing.Status = CheckStatus.Error;
+            existing.InstalledVersion = "No SCT file found";
+            setup.SetGngState(existing);
+            Equal("Install Swedish GNG", Required<Button>(setup, "GngPackageButton").Content?.ToString());
+            Required<Button>(setup, "GngPackageButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Equal(SetupWorkspaceAction.Gng, request!.Action);
+            existing.InstalledVersion = "Folder not found";
+            setup.SetGngState(existing);
+            Equal("Choose folder…", Required<Button>(setup, "GngPackageButton").Content?.ToString());
+            Required<Button>(setup, "GngPackageButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Equal(SetupWorkspaceAction.ChangeLocation, request!.Action);
+            Equal("EuroScope (GNG Pack)", request.Application);
+            existing.InstalledVersion = "2610/01 rev.3";
+            setup.SetGngState(existing);
+            Equal("Check for updates", Required<Button>(setup, "GngPackageButton").Content?.ToString());
+            Required<Button>(setup, "GngPackageButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Equal(SetupWorkspaceAction.GngCheck, request!.Action);
+            existing.Status = CheckStatus.Checking;
+            setup.SetGngState(existing);
+            Equal(false, Required<Button>(setup, "GngPackageButton").IsEnabled);
+            existing.Status = CheckStatus.UpToDate;
+            existing.FontsState = FontsState.AllOk;
+            setup.SetGngState(existing, "GNG already matches.");
+            Equal(true, Required<Button>(setup, "GngPackageButton").IsEnabled);
+            Equal(Visibility.Collapsed, Required<Button>(setup, "GngFontsButton").Visibility);
+            Equal("GNG already matches.", Required<TextBlock>(setup, "GngSummary").Text);
+            existing.GngOperation = new("Downloading the package…", "Downloading", Busy: true, CanCancel: true, Percent: 42);
+            setup.SetGngState(existing);
+            setup.SetActionsEnabled(false);
+            Equal(true, Required<FrameworkElement>(setup, "GngPanel").IsEnabled);
+            Equal(Visibility.Visible, Required<ProgressBar>(setup, "GngProgress").Visibility);
+            Equal(42d, Required<ProgressBar>(setup, "GngProgress").Value);
+            Equal(false, Required<ProgressBar>(setup, "GngProgress").IsIndeterminate);
+            Equal(false, Required<Button>(setup, "GngImportButton").IsEnabled);
+            Equal(true, Required<Button>(setup, "GngCancelButton").IsEnabled);
+            Required<Button>(setup, "GngCancelButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Equal(SetupWorkspaceAction.GngCancel, request!.Action);
+            existing.GngOperation = new("Review the package changes.", "Ready to update", NeedsAttention: true);
+            setup.SetGngState(existing);
+            Equal("Continue", Required<Button>(setup, "GngPackageButton").Content?.ToString());
+            Equal(true, Required<Button>(setup, "GngPackageButton").IsEnabled);
+            Equal(Visibility.Collapsed, Required<Button>(setup, "GngCancelButton").Visibility);
+            Required<Button>(setup, "GngPackageButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Equal(SetupWorkspaceAction.Gng, request!.Action);
+            var operation = new Border { Child = new TextBlock { Text = "Ready to update", TextWrapping = TextWrapping.Wrap } };
+            setup.SetGngOperationContent(operation);
+            setup.ShowGngOperation(true);
+            LayoutValidation.CheckWindowContent(window);
+            Equal("Gng", setup.SelectedSection);
+            Equal(Visibility.Visible, Required<ContentControl>(setup, "GngOperationHost").Visibility);
+            Equal(Visibility.Collapsed, Required<ScrollViewer>(setup, "SetupSectionScroll").Visibility);
+            foreach (string section in Sections)
+                Equal(true, Presented(Required<RadioButton>(setup, section + "Tab")));
+            setup.ShowGngOperation(false);
+            Equal(Visibility.Visible, Required<ScrollViewer>(setup, "SetupSectionScroll").Visibility);
+            setup.SetGngOperationContent(null);
+            Equal(null, operation.Parent);
+        }
+        finally
+        {
+            setup.Requested -= observe;
+            setup.SetGngOperationContent(null);
+            setup.ShowGngOperation(false);
+            Required<Expander>(setup, "GngMaintenance").IsExpanded = false;
+            setup.SetActionsEnabled(true);
+            PopulateSetup(setup, empty);
+        }
     }
 
     private static void CheckPluginChoices(Window window, SetupWorkspaceControl setup, bool empty)
@@ -515,10 +633,11 @@ internal static class WorkspaceLayoutReview
                     }
                     if (section == "Gng")
                     {
-                        Equal("Use existing folder…", Required<Button>(setup, "GngLocationButton").Content?.ToString());
-                        Equal("Install Swedish GNG…", Required<Button>(setup, "GngPackageButton").Content?.ToString());
+                        Equal("Use existing folder…", Required<Button>(setup, "GngAdoptButton").Content?.ToString());
+                        Equal("Install Swedish GNG", Required<Button>(setup, "GngPackageButton").Content?.ToString());
                         Equal(Visibility.Visible, Required<TextBlock>(setup, "GngDestinationHint").Visibility);
-                        Equal(Visibility.Collapsed, Required<FrameworkElement>(setup, "GngMaintenanceActions").Visibility);
+                        Equal(false, Required<Expander>(setup, "GngMaintenance").IsExpanded);
+                        Equal(Visibility.Collapsed, Required<Button>(setup, "GngCleanupButton").Visibility);
                         Equal("New installs use %APPDATA%\\EuroScope.", Required<TextBlock>(setup, "GngDestinationHint").Text);
                     }
                     if (section == "Preferences")
