@@ -4,7 +4,7 @@ A Windows desktop app for [VATSIM Scandinavia](https://vatsca.org) controllers. 
 
 Launchpad supports reviewed installation and updates, optional controller-profile changes, and local recovery history. Downloads, installations and application launches always require an explicit action.
 
-Latest release: **2.6.1** — 24 October 2026. See the [changelog](CHANGELOG.md) for what's new.
+Latest release: **[2.6.3](https://github.com/Sjolus/vatsca-sweden-fir-launchpad/releases/tag/v2.6.3)** — 29 October 2026. See the [changelog](CHANGELOG.md) for what's new.
 
 ![Launchpad's compact application list](Assets/screenshot.png)
 
@@ -25,6 +25,8 @@ Open **Setup** to manage your applications, Swedish GNG package and controller p
 3. **Controller profile:** enter your details once. **Save & apply** uses them for configured EuroScope, vATIS and TrackAudio copies. It also adds the latest Swedish vATIS profile when no automatic Swedish profile is present. Close the clients before applying; unsupported versions are left unchanged.
 
 Fresh vATIS and TrackAudio installations reuse your saved controller details. TrackAudio still needs audio devices and PTT configured. vATIS updates the Swedish airport profile from its official source afterward; custom profiles are kept. Opening Setup alone changes nothing.
+
+Controller setup supports vATIS 4.1.x from beta.19 onward, including later numbered beta/RC builds and stable patches. After updating Launchpad to fix a rejected vATIS version, close vATIS and choose **Save & apply** again.
 
 The **Apps** and **Setup** tabs stay visible. Preferences and Activity & recovery are sections in the same Setup sidebar. **Applications I don't use** in Preferences hides those tools from Apps and update reminders. Their paths, data and plugin choices stay unchanged; clear a checkbox to show a tool again. GNG, VatEFS and SAAMAN are grouped under EuroScope. The **?** in the title bar opens help, reporting and privacy controls.
 
@@ -50,7 +52,7 @@ The profile sync indicator checks only the first matching `ES*.prf`. A blank Hop
 | Application | Supported route |
 | --- | --- |
 | EuroScope | Open **Setup → Applications**, then **Install…** for a missing copy or **Manage…** for an existing one. Install, repair or switch to the pinned **3.2.3.2** token-authentication build. Existing installations need a recovery folder; switching from a higher version is a downgrade. |
-| VACS | Update recognized 2.x NSIS installations; fresh setup uses an all-users installation. A per-user installer that requires elevation must be handled manually. |
+| VACS | Update recognized 2.x and 3.x NSIS installations; fresh setup uses an all-users installation. Custom-folder and per-user 2→3 migrations stay manual when the installer cannot preserve their location. Per-user installers requiring elevation also stay manual. |
 | TrackAudio | Install or update a recognized current-user installation. |
 | vATIS | Update the recognized standard per-user layout, with a complete recovery backup. Fresh setup supports the reviewed beta.19 package only after explicit beta opt-in, and refuses an existing installation/data folder. |
 | Swedish GNG package | Choose **Setup → Swedish GNG → Get / update package…** to sign in on AeroNav, download or import a ZIP, review the changes and install. |

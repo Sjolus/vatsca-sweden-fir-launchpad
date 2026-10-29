@@ -8,11 +8,13 @@ Launchpad downloads and verifies the official package, applies the reviewed chan
 
 | Application | Support and release source |
 | --- | --- |
-| VACS | VACS 2.x installations registered for the current user or all users. Updates come from the official [client releases](https://github.com/vacs-project/vacs/releases). A per-user installation that requires elevation must be updated manually. |
+| VACS | Recognized 2.x and 3.x installations registered for the current user or all users. Updates come from the official [client releases](https://github.com/vacs-project/vacs/releases). A per-user installation that requires elevation must be updated manually. |
 | TrackAudio | Registered current-user installations. Updates come from official [stable releases](https://github.com/pierr3/TrackAudio/releases). Machine-wide copies are not supported. |
 | vATIS | Its standard per-user installation with the supported updater. Updates use the official Windows feed. Stable installations stay on stable releases; existing beta installations may update to beta or stable. |
 
 For VACS and TrackAudio, the executable and Windows registration must agree on the version and location. If they differ, Launchpad explains the mismatch and asks you to repair or reinstall through the vendor. vATIS is checked against its package metadata and installed updater. If the vATIS application can be verified but its updater is unsupported, Launchpad still shows the installed and available versions and offers the official download page. Portable, custom or unsupported installations use the download-page fallback.
+
+VACS 3 renamed its executable from `vacs-client.exe` to `vacs.exe`. Launchpad saves the new launch path after a supported upgrade. Managed 2→3 upgrades require the standard all-users Program Files folder and no conflicting VACS 3 destination. Other 2→3 migrations stay manual because the vendor installer can change their location.
 
 For a missing application, see [setup](product-onboarding.md). EuroScope has separate [supported-version management](euroscope-management.md). Swedish GNG has a separate [download and installation workflow](gng-updates.md).
 
@@ -34,7 +36,7 @@ While Windows Installer runs, Launchpad shows elapsed time and the diagnostic lo
 
 Open **Setup → Applications**. SAAMAN has one **Use in APP / ACC** switch. Turning it on uses the selected DLL or installs the latest stable [SAAMAN release](https://github.com/Kaskobiii/SAAMAN/releases) if missing, then enables it in the profile. The default destination is `ESAA\Plugins\SAAMAN\SAAMAN.dll` inside your EuroScope data folder. SAAMAN runs inside EuroScope and has no separate Launch button.
 
-Choose **Update** to install the latest stable release. An identical installed copy is kept without downloading it again. Launchpad verifies file sizes, SHA-256 hashes, the published checksum list, and the DLL's plugin identity and version. It retains the release's licence notices. WebView2 is required; a separate runtime installation button appears if needed.
+Choose **Update** to install the latest stable release. Updating from Apps keeps progress, cancellation and results in the SAAMAN row without switching to Setup. An identical installed copy is kept without downloading it again. Launchpad verifies file sizes, SHA-256 hashes, the published checksum list, and the DLL's plugin identity and version. It retains the release's licence notices. WebView2 is required; a separate runtime installation button appears if needed.
 
 The switch applies immediately, with a recovery copy. SAAMAN becomes the first plugin, MAESTRO's entry is removed, and remaining plugins retain their relative order and display settings. Controller credentials and the MAESTRO DLL are unchanged. The option starts off and targets `ESAA APP ACC.prf`, retaining any previously selected custom profile.
 
@@ -74,6 +76,6 @@ Downloads are kept under `%LOCALAPPDATA%\VatscaUpdateChecker\SoftwareUpdates`. U
 
 ## Maintainer notes
 
-The current vendor commands are VACS Setup with `/S /UPDATE /CurrentUser` or `/AllUsers`, TrackAudio Setup with `/S`, and vATIS's installed helper with `--silent apply --norestart --package`. VatEFS uses system `msiexec` with `/qn /norestart` and automatic application shutdown/restart disabled. The vATIS helper is pinned to **0.0.1251**; future helper versions need review.
+The current vendor commands are VACS Setup with `/S /UPDATE /CurrentUser` or `/AllUsers`, TrackAudio Setup with `/S`, and vATIS's installed helper with `--silent apply --norestart --package`. VatEFS uses system `msiexec` with `/qn /norestart` and automatic application shutdown/restart disabled. The supported vATIS helpers are **0.0.1251** and **1.2.161**; other helper versions need review. This updater check is separate from the 4.1.x controller-settings compatibility rule.
 
 Command behavior is documented in the [VACS/Tauri installer](https://github.com/tauri-apps/tauri/blob/8909f221d1515955fc843808032bdc5d62209c96/crates/tauri-bundler/src/bundle/windows/nsis/installer.nsi), [TrackAudio/NSIS installer](https://github.com/electron-userland/electron-builder/blob/electron-builder%4026.15.3/packages/app-builder-lib/templates/nsis/installSection.nsh) and [vATIS/Velopack apply command](https://github.com/velopack/velopack/blob/0.0.1251/src/bins/src/commands/apply.rs). These commands depend on Launchpad's installation checks; they are not a general repair recipe.
