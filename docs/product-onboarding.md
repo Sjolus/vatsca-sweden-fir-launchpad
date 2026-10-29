@@ -4,7 +4,7 @@ You can use Launchpad with an existing setup or install supported applications f
 
 ## Keep your existing setup
 
-Open **Setup → Applications**. First launch includes a short guide through Applications, Swedish GNG and Controller profile. The **Apps** and **Setup** tabs stay visible; switching tabs does not finish the guide. It resumes after a restart. Choose **Finish setup** when done or **Later** to dismiss it, and use **? → Getting started…** to return. Optional tools never block completion.
+Open **Setup → Applications**. First launch includes a short guide through Applications, Swedish GNG and Controller profile. The **Apps** and **Setup** tabs stay visible; switching tabs does not finish the guide. It resumes after a restart. Choose **Finish setup** when done or **Later** to dismiss it, and use **Setup → Preferences → Open setup guide** to return. Optional tools never block completion.
 
 1. Choose **Find installed apps…** to check installed-app records and common folders. Your current locations stay selected.
 2. Choose any replacements, then **Done**. Unchanged locations are kept.
@@ -34,7 +34,7 @@ Open **Setup → Applications**, then choose **Install…** beside the missing a
 | vATIS | The supported beta.19 package, with an explicit choice to use the beta. | An existing vATIS folder must be handled through update or removal first. Setup cannot overwrite it. |
 | VatEFS | The official MSI, including prereleases, under `%ProgramFiles%\VatEFS` for all users. Close EuroScope and the VatEFS backend first. | Fresh installation refuses an existing registration or folder. Supported installed copies use the update action with a recovery backup. External profiles and browser settings stay in place. |
 | SAAMAN | Switch on **Use in APP / ACC** under **Setup → Applications**. A missing DLL is installed from the latest stable release. **Use existing…** selects an existing copy. | Enabling puts SAAMAN first in APP/ACC. Switching it off restores MAESTRO. Personal settings are kept. |
-| Swedish GNG | Choose Download Swedish GNG and sign in if asked. Launchpad chooses Update Only for a recognized existing setup, or Full Package for setup/repair; review installation afterward. Original ZIP import is also available. | Supported personal files and profile fields are preserved. Shared defaults are replaced with backups; read the preview before confirming. |
+| Swedish GNG | Choose Install or Update under Setup → Swedish GNG and sign in if asked. Launchpad selects the appropriate package and shows an installation summary. Original ZIP import is also available. | Supported personal files and profile fields are preserved. Shared defaults are replaced with backups; follow any warnings in the summary. |
 
 If Launchpad finds an existing copy or leftover installation files, use the existing-applications route or **Remove / reset…** before trying a fresh install. Unsupported layouts can be installed manually through the vendor.
 
@@ -57,7 +57,7 @@ Confirm the runtime installation when prompted. If Windows requires a restart, r
 
 Setup keeps Applications, Swedish GNG, Controller profile, Preferences and Activity & recovery in one sidebar. **Preferences** controls compact layout, text size, staying on top and which applications you use. Opening a section does not change any files.
 
-Under **Swedish GNG**, select **Use existing folder…** for a package you already have, or **Install Swedish GNG…** for a new setup. New installations use `%APPDATA%\EuroScope`; Launchpad prepares the folder when requested and saves its location after installation succeeds. Existing setups show **Get / update package…**. The package window reviews file changes before installation. **Check fonts…** opens missing or older fonts in Windows font preview; choose Install there if needed.
+Under **Swedish GNG**, use **Maintenance → Use existing folder…** for a package you already have, or **Install Swedish GNG** for a new setup. New installations use `%APPDATA%\EuroScope`; Launchpad saves the location after installation succeeds or the package already matches. Existing setups offer **Update**. The update stays inside Launchpad and shows a short summary before installation. Optional **View details** provides individual file comparisons. **Check fonts…** opens missing or older fonts in Windows font preview; choose Install there if needed.
 
 Edit your name, CID, rating and password under **Controller profile**. Switching sections keeps unfinished edits. **Save & apply** uses the details in configured EuroScope profiles, vATIS and TrackAudio; **Preview** is optional. Close the clients first. Unsupported copies are left unchanged, and the result explains what needs attention.
 

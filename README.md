@@ -4,7 +4,7 @@ A Windows desktop app for [VATSIM Scandinavia](https://vatsca.org) controllers. 
 
 Launchpad supports reviewed installation and updates, optional controller-profile changes, and local recovery history. Downloads, installations and application launches always require an explicit action.
 
-Latest release: **[2.6.3](https://github.com/Sjolus/vatsca-sweden-fir-launchpad/releases/tag/v2.6.3)** — 29 October 2026. See the [changelog](CHANGELOG.md) for what's new.
+Latest release: **[2.6.4](https://github.com/Sjolus/vatsca-sweden-fir-launchpad/releases/tag/v2.6.4)** — 29 October 2026. See the [changelog](CHANGELOG.md) for what's new.
 
 ![Launchpad's compact application list](Assets/screenshot.png)
 
@@ -55,7 +55,7 @@ The profile sync indicator checks only the first matching `ES*.prf`. A blank Hop
 | VACS | Update recognized 2.x and 3.x NSIS installations; fresh setup uses an all-users installation. Custom-folder and per-user 2→3 migrations stay manual when the installer cannot preserve their location. Per-user installers requiring elevation also stay manual. |
 | TrackAudio | Install or update a recognized current-user installation. |
 | vATIS | Update the recognized standard per-user layout, with a complete recovery backup. Fresh setup supports the reviewed beta.19 package only after explicit beta opt-in, and refuses an existing installation/data folder. |
-| Swedish GNG package | Choose **Setup → Swedish GNG → Get / update package…** to sign in on AeroNav, download or import a ZIP, review the changes and install. |
+| Swedish GNG package | Choose **Update** in Apps, or open **Setup → Swedish GNG**. Launchpad gets the appropriate package and checks it before you choose **Install update**. |
 | VatEFS | Install missing copies and update recognized all-users MSI installations in Program Files, including official prereleases. Close EuroScope and the VatEFS backend first. The browser launch stays available when its local service is running. |
 | SAAMAN | Install or update the latest stable Arlanda arrival-manager plugin, or choose an existing `SAAMAN.dll`. Optional profile integration puts it first in APP/ACC and replaces MAESTRO's entry. Close EuroScope before making changes. |
 | Other custom tools | Configure their paths; installation remains manual. |
@@ -88,11 +88,13 @@ See [removal and recovery](docs/uninstallation.md) before a clean reinstall.
 
 ### Install GNG and clean up old files
 
-Choose **Setup → Swedish GNG → Get / update package… → Download Swedish GNG**. Launchpad chooses Update Only for a recognized existing installation, or Full Package for setup or repair, then downloads the newest matching ZIP after AeroNav sign-in. You can also import an original ZIP downloaded through your browser. Review the destination, replacements and preservation notes before confirming installation. Launchpad backs up replaced files, keeps supported personal settings, and promotes staged plugin DLLs while EuroScope is closed. Read [GNG installation and recovery](docs/gng-updates.md) before your first update.
+Choose **Update** beside Swedish GNG in Apps, or open **Setup → Swedish GNG**. Launchpad selects the appropriate package and reuses matching saved downloads. Sign in to AeroNav only when needed. A short summary shows whether installation checks passed or anything needs attention; choose **Install update** to proceed. EuroScope must be closed. Replaced files are backed up and supported personal settings are kept.
 
-Unchanged files are hidden by default, and file comparisons show the expected result before installation. The comparison view highlights additions and removals and offers **Next change**. **Keep my list positions and visibility** is enabled by default; list items, columns and sorting still come from the new package. Validated cached packages are reused when the current AIRAC and revision match, without another download or sign-in.
+Most controllers can use the summary and follow any warnings shown there. **View details** provides optional advanced review for customised setups, with a searchable file list. Filter changed profiles or plugins, or include all files. Open a file to compare its current and expected contents, then use **Previous file** and **Next file** to move through the results. **Back to files** keeps your search, selection and scroll position. Installation options and technical notes have their own tabs. **Keep my list positions and visibility** is on by default; list items, columns and sorting still follow the new package.
 
-Managed updates also download a matching complete ZIP as a cleanup reference, without installing its extra files. The result offers optional cleanup using the saved old and new complete ZIPs, subject to verification against installed files. The first managed installation may still need your original old ZIP. Review and select eligible files to move into a dated backup; nothing is selected or moved automatically. **Setup → Swedish GNG** also offers **Check fonts…** and **Clean up old files…**. Modified and referenced files are kept. This is separate from removing the whole GNG package; see [cleanup and recovery](docs/gng-cleanup.md).
+ZIP import and fresh downloads are under **Setup → Swedish GNG → Maintenance**. Testing ZIPs can be imported deliberately and are clearly labelled; normal downloads use published packages. See [GNG installation and recovery](docs/gng-updates.md) for package selection, settings preservation and backups.
+
+Managed updates also keep a complete ZIP for later cleanup comparisons. Cleanup is optional and uses verified old and new complete packages; the first managed update may still need your original old ZIP. Review and select files before archiving them. Modified or referenced files are kept. Cleanup is available under **Maintenance**; installation recovery is under **Setup → Activity & recovery**. Successful updates also offer these options under **Advanced: recovery and cleanup**. See [cleanup and recovery](docs/gng-cleanup.md).
 
 ## Update Launchpad
 

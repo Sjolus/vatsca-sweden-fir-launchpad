@@ -11,8 +11,11 @@ public enum CheckStatus { Unknown, Checking, UpToDate, UpdateAvailable, Unsuppor
 public enum CheckRowAction
 {
     None, Setup, SoftwareUpdate, SoftwareCancel, SoftwareCheck, Downloads,
-    SelfUpdate, GngUpdate, Fonts, SaamanManage, EuroScopeManage, SaamanCancel, SaamanRetrySave
+    SelfUpdate, GngUpdate, Fonts, SaamanManage, EuroScopeManage, SaamanCancel, SaamanRetrySave, GngCancel, GngContinue
 }
+
+public sealed record GngOperationState(string Message, string Stage, bool Busy = false,
+    bool CanCancel = false, bool NeedsAttention = false, double? Percent = null, bool Warning = false);
 
 public sealed record SaamanOperationState(string Message, bool Busy = false, bool Warning = false,
     double? Percent = null, bool CanCancel = false, bool CanRetrySave = false,
@@ -31,6 +34,12 @@ public class CheckResult : INotifyPropertyChanged
     private bool _isRunning;
     private bool _isSelected;
     private bool _isNotUsed;
+    private bool _gngIsTesting;
+    public bool GngIsTesting
+    {
+        get => _gngIsTesting;
+        set => Set(ref _gngIsTesting, value);
+    }
 
     public bool IsNotUsed
     {
@@ -81,6 +90,8 @@ public class CheckResult : INotifyPropertyChanged
     {
         get
         {
+            if (HasFontsCheck && GngOperation is { } gng) return gng.Stage;
+            if (HasFontsCheck && GngIsTesting && FontsState != FontsState.NeedsAction && Status is CheckStatus.UpToDate or CheckStatus.Installed) return "Testing package";
             if (IsNotUsed && !SoftwareUpdateBusy && !SaamanBusy && !IsRunning) return "Not used";
             if (HasSaamanManagement && SaamanOperation is { } saaman)
                 return saaman.Busy ? saaman.Percent.HasValue ? $"Updating {saaman.Percent:0}%" : "Updating…"
@@ -126,7 +137,7 @@ public class CheckResult : INotifyPropertyChanged
                 CheckStatus.Checking => "Checking…",
                 CheckStatus.Error => "Needs attention",
                 CheckStatus.WebApp => "Web app",
-                CheckStatus.Installed => "Plugin detected",
+                CheckStatus.Installed => HasFontsCheck ? "Installed" : "Plugin detected",
                 _ => "Not checked"
             };
         }
@@ -136,6 +147,8 @@ public class CheckResult : INotifyPropertyChanged
     {
         get
         {
+            if (HasFontsCheck && GngOperation is { } gng) return gng.Warning ? "Warning" : "Neutral";
+            if (HasFontsCheck && GngIsTesting && FontsState != FontsState.NeedsAction && Status is CheckStatus.UpToDate or CheckStatus.Installed) return "Neutral";
             if (IsNotUsed && !SoftwareUpdateBusy && !SaamanBusy) return "Neutral";
             if (HasSaamanManagement && SaamanOperation is { } saaman)
                 return saaman.Busy ? "Neutral" : saaman.Warning || saaman.Cancelled ? "Warning" : "Success";
@@ -172,6 +185,9 @@ public class CheckResult : INotifyPropertyChanged
     {
         get
         {
+            if (HasFontsCheck && GngOperation is { } gng)
+                return gng.NeedsAttention ? "Continue the GNG update" : gng.CanCancel ? "Preparing in the background" : "Keep Launchpad open";
+            if (HasFontsCheck && GngIsTesting) return "Navteam testing package · manually imported";
             if (IsNotUsed) return "Optional · your saved locations and settings are kept";
             if (HasSaamanManagement && SaamanOperation is { } saaman)
                 return saaman.Busy ? saaman.CanCancel ? "Updating in the background" : "Keep Launchpad open"
@@ -248,6 +264,7 @@ public class CheckResult : INotifyPropertyChanged
         get
         {
             var paragraphs = new List<string>();
+            if (HasFontsCheck) AddDetail(paragraphs, GngOperation?.Message);
             if (IsNotUsed) AddDetail(paragraphs, "You chose not to use this application. Your saved locations and data are unchanged. Choose Use this application whenever you need it.");
             if (HasSaamanManagement) AddDetail(paragraphs, SaamanOperation?.Message);
             AddDetail(paragraphs, StatusMessage);
@@ -286,6 +303,8 @@ public class CheckResult : INotifyPropertyChanged
     {
         get
         {
+            if (HasFontsCheck && GngOperation is { } gng)
+                return gng.NeedsAttention ? CheckRowAction.GngContinue : gng.CanCancel ? CheckRowAction.GngCancel : CheckRowAction.None;
             if (HasSoftwareUpdate && SoftwareCanCancel) return CheckRowAction.SoftwareCancel;
             if (SaamanBusy) return SaamanOperation!.CanCancel ? CheckRowAction.SaamanCancel : CheckRowAction.None;
             if (SoftwareUpdateBusy || SelfUpdateBusy) return CheckRowAction.None;
@@ -334,6 +353,8 @@ public class CheckResult : INotifyPropertyChanged
     public string RowActionText => RowAction switch
     {
         CheckRowAction.Setup => "Set up",
+        CheckRowAction.GngContinue => "Continue",
+        CheckRowAction.GngCancel => "Cancel",
         CheckRowAction.SoftwareUpdate or CheckRowAction.GngUpdate => "Update",
         CheckRowAction.SaamanManage => SaamanOperation is { Warning: true } or { Cancelled: true } ? "Retry" : "Update",
         CheckRowAction.SoftwareCancel or CheckRowAction.SaamanCancel => "Cancel",
@@ -358,6 +379,8 @@ public class CheckResult : INotifyPropertyChanged
     public bool RowActionEnabled => RowAction switch
     {
         CheckRowAction.None => false,
+        CheckRowAction.GngContinue => GngOperation?.NeedsAttention == true,
+        CheckRowAction.GngCancel => GngOperation?.CanCancel == true,
         CheckRowAction.SoftwareCancel => SoftwareCanCancel,
         CheckRowAction.SaamanCancel => SaamanBusy && SaamanOperation!.CanCancel,
         CheckRowAction.SelfUpdate => SelfUpdateActionEnabled,
@@ -377,6 +400,8 @@ public class CheckResult : INotifyPropertyChanged
         CheckRowAction.SoftwareCheck or CheckRowAction.Downloads => SoftwareActionText,
         CheckRowAction.SelfUpdate => SelfUpdateActionText,
         CheckRowAction.GngUpdate => "Review and install the GNG package update.",
+        CheckRowAction.GngContinue => "Return to the GNG sign-in, review or result.",
+        CheckRowAction.GngCancel => "Cancel this GNG download. Installed files are unchanged.",
         CheckRowAction.Fonts => "Check the required GNG fonts.",
         CheckRowAction.SaamanManage => "Install the latest stable SAAMAN update.",
         CheckRowAction.EuroScopeManage => "Review the supported EuroScope installation.",
@@ -429,6 +454,19 @@ public class CheckResult : INotifyPropertyChanged
     public bool HasSelfUpdate { get; init; }
     public bool HasEuroScopeManagement { get; init; }
     public bool HasSaamanManagement { get; init; }
+    private GngOperationState? _gngOperation;
+    public GngOperationState? GngOperation
+    {
+        get => _gngOperation;
+        set
+        {
+            Set(ref _gngOperation, value);
+            OnPropertyChanged(nameof(RowProgressVisible));
+            OnPropertyChanged(nameof(RowProgressValue));
+            OnPropertyChanged(nameof(RowProgressIndeterminate));
+        }
+    }
+    private bool GngBusy => HasFontsCheck && GngOperation?.Busy == true;
     private SaamanOperationState? _saamanOperation;
     public SaamanOperationState? SaamanOperation
     {
@@ -492,9 +530,9 @@ public class CheckResult : INotifyPropertyChanged
     public bool SoftwareCanCancel => SoftwareUpdate?.CanCancel == true;
     public double SoftwareProgressValue => SoftwareUpdate?.ProgressPercent ?? 0;
     public bool SoftwareProgressIndeterminate => SoftwareUpdateBusy && SoftwareUpdate?.ProgressPercent == null;
-    public bool RowProgressVisible => SoftwareUpdateBusy || SaamanBusy;
-    public double RowProgressValue => SaamanBusy ? SaamanOperation?.Percent ?? 0 : SoftwareProgressValue;
-    public bool RowProgressIndeterminate => SaamanBusy ? SaamanOperation?.Percent == null : SoftwareProgressIndeterminate;
+    public bool RowProgressVisible => SoftwareUpdateBusy || SaamanBusy || GngBusy;
+    public double RowProgressValue => GngBusy ? GngOperation?.Percent ?? 0 : SaamanBusy ? SaamanOperation?.Percent ?? 0 : SoftwareProgressValue;
+    public bool RowProgressIndeterminate => GngBusy ? GngOperation?.Percent == null : SaamanBusy ? SaamanOperation?.Percent == null : SoftwareProgressIndeterminate;
     private bool _applicationActionsAllowed = true;
     public bool ApplicationActionsAllowed
     {

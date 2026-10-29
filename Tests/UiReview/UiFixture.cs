@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -21,6 +21,15 @@ internal static class UiReviewProgram
         {
             app.InitializeComponent();
             UiFixture.SetTextScale(1);
+            if (args.Contains("--check-gng"))
+            {
+                app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+                var option = Array.IndexOf(args, "--snapshots");
+                if (option >= 0 && option + 1 < args.Length) LayoutSnapshots.CaptureGng(args[option + 1]);
+                Console.WriteLine(LayoutMatrix.RunGngOnly());
+                app.Shutdown();
+                return 0;
+            }
             if (args.Contains("--check-workspaces"))
             {
                 app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
@@ -75,7 +84,7 @@ public sealed class UiReviewHost : Window
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         var panel = new StackPanel { Margin = new Thickness(18) };
         Content = new ScrollViewer { Content = panel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
-        panel.Children.Add(new TextBlock { Text = "Production WPF layouts • inert fixture handlers", FontSize = 19, FontWeight = FontWeights.SemiBold });
+        panel.Children.Add(new TextBlock { Text = "Production WPF layouts • synthetic data", FontSize = 19, FontWeight = FontWeights.SemiBold });
         panel.Children.Add(new TextBlock { Text = "No production services, startup hooks, credentials, registry, network or process operations are compiled into this fixture.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0,10,0,10) });
         var screens = new WrapPanel(); panel.Children.Add(screens);
         Add(screens, "Main window", () => Open(new MainWindow()));
@@ -92,6 +101,7 @@ public sealed class UiReviewHost : Window
         Add(screens, "Set up vATIS", () => Open(new FreshSoftwareInstallWindow()));
         Add(screens, "Setup wizard", () => Open(new SetupWizardWindow()));
         Add(screens, "GNG cleanup", () => Open(new GngCleanupWindow()));
+        Add(screens, "GNG: investigate 150 files", () => Open(GngUpdateWindow.CreateInvestigation()));
         Add(screens, "GNG setup / update", () => Open(new GngUpdateWindow()));
         Add(screens, "GNG file changes", () => Open(GngFileDiffFixture.Create(GngFileDiffFixtureState.Changes, UiFixture.Minimum)));
         var options = new WrapPanel(); panel.Children.Add(options);

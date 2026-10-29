@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -39,6 +39,9 @@ internal static partial class LayoutMatrix
                 if (UiFixture.Dark != dark) UiFixture.ToggleTheme();
                 CheckThemeReadability();
                 layouts += CheckGngUpdateLayouts();
+                layouts += GngFileNavigationTests.Run();
+                layouts += CheckGngInvestigationLayouts();
+                layouts += CheckCompactGngChangeNavigation();
                 layouts += CheckGngFileDiffLayouts();
                 layouts += CheckProfilePreviewLayouts();
                 CheckCompactDensity();
@@ -141,7 +144,7 @@ internal static partial class LayoutMatrix
     private static void CheckFooter(Window window)
     {
         var content = (FrameworkElement)window.Content;
-        var gngOptions = window is GngUpdateWindow ? Required<Expander>(window, "OtherOptions") : null;
+        var gngOptions = window is GngUpdateWindow && IsPresented(Required<Expander>(window, "OtherOptions")) ? Required<Expander>(window, "OtherOptions") : null;
         bool gngOptionsWasExpanded = gngOptions?.IsExpanded == true;
         if (gngOptions is not null)
         {
@@ -162,7 +165,7 @@ internal static partial class LayoutMatrix
             EuroScopeInstallWindow or FreshSoftwareInstallWindow => new[] { "ReviewButton", "ApplyButton", "CloseButton" },
             SetupWizardWindow => new[] { "SkipButton", "BackButton", "NextButton" },
             GngCleanupWindow => new[] { "RestoreButton", "ArchiveButton", "CloseButton" },
-            GngUpdateWindow => new[] { "ImportButton", "ExternalBrowserButton", "RestoreButton", "CloseButton" },
+            GngUpdateWindow => new[] { "CloseButton" },
             GngFileDiffWindow => new[] { "CloseButton" },
             _ => Array.Empty<string>()
         };

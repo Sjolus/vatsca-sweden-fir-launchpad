@@ -113,13 +113,32 @@
     </StackPanel>
     <StackPanel x:Name="GngPanel" Visibility="Collapsed">
      <TextBlock Text="Swedish GNG package" FontSize="{DynamicResource TextSize16}" FontWeight="SemiBold"/>
-     <TextBlock Text="Sector data, radar screens and plugins for Sweden." Foreground="{DynamicResource SecondaryText}" Margin="0,5,0,14"/>
-     <TextBlock Text="EuroScope data folder" FontWeight="SemiBold"/>
-     <TextBox x:Name="GngLocation" IsReadOnly="True" Style="{StaticResource ThemedTextBox}" Margin="0,6,0,8"/>
-     <WrapPanel><Button x:Name="GngLocationButton" Content="Location…" Style="{StaticResource Action}" Click="GngLocation_Click"/><Button x:Name="GngPackageButton" Content="Get / update package…" Style="{StaticResource Action}" Click="Gng_Click"/></WrapPanel>
-     <TextBlock x:Name="GngDestinationHint" Text="New installs use %APPDATA%\EuroScope." Foreground="{DynamicResource SecondaryText}" TextWrapping="Wrap" Margin="0,8,0,0" Visibility="Collapsed"/>
-     <TextBlock x:Name="GngSummary" Foreground="{DynamicResource SecondaryText}" TextWrapping="Wrap" Margin="0,12,0,14"/>
-     <WrapPanel x:Name="GngMaintenanceActions"><Button Content="Check fonts…" Style="{StaticResource Action}" Click="Fonts_Click"/><Button Content="Clean up old files…" Style="{StaticResource Action}" Click="Cleanup_Click"/></WrapPanel>
+     <TextBlock Text="Sector data, radar screens and plugins for Sweden." Foreground="{DynamicResource SecondaryText}" TextWrapping="Wrap" Margin="0,4,0,12"/>
+     <Grid Margin="0,0,0,10">
+      <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+      <StackPanel Margin="0,0,10,0"><TextBlock Text="Your version" Foreground="{DynamicResource SecondaryText}"/><TextBlock x:Name="GngInstalledVersion" Text="Not installed" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,3,0,0"/></StackPanel>
+      <StackPanel Grid.Column="1"><TextBlock Text="Latest package" Foreground="{DynamicResource SecondaryText}"/><TextBlock x:Name="GngLatestVersion" Text="Not checked" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,3,0,0"/></StackPanel>
+     </Grid>
+     <TextBlock x:Name="GngSummary" Foreground="{DynamicResource SecondaryText}" TextWrapping="Wrap" Margin="0,0,0,8" AutomationProperties.LiveSetting="Polite"/>
+     <ProgressBar x:Name="GngProgress" Minimum="0" Maximum="100" Height="4" Margin="0,0,0,10" Visibility="Collapsed" AutomationProperties.Name="Swedish GNG progress"/>
+     <WrapPanel Margin="0,0,0,8"><Button x:Name="GngPackageButton" Content="Install Swedish GNG" Style="{StaticResource Action}" Click="Gng_Click"/><Button x:Name="GngCancelButton" Content="Cancel" Style="{StaticResource Action}" Click="GngCancel_Click" Visibility="Collapsed"/><Button x:Name="GngAdoptButton" Content="Use existing folder…" Style="{StaticResource Action}" Click="GngLocation_Click"/></WrapPanel>
+     <TextBlock Text="Package folder" FontWeight="SemiBold"/>
+     <TextBox x:Name="GngLocation" IsReadOnly="True" Style="{StaticResource ThemedTextBox}" Margin="0,5,0,5" AutomationProperties.Name="Swedish GNG package folder"/>
+     <TextBlock x:Name="GngDestinationHint" Text="New installs use %APPDATA%\EuroScope." Foreground="{DynamicResource SecondaryText}" TextWrapping="Wrap" Margin="0,0,0,5" Visibility="Collapsed"/>
+     <WrapPanel Margin="0,8,0,5">
+      <TextBlock Text="Fonts" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,8,4"/>
+      <TextBlock x:Name="GngFontsStatus" Text="Checked after installation" Foreground="{DynamicResource SecondaryText}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,8,4"/>
+      <Button x:Name="GngFontsButton" Content="Install missing fonts…" Style="{StaticResource Action}" Click="Fonts_Click" Visibility="Collapsed"/>
+     </WrapPanel>
+     <Expander x:Name="GngMaintenance" Header="Maintenance" Foreground="{DynamicResource PrimaryText}" Margin="0,8,0,0">
+      <WrapPanel x:Name="GngMaintenanceActions" Margin="0,8,0,0">
+       <Button x:Name="GngLocationButton" Content="Use another folder…" Style="{StaticResource Action}" Click="GngLocation_Click"/>
+       <Button x:Name="GngImportButton" Content="Import ZIP…" Style="{StaticResource Action}" Click="GngImport_Click"/>
+       <Button x:Name="GngFreshButton" Content="Download fresh copies" Style="{StaticResource Action}" Click="GngFresh_Click"/>
+       <Button x:Name="GngCheckFontsButton" Content="Check fonts" Style="{StaticResource Action}" Click="Fonts_Click"/>
+       <Button x:Name="GngCleanupButton" Content="Clean up old files…" Style="{StaticResource Action}" Click="Cleanup_Click"/>
+      </WrapPanel>
+     </Expander>
     </StackPanel>
     <Border x:Name="LocationReview" Visibility="Collapsed" Background="{DynamicResource RowBg}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1" Padding="10" Margin="0,12,0,0">
      <StackPanel>
@@ -139,6 +158,7 @@
    <local:ControllerProfileControl x:Name="ControllerProfilePanel"/>
   </DockPanel>
   <local:ActivityWorkspaceControl x:Name="ActivityPanel" Grid.Row="1" Visibility="Collapsed" Margin="-12,-10,-12,-10"/>
+  <ContentControl x:Name="GngOperationHost" Grid.Row="1" Visibility="Collapsed" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"/>
   </Grid>
  </Grid>
 </UserControl>

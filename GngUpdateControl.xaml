@@ -1,0 +1,281 @@
+﻿<UserControl x:Class="VatscaUpdateChecker.GngUpdateControl"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Background="{DynamicResource AppBg}" Foreground="{DynamicResource PrimaryText}"
+        FontSize="{DynamicResource TextSize12}">
+    <UserControl.Resources>
+        <Style TargetType="DataGridColumnHeader">
+            <Setter Property="Background" Value="{DynamicResource ColumnHeaderBg}"/>
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
+            <Setter Property="Padding" Value="8"/>
+        </Style>
+        <Style TargetType="DataGridCell">
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
+            <Setter Property="BorderThickness" Value="1"/><Setter Property="BorderBrush" Value="Transparent"/>
+            <Style.Triggers>
+                <Trigger Property="IsSelected" Value="True"><Setter Property="Background" Value="{DynamicResource ApplicationSelectedBg}"/></Trigger>
+                <Trigger Property="IsKeyboardFocusWithin" Value="True"><Setter Property="BorderBrush" Value="{DynamicResource ButtonFocusBorder}"/></Trigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="FileText" TargetType="TextBlock">
+            <Setter Property="TextWrapping" Value="NoWrap"/><Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            <Setter Property="Margin" Value="6,4"/><Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="ToolTip" Value="{Binding RelativePath}"/>
+        </Style>
+        <Style x:Key="ActionText" TargetType="TextBlock" BasedOn="{StaticResource FileText}">
+            <Setter Property="ToolTip" Value="{Binding Action}"/>
+        </Style>
+        <Style TargetType="TabItem">
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TabItem">
+                <Border x:Name="TabBorder" Padding="12,6" Background="{DynamicResource RowAltBg}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1" Margin="0,0,4,0">
+                    <ContentPresenter x:Name="TabHeader" ContentSource="Header" RecognizesAccessKey="True"/>
+                </Border>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsSelected" Value="True"><Setter TargetName="TabBorder" Property="Background" Value="{DynamicResource ApplicationSelectedBg}"/><Setter TargetName="TabBorder" Property="BorderBrush" Value="{DynamicResource ApplicationUpdateText}"/><Setter TargetName="TabHeader" Property="TextElement.FontWeight" Value="SemiBold"/></Trigger>
+                    <Trigger Property="IsKeyboardFocusWithin" Value="True"><Setter TargetName="TabBorder" Property="BorderBrush" Value="{DynamicResource ButtonFocusBorder}"/></Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate></Setter.Value></Setter>
+        </Style>
+    </UserControl.Resources>
+    <Grid>
+    <Grid x:Name="OperationBody" Margin="12" SizeChanged="OperationBody_SizeChanged">
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition x:Name="OperationContentRow" Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+        <StackPanel x:Name="FlowHeading" Margin="0,0,0,8">
+            <TextBlock Text="Swedish GNG" FontSize="{DynamicResource TextSize22}" FontWeight="SemiBold" TextWrapping="Wrap"/>
+            <TextBlock x:Name="StepText" Text="" Visibility="Collapsed"
+                       Foreground="{DynamicResource SecondaryText}" TextWrapping="Wrap" Margin="0,6,0,0"/>
+        </StackPanel>
+        <Border x:Name="DownloadActivityPanel" Grid.Row="2" Margin="0,0,0,8" Padding="10,6"
+                BorderBrush="{DynamicResource ApplicationUpdateText}" BorderThickness="3,0,0,0" Background="{DynamicResource RowAltBg}">
+            <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock x:Name="DownloadStageText" FontSize="{DynamicResource TextSize15}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,0,3"
+                               Visibility="Collapsed" AutomationProperties.Name="Current GNG operation"/>
+                    <TextBox x:Name="StatusText" Text="Get the package, then review its changes before installing."
+                             IsReadOnly="True" IsReadOnlyCaretVisible="True" TextWrapping="Wrap" MaxHeight="75" VerticalScrollBarVisibility="Auto" Background="Transparent" BorderThickness="0"
+                             Foreground="{DynamicResource PrimaryText}" Padding="0" AutomationProperties.Name="GNG operation status" AutomationProperties.LiveSetting="Polite"/>
+                    <ProgressBar x:Name="Activity" Height="7" Minimum="0" Maximum="100" Visibility="Collapsed" Margin="0,7,0,0"
+                                 Foreground="{DynamicResource ApplicationUpdateText}" AutomationProperties.Name="GNG operation progress"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
+                    <Button x:Name="StopRequestButton" Content="Stop" Click="StopRequest_Click" IsEnabled="False" Visibility="Collapsed"
+                            ToolTip="Stop waiting for sign-in or the next package download."/>
+                    <Button x:Name="CancelDownloadButton" Content="Cancel download" Click="CancelDownload_Click" Visibility="Collapsed"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+        <Border Grid.Row="3" Background="{DynamicResource AppBg}">
+            <Grid>
+                <Grid x:Name="BrowserPanel">
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                    <Grid x:Name="BrowserToolbar" Visibility="Collapsed" Margin="8">
+                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                        <WrapPanel>
+                            <Button x:Name="BackButton" Content="←" Click="Back_Click" ToolTip="Go back" AutomationProperties.Name="Go back" IsEnabled="False" Margin="0,0,6,0"/>
+                            <Button x:Name="ReloadButton" Content="Reload" Click="Reload_Click" IsEnabled="False" Margin="0,0,6,0"/>
+                            <Button x:Name="HomeButton" Content="AeroNav" Click="Home_Click" IsEnabled="False" Margin="0,0,12,0"/>
+                            <Button x:Name="RetryDownloadButton" Content="Retry download" Click="RetryDownload_Click" IsEnabled="False" Margin="0,0,6,0"/>
+                        </WrapPanel>
+                        <TextBlock x:Name="OriginText" Grid.Row="1" Text="Browser not started" TextTrimming="CharacterEllipsis" Margin="0,6,0,0"
+                                   VerticalAlignment="Center" Foreground="{DynamicResource SecondaryText}" AutomationProperties.Name="Current website origin"/>
+                    </Grid>
+                    <Grid x:Name="BrowserSurface" Grid.Row="1">
+                        <ContentControl x:Name="BrowserHost"/>
+                    </Grid>
+                    <Border x:Name="StartPanel" Grid.Row="1" Background="{DynamicResource RowBg}" Padding="20">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel VerticalAlignment="Center" MaxWidth="650">
+                                <TextBlock x:Name="StartHeading" Text="Get Swedish GNG" FontSize="{DynamicResource TextSize21}" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                <TextBlock x:Name="StartExplanation" Text="Use the latest package from AeroNav. Saved copies are reused; sign in only if needed."
+                                           TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,10,0,12"/>
+                                <TextBlock x:Name="PackageKindText" TextWrapping="Wrap" Margin="0,0,0,12" FontWeight="SemiBold"/>
+                                <WrapPanel>
+                                    <Button x:Name="StartBrowserButton" Content="Download Swedish GNG" Click="StartBrowser_Click" Margin="0,0,8,8"
+                                            ToolTip="Check AeroNav's current version and reuse matching saved packages first. Download missing packages, then review before installing."/>
+                                    <Button x:Name="RuntimeInstallButton" Content="Install WebView2…" Click="InstallRuntime_Click" Visibility="Collapsed" Margin="0,0,8,8"/>
+                                    <Button x:Name="RuntimeInfoButton" Content="Runtime information ↗" Click="RuntimeInfo_Click" Visibility="Collapsed" Margin="0,0,0,8"/>
+                                </WrapPanel>
+                                <TextBlock Text="If the download cannot continue, use Maintenance below to import a ZIP."
+                                           TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,4,0,0"/>
+                                <Expander x:Name="StartOptions" Header="Download options" Foreground="{DynamicResource PrimaryText}" Margin="0,12,0,0">
+                                    <StackPanel Margin="0,8,0,0">
+                                        <TextBlock Text="Matching saved packages are normally reused. Download fresh copies only if you need to replace them. Your AeroNav sign-in is kept in this browser."
+                                                   TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,8"/>
+                                        <Button x:Name="FreshDownloadButton" Content="Download fresh copies" Click="FreshDownload_Click" HorizontalAlignment="Left" Margin="0,0,0,8"
+                                                ToolTip="Ignore saved packages and download fresh copies from AeroNav. Installation still requires your review."/>
+                                        <TextBlock Text="For manual downloads, keep the original AeroNav ZIP filename."
+                                                   TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}"/>
+                                    </StackPanel>
+                                </Expander>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Border>
+                    <Grid x:Name="BrowserDownloadOverlay" Grid.Row="1" Visibility="Collapsed" Background="{DynamicResource RowAltBg}"
+                          AutomationProperties.Name="Website controls locked during download or package checks">
+                        <Border HorizontalAlignment="Center" VerticalAlignment="Center" Margin="24" Padding="20,16"
+                                MaxWidth="460" Background="{DynamicResource RowBg}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1" CornerRadius="4">
+                            <StackPanel>
+                                <TextBlock x:Name="BrowserOverlayTitle" FontSize="{DynamicResource TextSize17}" FontWeight="SemiBold" TextWrapping="Wrap" TextAlignment="Center">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Text" Value="{Binding Text, ElementName=DownloadStageText}"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Text, ElementName=DownloadStageText}" Value="">
+                                                    <Setter Property="Text" Value="Preparing your package"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                                <TextBlock x:Name="BrowserOverlayHint" TextWrapping="Wrap" TextAlignment="Center" Foreground="{DynamicResource SecondaryText}" Margin="0,8,0,0">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Text" Value="Progress is shown above. Website controls are unavailable during this step."/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Visibility, ElementName=CancelDownloadButton}" Value="Visible">
+                                                    <Setter Property="Text" Value="Progress is shown above. You can cancel the download there."/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Visibility, ElementName=StopRequestButton}" Value="Visible">
+                                                    <Setter Property="Text" Value="Progress is shown above. You can stop this request there."/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </Grid>
+                <Grid x:Name="ReviewPanel" Visibility="Collapsed">
+                    <ScrollViewer x:Name="ReviewInformationScroll" VerticalScrollBarVisibility="Auto">
+                        <Border Background="{DynamicResource RowBg}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1" Padding="18" VerticalAlignment="Top">
+                            <StackPanel>
+                                <DockPanel Margin="0,0,0,10">
+                                    <TextBlock x:Name="AssessmentGlyph" Text="✓" FontSize="{DynamicResource TextSize22}" FontWeight="SemiBold" Margin="0,0,10,0"/>
+                                    <TextBlock x:Name="AssessmentHeading" Text="Ready to install" FontSize="{DynamicResource TextSize22}" FontWeight="SemiBold" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite"/>
+                                </DockPanel>
+                                <TextBlock x:Name="PackageSummaryText" TextWrapping="Wrap" FontSize="{DynamicResource TextSize15}" Margin="0,0,0,12"/>
+                                <TextBox x:Name="AttentionText" IsReadOnly="True" IsReadOnlyCaretVisible="True" TextWrapping="Wrap" Background="Transparent" BorderThickness="0" Padding="0" Foreground="{DynamicResource PrimaryText}" AutomationProperties.Name="Update checks" Margin="0,0,0,12"/>
+                                <TextBox x:Name="ReviewSummaryText" IsReadOnly="True" IsReadOnlyCaretVisible="True" TextWrapping="Wrap" Background="Transparent" BorderThickness="0" Padding="0" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,12"/>
+                                <TextBlock x:Name="SummaryInstructionText" Text="Choose Install update when you are ready." TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Border>
+                    </ScrollViewer>
+                    <Grid x:Name="ReviewDetailsPanel" Visibility="Collapsed">
+                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                        <DockPanel Margin="0,0,0,8">
+                            <Button x:Name="BackToSummaryButton" Content="← Back to summary" Click="BackToReview_Click" DockPanel.Dock="Left"/>
+                            <TextBlock x:Name="PackageText" TextTrimming="CharacterEllipsis" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}" VerticalAlignment="Center" Margin="12,0,0,0"/>
+                        </DockPanel>
+                        <TabControl x:Name="DetailsTabs" Grid.Row="1" SelectionChanged="DetailsTabs_SelectionChanged" Background="{DynamicResource AppBg}" BorderBrush="{DynamicResource DividerBrush}" Padding="8" AutomationProperties.Name="Update details">
+                            <TabItem x:Name="FilesTab" Header="Files" IsSelected="True">
+                                <Grid>
+                                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                                    <Grid Margin="0,0,0,6">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <TextBlock Text="Search" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                        <TextBox x:Name="FileSearchBox" Grid.Column="1" TextChanged="FileSearchChanged" Padding="6,4" AutomationProperties.Name="Search file paths and changes"/>
+                                        <ComboBox x:Name="FileFilterBox" Grid.Column="2" SelectedIndex="0" SelectionChanged="FileFilterChanged" MinWidth="165" Margin="8,0,0,0" AutomationProperties.Name="Which files to show">
+                                            <ComboBoxItem Content="All changes"/><ComboBoxItem Content="Changed profiles"/><ComboBoxItem Content="Changed plugins"/><ComboBoxItem Content="All files"/>
+                                        </ComboBox>
+                                    </Grid>
+                                    <TextBlock x:Name="FileSummaryText" Grid.Row="1" Margin="0,0,0,6" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}" AutomationProperties.Name="GNG file change counts"/>
+                                    <DataGrid x:Name="FilesGrid" Grid.Row="2" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" CanUserDeleteRows="False" CanUserResizeRows="False" CanUserReorderColumns="False" HeadersVisibility="Column" GridLinesVisibility="Horizontal" Background="{DynamicResource RowBg}" Foreground="{DynamicResource PrimaryText}" RowBackground="{DynamicResource RowBg}" AlternatingRowBackground="{DynamicResource RowAltBg}" HorizontalGridLinesBrush="{DynamicResource DividerBrush}" BorderThickness="0" MouseDoubleClick="FilesGrid_MouseDoubleClick" KeyDown="FilesGrid_KeyDown" SelectionMode="Single" EnableRowVirtualization="True" EnableColumnVirtualization="False" VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling" VirtualizingPanel.ScrollUnit="Pixel" ScrollViewer.CanContentScroll="True" AutomationProperties.Name="Proposed GNG file changes">
+                                        <DataGrid.Columns>
+                                            <DataGridTextColumn Header="File" Binding="{Binding RelativePath}" SortMemberPath="RelativePath" Width="*" MinWidth="120" ElementStyle="{StaticResource FileText}"/>
+                                            <DataGridTextColumn Header="Change" Binding="{Binding Action}" SortMemberPath="Action" Width="175" ElementStyle="{StaticResource ActionText}"/>
+                                            <DataGridTemplateColumn Header="" Width="88" CanUserSort="False"><DataGridTemplateColumn.CellTemplate><DataTemplate>
+                                                <Button Content="View…" Click="ViewFileChanges_Click" Padding="7,2" Margin="4,2" ToolTip="Compare the current file and the planned result." AutomationProperties.Name="{Binding RelativePath, StringFormat=View changes to {0}}"/>
+                                            </DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+                                        </DataGrid.Columns>
+                                    </DataGrid>
+                                    <TextBlock x:Name="NoFileChangesText" Grid.Row="2" Visibility="Collapsed" TextWrapping="Wrap" Margin="8"/>
+                                </Grid>
+                            </TabItem>
+                            <TabItem x:Name="OptionsTab" Header="Options">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                    <StackPanel Margin="4,8">
+                                        <TextBlock Text="Install into" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                                        <TextBox x:Name="FolderText" IsReadOnly="True" Padding="6" TextWrapping="Wrap" MaxHeight="90" VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Swedish GNG installation folder"/>
+                                        <CheckBox x:Name="PreserveListLayout" IsChecked="True" Margin="0,16,0,8" Content="Keep my list positions and visibility" Foreground="{DynamicResource PrimaryText}" Checked="PreserveListLayout_Changed" Unchecked="PreserveListLayout_Changed"/>
+                                        <TextBlock Text="Columns, list contents and sorting still follow the package. Changing this option checks the update again." TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}"/>
+                                    </StackPanel>
+                                </ScrollViewer>
+                            </TabItem>
+                            <TabItem x:Name="NotesTab" Header="Technical notes">
+                                <TextBox x:Name="WarningsText" IsReadOnly="True" IsReadOnlyCaretVisible="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Padding="8" Background="{DynamicResource RowAltBg}" Foreground="{DynamicResource PrimaryText}" AutomationProperties.Name="Technical update notes and backup location"/>
+                            </TabItem>
+                        </TabControl>
+                    </Grid>
+                </Grid>
+                <ScrollViewer x:Name="CompletePanel" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" Margin="6,8">
+                    <StackPanel>
+                        <TextBlock x:Name="CompleteTitle" FontSize="{DynamicResource TextSize22}" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                        <TextBox x:Name="CompleteText" IsReadOnly="True" IsReadOnlyCaretVisible="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" MaxHeight="135"
+                                 Background="Transparent" BorderThickness="0" Foreground="{DynamicResource PrimaryText}" Margin="0,10,0,14" AutomationProperties.Name="Installation or restore result"/>
+                        <TextBlock x:Name="CompletionChecks" Visibility="Collapsed" TextWrapping="Wrap" Margin="0,10,0,6"/>
+                        <WrapPanel>
+                            <Button x:Name="CheckFontsButton" Visibility="Collapsed" Content="Set up fonts…" Click="CheckFonts_Click" Margin="0,0,8,6"/>
+                            <Button x:Name="CheckProfileButton" Visibility="Collapsed" Content="Review controller details" Click="CheckProfile_Click" Margin="0,0,8,6"/>
+                        </WrapPanel>
+                        <StackPanel x:Name="RestoreConfirmPanel" Visibility="Collapsed" Margin="0,12,0,12">
+                            <TextBlock x:Name="RestoreConfirmText" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                            <WrapPanel><Button x:Name="ConfirmRestoreButton" Content="Restore backup" Click="ConfirmRestore_Click" Margin="0,0,8,0"/><Button Content="Cancel" Click="CancelRestore_Click"/></WrapPanel>
+                        </StackPanel>
+                        <Expander x:Name="RecoveryDetails" Header="Advanced: recovery and cleanup" Foreground="{DynamicResource PrimaryText}">
+                        <StackPanel>
+                        <TextBox x:Name="BackupText" IsReadOnly="True" TextWrapping="Wrap" Padding="7" AutomationProperties.Name="GNG update backup location"/>
+                        <Button Content="Restore this update…" Click="Restore_Click" HorizontalAlignment="Left" Margin="0,8,0,0"/>
+                        <TextBlock x:Name="CleanupHint" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryText}"/>
+                        <Button x:Name="CleanupButton" Content="Clean up old files…" Click="Cleanup_Click" Visibility="Collapsed" HorizontalAlignment="Left" Margin="0,8,0,0"/>
+                        </StackPanel></Expander>
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+        </Border>
+        <StackPanel x:Name="ActionFooter" Grid.Row="4" Margin="0,10,0,0">
+            <TextBlock x:Name="EuroScopeNotice" Visibility="Collapsed" TextWrapping="Wrap" Margin="0,0,0,8"
+                       Foreground="{DynamicResource PrimaryText}" FontWeight="SemiBold"
+                       AutomationProperties.Name="EuroScope must be closed" AutomationProperties.LiveSetting="Polite"/>
+            <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="2*"/></Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Top" Visibility="{Binding Visibility, ElementName=ViewDetailsButton}">
+                    <Button x:Name="ViewDetailsButton" Content="View details" Click="ViewDetails_Click" Background="Transparent" BorderThickness="0" Padding="0,6"/>
+                    <Button x:Name="ViewDetailsInfoButton" Content="ⓘ" MinWidth="28" MinHeight="28" Margin="4,0,0,0" Padding="3"
+                            FontSize="{DynamicResource TextSize14}" Background="Transparent" BorderThickness="0"
+                            ToolTipService.InitialShowDelay="250" ToolTipService.ShowDuration="60000"
+                            Click="ReviewInfo_Open" GotKeyboardFocus="ReviewInfo_Open" LostKeyboardFocus="ReviewInfo_Close" Unloaded="ReviewInfo_Close" PreviewKeyDown="ReviewInfo_KeyDown"
+                            AutomationProperties.Name="About advanced file review" AutomationProperties.HelpText="Optional file review for customised setups. Most controllers can use the summary. Follow any warnings before continuing.">
+                        <Button.ToolTip>
+                            <ToolTip Placement="Top" Padding="12" Background="{DynamicResource InputBg}" Foreground="{DynamicResource InputFg}" BorderBrush="{DynamicResource InputBorder}" FontSize="{DynamicResource TextSize12}">
+                                <StackPanel MaxWidth="320">
+                                    <TextBlock Text="Advanced file review" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                                    <TextBlock Text="Useful if you have heavily customised your EuroScope setup. Most controllers can use the summary above. Follow any warnings there before continuing." TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </ToolTip>
+                        </Button.ToolTip>
+                    </Button>
+                </StackPanel>
+                <Expander x:Name="OtherOptions" Header="Maintenance" Foreground="{DynamicResource PrimaryText}" VerticalAlignment="Top" Margin="0,0,12,0"
+                          ToolTip="Open AeroNav in your normal browser or restore a saved installation backup.">
+                    <WrapPanel Margin="0,8,0,0">
+                        <Button x:Name="ImportButton" Content="Import ZIP…" Click="Import_Click" Margin="0,0,8,6"/>
+                        <Button x:Name="ExternalBrowserButton" Content="Open in browser ↗" Click="ExternalBrowser_Click" Margin="0,0,8,6"/>
+                        <Button x:Name="ChooseAnotherButton" Content="Choose another package" Click="ChooseAnother_Click" Margin="0,0,8,6"/>
+                        <Button x:Name="RestoreButton" Content="Restore backup…" Click="Restore_Click" Margin="0,0,8,6"/>
+                    </WrapPanel>
+                </Expander>
+                <WrapPanel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Top">
+                    <Button x:Name="StartOverButton" Content="Start over" Click="StartOver_Click" Visibility="Collapsed" Margin="0,0,8,0"/>
+                    <Button x:Name="RefreshReviewButton" Content="Refresh changes" Click="RefreshReview_Click" Visibility="Collapsed" Margin="0,0,8,0"/>
+                    <Button x:Name="InstallButton" Content="Install update" Click="Install_Click" IsEnabled="False" Visibility="Collapsed" Margin="0,0,8,0"/>
+                    <Button x:Name="CloseButton" Content="Cancel" Click="Close_Click"/>
+                </WrapPanel>
+            </Grid>
+        </StackPanel>
+    </Grid>
+    <ContentControl x:Name="NestedContent" Visibility="Collapsed"/>
+    </Grid>
+</UserControl>

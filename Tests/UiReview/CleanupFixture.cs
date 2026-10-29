@@ -8,7 +8,34 @@ namespace VatscaUpdateChecker;
 // Only production XAML is linked. These handlers never compare packages or move files.
 public partial class GngCleanupWindow : Window
 {
-    public GngCleanupWindow() { InitializeComponent(); UiFixture.Initialize(this); }
+    public GngCleanupControl Cleanup { get; }
+    public GngCleanupWindow()
+    {
+        InitializeComponent();
+        Cleanup = new();
+        Content = Cleanup;
+        NameScope.SetNameScope(this, NameScope.GetNameScope(Cleanup));
+        Cleanup.CloseRequested += (_, _) => Close();
+        UiFixture.Initialize(this);
+    }
+    internal void RefreshSyntheticScenario() => Cleanup.RefreshSyntheticScenario();
+}
+
+public partial class GngCleanupControl : UserControl
+{
+    public event EventHandler? CloseRequested;
+    public event Action? StateChanged;
+    public bool AttemptedChanges => false;
+    public bool IsBusy => false;
+    public bool CanDismiss => true;
+    public string Status => StatusText.Text;
+    public GngCleanupControl() => InitializeComponent();
+    public GngCleanupControl(string root, string? selectedProfile, IEnumerable<string> protectedPaths,
+        string? oldZip = null, string? newZip = null, string? recoveryFolder = null) : this()
+    {
+        RefreshSyntheticScenario();
+    }
+    public Task StartAsync() { StateChanged?.Invoke(); return Task.CompletedTask; }
 
     internal void RefreshSyntheticScenario()
     {
@@ -17,6 +44,7 @@ public partial class GngCleanupWindow : Window
         OldZipBox.Text = UiFixture.Blank ? "" : @"C:\Synthetic\Downloads\ESAA-Full-Package_20260903120000-260901-0001.zip";
         NewZipBox.Text = UiFixture.Blank ? "" : @"C:\Synthetic\Downloads\ESAA-Full-Package_20261001120000-261001-0003.zip";
         CandidatesGrid.ItemsSource = UiFixture.Blank ? Array.Empty<CleanupFixtureRow>() : ExampleRows();
+        SourceDetails.IsExpanded = UiFixture.Blank;
         SummaryText.Text = UiFixture.Blank ? "Nothing selected. Choose both complete ZIPs, then compare." : "3 old package files found · 1 can move · 2 must stay · 0 selected";
         StatusText.Text = "Synthetic preview only. Modified and referenced files are kept. Moving files to a backup does not free disk space.";
         ArchiveButton.IsEnabled = ClearButton.IsEnabled = false;
@@ -44,8 +72,7 @@ public partial class GngCleanupWindow : Window
     private void ClearSelection_Click(object sender, RoutedEventArgs e) => RefreshSyntheticScenario();
     private void Archive_Click(object sender, RoutedEventArgs e) => StatusText.Text = "Synthetic result: moved 1 file, skipped 1. Backup: C:\\Synthetic\\CleanupBackups\\dated-backup. Nothing was changed.";
     private void Restore_Click(object sender, RoutedEventArgs e) => StatusText.Text = "Synthetic restore: an existing destination file was kept. No files were changed.";
-    private void Window_Closing(object? sender, CancelEventArgs e) { }
-    private void Close_Click(object sender, RoutedEventArgs e) => Close();
+    private void Close_Click(object sender, RoutedEventArgs e) => CloseRequested?.Invoke(this, EventArgs.Empty);
 
     public sealed class CleanupFixtureRow(string relativePath, bool isEligible, string details)
     {
@@ -61,6 +88,7 @@ internal static partial class LayoutMatrix
 {
     private static void CheckCleanupLayout(GngCleanupWindow window)
     {
+        Require(window.Content is GngCleanupControl, "Cleanup must use the reusable inline view.");
         var root = Required<TextBox>(window, "RootBox");
         Require(root.IsReadOnly && root.Focusable, "Cleanup must show a selectable, fixed configured destination.");
         var backup = Required<TextBox>(window, "BackupRootBox");
@@ -74,7 +102,7 @@ internal static partial class LayoutMatrix
             "The cleanup preview must leave room to read and scroll file rows at the minimum size.");
         Require(!grid.CanUserAddRows && !grid.CanUserDeleteRows, "The cleanup review must not permit creating/deleting grid entries.");
         Require(!Required<Button>(window, "ArchiveButton").IsEnabled, "Cleanup must begin without an enabled move action.");
-        Require(grid.Items.OfType<GngCleanupWindow.CleanupFixtureRow>().All(row => !row.IsSelected),
+        Require(grid.Items.OfType<GngCleanupControl.CleanupFixtureRow>().All(row => !row.IsSelected),
             "The cleanup preview must start with every file unchecked.");
         var status = Required<TextBox>(window, "StatusText");
         Require(status.IsReadOnly && status.IsReadOnlyCaretVisible && status.Focusable &&
@@ -84,6 +112,10 @@ internal static partial class LayoutMatrix
         Required<ProgressBar>(window, "Activity").Visibility = Visibility.Visible;
         LayoutValidation.CheckWindowContent(window);
         Require(grid.ActualHeight >= 90, "Long cleanup results must leave the preview available.");
+        CheckFooter(window);
+        Required<Expander>(window, "SourceDetails").IsExpanded = true;
+        LayoutValidation.CheckWindowContent(window);
+        Require(grid.ActualHeight >= 90, "Expanded package sources must leave the cleanup files usable.");
         CheckFooter(window);
     }
 }

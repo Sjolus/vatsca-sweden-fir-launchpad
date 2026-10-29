@@ -83,13 +83,29 @@ internal static class InstallerTests
             ("VACS 3 uses its renamed executable in either registered scope", () =>
             {
                 foreach (var scope in new[] { "CurrentUser", "AllUsers" })
+                foreach (var version in new[] { "3.0.0", "3.0.1" })
                 {
                     using var f = new Fixture(SoftwareApp.Vacs, scope);
-                    f.SetVacsVersion("3.0.0");
+                    f.SetVacsVersion(version);
                     var found = f.Inspect();
-                    Assert(found.CanUpdate && found.Version == "3.0.0" && found.Scope == scope &&
+                    Assert(found.CanUpdate && found.Version == version && found.Scope == scope &&
                         found.ExePath == Path.Combine(f.Root, "vacs.exe") && f.RunCount == 0);
                 }
+                return Task.CompletedTask;
+            }),
+            ("VACS registry lookup follows the 3.0.1 restored destination key", () =>
+            {
+                var keys = new Dictionary<string, string>
+                {
+                    [@"Software\vacs\vacs"] = "restored-location",
+                    [@"Software\The vacs Project\vacs"] = "temporary-3.0.0-location"
+                };
+                foreach (var version in new[] { "2.8.0", "3.0.1", "3.0.1.0", "3.1.0" })
+                    Assert(keys[SoftwareInstallerEnvironment.VacsDestinationKey(version)] == "restored-location");
+                foreach (var version in new[] { "3.0.0", "3.0.0.0" })
+                    Assert(keys[SoftwareInstallerEnvironment.VacsDestinationKey(version)] == "temporary-3.0.0-location");
+                keys.Remove(@"Software\The vacs Project\vacs");
+                Assert(keys.ContainsKey(SoftwareInstallerEnvironment.VacsDestinationKey("3.0.1")));
                 return Task.CompletedTask;
             }),
             ("VACS generation and executable must agree", () =>
@@ -340,8 +356,12 @@ internal static class InstallerTests
                 foreach (var (scope, from, to) in new[]
                 {
                     ("AllUsers", "2.8.0", "3.0.0"),
+                    ("AllUsers", "2.8.0", "3.0.1"),
+                    ("CurrentUser", "2.8.0", "3.0.1"),
                     ("AllUsers", "3.0.0", "3.0.1"),
-                    ("CurrentUser", "3.0.0", "3.0.1")
+                    ("CurrentUser", "3.0.0", "3.0.1"),
+                    ("AllUsers", "3.0.1", "3.0.2"),
+                    ("CurrentUser", "3.0.1", "3.0.2")
                 })
                 {
                     using var f = new Fixture(SoftwareApp.Vacs, scope) { VacsTargetVersion = to };
@@ -356,6 +376,77 @@ internal static class InstallerTests
                     Assert(f.Inspect().CanUpdate && f.Inspect().Version == to && f.Inspect().Scope == scope);
                     if (from.StartsWith("2.", StringComparison.Ordinal)) Assert(!File.Exists(before.ExePath));
                 }
+            }),
+            ("VACS 3.0.1 preserves a single custom destination in either scope", async () =>
+            {
+                foreach (var scope in new[] { "CurrentUser", "AllUsers" })
+                foreach (var from in new[] { "2.8.0", "3.0.0" })
+                {
+                    using var f = new Fixture(SoftwareApp.Vacs, scope, "custom-vacs") { VacsTargetVersion = "3.0.1" };
+                    f.SetVacsVersion(from);
+                    if (from == "3.0.0") f.VacsLegacyDestination = null;
+                    var before = f.Inspect(); var release = f.CreatePackage();
+                    Assert(f.Installer.GetUpdateProblem(before, release) == null && f.LastVacsDestinationScope == scope);
+                    f.OnRun = () => f.SetVacsVersion(release.Version);
+                    var result = await f.Installer.InstallAsync(before, release, f.PackagePath, null);
+                    Assert(result.ExecutablePath == Path.Combine(f.Root, "vacs.exe") && f.RunCount == 1);
+                    Assert(f.VacsLegacyDestination == f.Root && f.Vacs3Destination == null);
+                }
+            }),
+            ("VACS 3.0.1 refuses conflicting or missing migration locations before execution", async () =>
+            {
+                foreach (var scope in new[] { "CurrentUser", "AllUsers" })
+                foreach (var variant in new[] { "legacy-conflict", "300-conflict", "missing-source" })
+                {
+                    using var f = new Fixture(SoftwareApp.Vacs, scope) { VacsTargetVersion = "3.0.1" };
+                    f.SetVacsVersion("3.0.0");
+                    var before = f.Inspect(); var release = f.CreatePackage();
+                    string other = Path.Combine(f.TestRoot, "other-vacs"); Directory.CreateDirectory(other);
+                    string otherExe = Path.Combine(other, "vacs.exe"); File.WriteAllText(otherExe, "synthetic copy must stay");
+                    if (variant == "legacy-conflict") f.VacsLegacyDestination = other;
+                    if (variant == "300-conflict") f.Vacs3Destination = other;
+                    if (variant == "missing-source") f.Vacs3Destination = null;
+                    Assert(f.Installer.GetUpdateProblem(before, release) is not null && f.LastVacsDestinationScope == scope);
+                    await Reject(() => f.Installer.InstallAsync(before, release, f.PackagePath, null));
+                    Assert(f.RunCount == 0 && File.Exists(before.ExePath) && File.ReadAllText(otherExe) == "synthetic copy must stay");
+                }
+            }),
+            ("VACS 3.0.1 rechecks both location keys at the execution boundary", async () =>
+            {
+                using var f = new Fixture(SoftwareApp.Vacs, "AllUsers") { VacsTargetVersion = "3.0.1" };
+                f.SetVacsVersion("3.0.0");
+                var before = f.Inspect(); var release = f.CreatePackage();
+                f.OnReadVacsDestinations = () =>
+                {
+                    if (f.VacsDestinationReads == 2) f.VacsLegacyDestination = Path.Combine(f.TestRoot, "changed-after-review");
+                };
+                await Reject(() => f.Installer.InstallAsync(before, release, f.PackagePath, null));
+                Assert(f.VacsDestinationReads == 2 && f.RunCount == 0 && File.Exists(before.ExePath));
+            }),
+            ("VACS 3.0.1 rejects linked primary and secondary installer locations", async () =>
+            {
+                foreach (var primary in new[] { true, false })
+                {
+                    using var f = new Fixture(SoftwareApp.Vacs, "AllUsers") { VacsTargetVersion = "3.0.1" };
+                    f.SetVacsVersion("3.0.0");
+                    var before = f.Inspect(); var release = f.CreatePackage();
+                    string link = Path.Combine(f.TestRoot, "linked-location"); SyntheticJunction.Create(link, f.Root);
+                    try
+                    {
+                        if (primary) f.Vacs3Destination = link; else f.VacsLegacyDestination = link;
+                        await Reject(() => { f.Installer.GetUpdateProblem(before, release); return Task.CompletedTask; });
+                        await Reject(() => f.Installer.InstallAsync(before, release, f.PackagePath, null));
+                        Assert(f.RunCount == 0 && File.Exists(before.ExePath));
+                    }
+                    finally { Directory.Delete(link, recursive: false); }
+                }
+            }),
+            ("VACS 3.0.1 rejects an unknown scope before reading installer locations", async () =>
+            {
+                using var f = new Fixture(SoftwareApp.Vacs) { VacsTargetVersion = "3.0.1" };
+                f.SetVacsVersion("3.0.0"); var before = f.Inspect() with { Scope = "Unknown" }; var release = f.CreatePackage();
+                await Reject(() => { f.Installer.GetUpdateProblem(before, release); return Task.CompletedTask; });
+                Assert(f.VacsDestinationReads == 0 && f.RunCount == 0);
             }),
             ("VACS 2 to 3 blocks destinations its installer cannot preserve", async () =>
             {
@@ -586,7 +677,11 @@ internal static class InstallerTests
         public SoftwareInstaller Installer { get; }
         public bool Running, RejectTrust, RejectHelperTrust;
         public string? Prerequisite;
+        public string? VacsLegacyDestination;
         public string? Vacs3Destination;
+        public string? LastVacsDestinationScope;
+        public int VacsDestinationReads;
+        public Action? OnReadVacsDestinations;
         public int RunCount, TrustChecks, ExitCode;
         public Action? OnRun;
         public SoftwareInstallCommand? LastCommand;
@@ -602,6 +697,7 @@ internal static class InstallerTests
             Registration = new(Root, Root, scope, Version, Path.GetFileName(Exe));
             Registrations.Add(Registration);
             SetVersion(Version);
+            if (app == SoftwareApp.Vacs) VacsLegacyDestination = Root;
             if (app == SoftwareApp.Vatis)
             {
                 WriteBinary(Path.Combine(Root, "Update.exe"), "Velopack", "0.0.1251");
@@ -612,6 +708,11 @@ internal static class InstallerTests
             Installer = new SoftwareInstaller(new SoftwareInstallerEnvironment
             {
                 LocalAppData = TestRoot, ProgramFiles = TestRoot, Vacs3MachineDestination = () => Vacs3Destination,
+                ReadVacsDestinations = scope =>
+                {
+                    LastVacsDestinationScope = scope; VacsDestinationReads++; OnReadVacsDestinations?.Invoke();
+                    return new(VacsLegacyDestination, Vacs3Destination);
+                },
                 ReadRegistrations = _ => Registrations,
                 ReadBinary = path => { var fields = File.ReadAllText(path).Split('|'); return new(fields[1], fields[0]); },
                 VerifyPublisher = (path, publisher) => { TrustChecks++; Assert(publisher == "Justin Shannon"); if (RejectTrust || RejectHelperTrust && Path.GetFileName(path) is "Update.exe" or "Squirrel.exe") throw new InvalidDataException("Synthetic bad signature"); },
@@ -637,6 +738,8 @@ internal static class InstallerTests
             Exe = next;
             Registration = Registration with { MainBinaryName = name };
             SetVersion(version);
+            if (version == "3.0.0") Vacs3Destination = Root;
+            else { VacsLegacyDestination = Root; Vacs3Destination = null; }
         }
         public SoftwareRelease CreatePackage(string? variant = null)
         {

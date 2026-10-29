@@ -2,7 +2,7 @@ using System.Windows;
 
 namespace VatscaUpdateChecker;
 
-public partial class GngUpdateWindow
+public partial class GngUpdateControl
 {
     private void SetBrowserInteractionBlocked(bool blocked)
     {

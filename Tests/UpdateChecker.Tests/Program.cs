@@ -13,6 +13,11 @@ Run("GNG malformed page becomes Error instead of leaving Checking", () => GngRem
 Run("GNG asynchronous transport failure becomes Error on its owner thread", () => GngRemote("fault"));
 foreach (var mode in new[] { "unconfigured", "missing", "empty", "filename", "pending" })
     Run("GNG " + mode + " location does not request a package page", () => GngLocal(mode));
+foreach (var latest in new[] { "—", "Parse error", "Not checked" })
+    Run("GNG local refresh with " + latest + " latest metadata reports installed, not up to date", () => GngUnknownLatest(latest));
+Run("GNG local refresh immediately reflects restore and clears the testing flag", GngRefreshAfterRestore);
+Run("GNG local refresh respects pending recovery before trusting sector files or receipts", GngRefreshPending);
+Run("GNG public check reads testing provenance without changing its version comparison", GngRemoteTesting);
 Run("GitHub newer release keeps every notification on its owner thread", () => GitHubRemote("newer"));
 Run("GitHub current release finishes on its owner thread", () => GitHubRemote("current"));
 Run("GitHub absent release becomes Error instead of leaving Checking", () => GitHubRemote("missing"));
@@ -104,6 +109,72 @@ async Task GngLocal(string mode)
     Require(guards == (mode is "unconfigured" or "missing" ? 0 : 1), "The pending-update guard was skipped or run too early.");
     Require(row.Status == (mode == "unconfigured" ? CheckStatus.NotConfigured : CheckStatus.Error), "Local validation left the row Checking.");
     if (mode == "pending") Require(row.StatusMessage == "Synthetic pending update requires recovery.", "The recovery guard explanation was lost.");
+}
+
+Task GngUnknownLatest(string latest)
+{
+    using var files = new SyntheticFiles();
+    files.Sector();
+    var row = new CheckResult { AppName = "EuroScope (GNG Pack)", HasFontsCheck = true,
+        Status = CheckStatus.UpToDate, LatestVersion = latest, GngIsTesting = true };
+    using var observer = new OwnerObserver(row);
+    UpdateChecker.RefreshGngLocal(row, files.Root, _ => { }, _ => false);
+    observer.AssertNotified();
+    Require(row.Status == CheckStatus.Installed, "Local presence was incorrectly presented as up to date.");
+    Require(row.StatusMessage == "Installed; check for updates.", "The unknown-latest action was lost.");
+    Require(row.LatestVersion == latest && row.InstalledVersion == "2605/01  rev.1", "Local refresh replaced public metadata or failed to inspect local files.");
+    Require(!row.GngIsTesting, "A previous testing marker survived a normal installation.");
+    return Task.CompletedTask;
+}
+
+Task GngRefreshAfterRestore()
+{
+    using var files = new SyntheticFiles();
+    files.Sector();
+    string newer = Path.Combine(files.Root, "ESAA-Sweden_20260601000000-260601-0002.sct");
+    File.WriteAllText(newer, "Synthetic newer generation; never loaded.");
+    var row = new CheckResult { AppName = "EuroScope (GNG Pack)", HasFontsCheck = true,
+        Status = CheckStatus.Checking, LatestVersion = "2606/01 rev.2" };
+    using var observer = new OwnerObserver(row);
+    var order = new List<string>();
+    UpdateChecker.RefreshGngLocal(row, files.Root, root =>
+    {
+        Require(root == files.Root, "Unexpected data root."); order.Add("guard");
+    }, root => { Require(root == files.Root, "Unexpected receipt root."); order.Add("receipt"); return true; });
+    Require(order.SequenceEqual(new[] { "guard", "receipt" }), "Receipt inspection preceded the recovery guard.");
+    Require(row.Status == CheckStatus.UpToDate && row.GngIsTesting && row.InstalledVersion == "2606/01  rev.2", "The current local generation was not reflected synchronously.");
+    File.Delete(newer);
+    UpdateChecker.RefreshGngLocal(row, files.Root, _ => { }, _ => false);
+    Require(row.Status == CheckStatus.UpdateAvailable && !row.GngIsTesting, "A restore retained the previous installed-version/status marker.");
+    Require(row.InstalledVersion == "2605/01  rev.1" && row.LatestVersion == "2606/01 rev.2", "Restore did not reread local files while retaining the known latest generation.");
+    observer.AssertNotified();
+    return Task.CompletedTask;
+}
+
+Task GngRefreshPending()
+{
+    using var files = new SyntheticFiles();
+    files.Sector();
+    var row = new CheckResult { AppName = "EuroScope (GNG Pack)", HasFontsCheck = true,
+        Status = CheckStatus.UpToDate, LatestVersion = "2605/01 rev.1", GngIsTesting = true };
+    bool receiptRead = false;
+    UpdateChecker.RefreshGngLocal(row, files.Root,
+        _ => throw new InvalidOperationException("Synthetic pending recovery."), _ => { receiptRead = true; return true; });
+    Require(!receiptRead && !row.GngIsTesting && row.ObservedLocalVersion is null, "Pending recovery was treated as an installed package.");
+    Require(row.Status == CheckStatus.Error && row.StatusMessage == "Synthetic pending recovery.", "Recovery no longer blocks local refresh.");
+    Require(row.LatestVersion == "2605/01 rev.1", "Local recovery failure erased unrelated public metadata.");
+    return Task.CompletedTask;
+}
+
+async Task GngRemoteTesting()
+{
+    using var files = new SyntheticFiles();
+    files.Sector();
+    var row = new CheckResult { AppName = "EuroScope (GNG Pack)", HasFontsCheck = true, Status = CheckStatus.Checking };
+    await UpdateChecker.CheckGng(row, files.Root, () => Task.FromResult(PackagePage("2610 / 01", 3)), _ => { }, _ => true);
+    Require(row.GngIsTesting && row.Status == CheckStatus.UpdateAvailable, "Testing provenance changed the actual public comparison.");
+    await UpdateChecker.CheckGng(row, "", () => throw new InvalidOperationException("No request is expected."), _ => { }, _ => true);
+    Require(!row.GngIsTesting && row.Status == CheckStatus.NotConfigured, "An unset root retained old testing provenance.");
 }
 
 async Task GitHubRemote(string mode)

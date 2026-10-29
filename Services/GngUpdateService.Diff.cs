@@ -42,7 +42,7 @@ public static partial class GngUpdateService
         using var packageInput = OpenPreviewFile(zipPath);
         if (packageInput.Length > MaxTotal || Hash(packageInput) != plan.PackageHash)
             throw new InvalidOperationException("The package changed after review. Create a new installation review.");
-        var package = ReadPackage(zipPath);
+        var package = ReadPackage(zipPath, plan.IsTestingPackage);
         if (package.Hash != plan.PackageHash || !package.Entries.TryGetValue(relative, out var entry))
             throw new InvalidOperationException("The selected file no longer matches the reviewed package.");
         packageInput.Position = 0;

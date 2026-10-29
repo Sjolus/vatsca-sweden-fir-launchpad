@@ -17,7 +17,7 @@ namespace VatscaUpdateChecker.Services;
 public static partial class GngUpdateService
 {
     private static readonly StringComparer Paths = StringComparer.OrdinalIgnoreCase;
-    private static readonly Regex PackageName = new(@"^ESAA-(Full-Package|Update-Only)_(\d{14})-(\d{6})-(\d{4})(?: \(\d+\))?\.zip$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private static readonly Regex PackageName = new(@"^ESAA-(Full-Package|Update-Only|Testing)_(\d{14})-(\d{6})-(\d{4})(?: \(\d+\))?\.zip$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     private static readonly Regex SectorName = new(@"^ESAA-Sweden_(\d{14})-(\d{6})-(\d{4})$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     private static readonly Regex PluginKey = new(@"^Plugin(\d+)(.*)$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     private static readonly Encoding PrfEncoding = CreateEncoding();
@@ -41,22 +41,24 @@ public static partial class GngUpdateService
 
     // Validate the original archive before requesting its matching reference.
     // Destination/profile compatibility is reviewed only after both downloads finish.
-    public static string ValidatePackage(string zipPath) => FormatVersion(ReadPackage(CanonicalPath(zipPath)).Generation);
+    public static string ValidatePackage(string zipPath, bool allowTesting = false) => FormatVersion(ReadPackage(CanonicalPath(zipPath), allowTesting).Generation);
 
-    public static GngUpdatePlan BuildPlan(string zipPath, string dataFolder, IEnumerable<string>? protectedPaths = null, string? fullPackagePath = null, bool preserveListLayout = true, SaamanProfilePolicy? saamanPolicy = null) =>
-        BuildPlan(zipPath, dataFolder, protectedPaths, ProductionContext(), fullPackagePath, preserveListLayout, saamanPolicy);
+    public static GngUpdatePlan BuildPlan(string zipPath, string dataFolder, IEnumerable<string>? protectedPaths = null, string? fullPackagePath = null, bool preserveListLayout = true, SaamanProfilePolicy? saamanPolicy = null, bool allowTesting = false) =>
+        BuildPlan(zipPath, dataFolder, protectedPaths, ProductionContext(), fullPackagePath, preserveListLayout, saamanPolicy, allowTesting);
 
-    internal static GngUpdatePlan BuildPlan(string zipPath, string dataFolder, IEnumerable<string>? protectedPaths, OperationContext context, string? fullPackagePath = null, bool preserveListLayout = true, SaamanProfilePolicy? saamanPolicy = null)
+    internal static GngUpdatePlan BuildPlan(string zipPath, string dataFolder, IEnumerable<string>? protectedPaths, OperationContext context, string? fullPackagePath = null, bool preserveListLayout = true, SaamanProfilePolicy? saamanPolicy = null, bool allowTesting = false)
     {
         var root = ExistingDirectory(dataFolder);
         var protections = ValidateRoots(root, protectedPaths, context);
         var pending = GetPendingUpdate(root, context);
         if (pending is not null) throw new InvalidOperationException("An unfinished GNG update requires recovery first: " + pending);
         zipPath = CanonicalPath(zipPath);
-        var package = ReadPackage(zipPath);
+        var package = ReadPackage(zipPath, allowTesting);
+        bool testing = IsTestingPackage(zipPath);
         Package? reference = null;
         if (fullPackagePath is not null)
         {
+            if (testing) throw new InvalidOperationException("Testing packages cannot use a stable Full Package as a cleanup reference.");
             fullPackagePath = CanonicalPath(fullPackagePath);
             if (!IsCompletePackage(fullPackagePath)) throw new InvalidOperationException("The reference ZIP must be an original Full Package.");
             reference = ReadPackage(fullPackagePath);
@@ -81,6 +83,7 @@ public static partial class GngUpdateService
                     throw new InvalidOperationException("This GNG package includes the configured SAAMAN.dll. Review the SAAMAN installation location before updating GNG; the selected DLL will not be overwritten.");
             }
         }
+        var reusedPlugins = new List<GngUpdateDependency>();
         foreach (var plugin in package.ProfilePlugins.Where(p => !package.Entries.ContainsKey(p)))
         {
             var existing = Contained(root, plugin);
@@ -88,7 +91,9 @@ public static partial class GngUpdateService
             if (!File.Exists(existing)) throw new InvalidOperationException("The Update-Only package needs an installed plugin that is missing: " + plugin + ". Use a Full Package instead.");
             if (new FileInfo(existing).Length > MaxFile) throw new InvalidOperationException("An installed plugin needed by the Update-Only package exceeds the supported size.");
             var snapshot = Snapshot(existing);
-            dependencies.Add(new(existing, snapshot.Hash, snapshot.Length));
+            var dependency = new GngUpdateDependency(existing, snapshot.Hash, snapshot.Length);
+            dependencies.Add(dependency);
+            reusedPlugins.Add(dependency);
         }
         var current = ReadInstallation(root, context);
         var installedGenerations = Directory.EnumerateFiles(root, "ESAA-Sweden_*.sct")
@@ -109,32 +114,44 @@ public static partial class GngUpdateService
             "When the package ships RDF, profiles use its RDF DLL and remove old AFV/RDF entries, including external copies. External files remain untouched; custom RDF display permissions are kept.",
             "Every replaced file is backed up before installation. Close EuroScope; a failed installation will attempt rollback."
         };
-        warnings.Add(preserveListLayout
+        var classifiedWarnings = new List<string>(warnings);
+        void AddKnownWarning(string warning) { warnings.Add(warning); classifiedWarnings.Add(warning); }
+        var unchangedProfiles = new List<string>();
+        var preservedCustomPlugins = new HashSet<string>(Paths);
+        var customizedReplacements = new HashSet<string>(Paths);
+        var unmatchedReplacements = new HashSet<string>(Paths);
+        var packagePluginPaths = package.ProfilePlugins.Select(plugin => PluginIdentity(root, plugin)).ToHashSet(Paths);
+        int rdfOverrideCount = 0;
+        if (testing) AddKnownWarning("This is a navteam testing package, not a stable release. Install it only when you intend to test it. Its archive will not be used for automatic downloads or cleanup comparisons.");
+        AddKnownWarning(preserveListLayout
             ? "List positions and whether each list is shown are kept where their settings can be matched safely. Columns, items, sorting and other settings come from the new package."
             : "List layout preservation is off. Installed list settings will use the new package's positions and visibility defaults.");
         if (previousPackage is null)
-            warnings.Add("No verified previous package is available. Unrecognized existing plugins are kept; review their compatibility after updating.");
+            AddKnownWarning("No verified previous package is available. Unrecognized existing plugins are kept; review their compatibility after updating.");
         if (dependencies.Count > 0)
-            warnings.Add("This Update-Only package reuses " + dependencies.Count + " installed plugin DLL(s) it does not contain. A Full Package is needed for a complete installation or cleanup comparison.");
+            AddKnownWarning("This Update-Only package reuses " + dependencies.Count + " installed plugin DLL(s) it does not contain. A Full Package is needed for a complete installation or cleanup comparison.");
         if (reference is not null && !IsCompletePackage(zipPath))
-            warnings.Add("The matching Full Package will be cached intact as a reference; only the Update-Only ZIP is installed. Cleanup still verifies that the Full reference's replacement sectors are installed; matching AIRAC/revision alone does not prove that.");
+            AddKnownWarning("The matching Full Package will be cached intact as a reference; only the Update-Only ZIP is installed. Cleanup still verifies that the Full reference's replacement sectors are installed; matching AIRAC/revision alone does not prove that.");
         if (installedGenerations.Any(g => Paths.Equals(g, package.Generation)))
-            warnings.Add("This generation is already present. This is a repair/reinstall preview; missing package files will be restored and package defaults refreshed.");
+            AddKnownWarning("This generation is already present. This is a repair/reinstall preview; missing package files will be restored and package defaults refreshed.");
         if (saamanPolicy is not null)
         {
             var target = Path.GetRelativePath(root, saamanPolicy.ProfilePath);
             if (package.Entries.ContainsKey(target))
-                warnings.Add(saamanPolicy.Enabled
+                AddKnownWarning(saamanPolicy.Enabled
                     ? "SAAMAN remains the first plugin in " + target + "; MAESTRO profile entries are removed. Plugin binaries are not deleted."
                     : "SAAMAN entries are removed from " + target + "; any MAESTRO entries replaced by Launchpad are restored. Other plugin changes are kept.");
             else if (!File.Exists(saamanPolicy.ProfilePath))
                 throw new InvalidOperationException("The selected SAAMAN APP/ACC profile is missing from both this folder and the GNG package. Restore that profile, or turn off Use in APP / ACC for SAAMAN under Setup → Applications.");
             else
-                warnings.Add("The selected SAAMAN APP/ACC profile is not supplied by this package. It remains unchanged: " + target);
+                AddKnownWarning("The selected SAAMAN APP/ACC profile is not supplied by this package. It remains unchanged: " + target);
         }
         foreach (var localProfile in Directory.EnumerateFiles(root, "ES*.prf"))
             if (!package.Entries.ContainsKey(Path.GetFileName(localProfile)))
-                warnings.Add("Existing profile is not supplied by this package and will not be upgraded: " + Path.GetFileName(localProfile) + ". Select a profile supplied by the new package afterward; review old profiles separately in cleanup.");
+            {
+                unchangedProfiles.Add(localProfile);
+                AddKnownWarning("Existing profile is not supplied by this package and will not be upgraded: " + Path.GetFileName(localProfile) + ". Select a profile supplied by the new package afterward; review old profiles separately in cleanup.");
+            }
         var files = new List<GngUpdateFile>();
         using var input = new FileStream(zipPath, FileMode.Open, FileAccess.Read, FileShare.Read);
         if (Hash(input) != package.Hash) throw new IOException("The downloaded package changed while building its preview.");
@@ -199,25 +216,42 @@ public static partial class GngUpdateService
                     }
                     merged = PrfEncoding.GetBytes(SaamanProfileService.TransformMerged(localText, PrfEncoding.GetString(merged), saamanPolicy));
                 }
+                foreach (var plugin in ParsePlugins(Lines(PrfEncoding.GetString(merged))))
+                {
+                    var identity = PluginIdentity(root, plugin.Path);
+                    if (!packagePluginPaths.Contains(identity) &&
+                        !(saamanPolicy?.Enabled == true && Paths.Equals(identity, saamanPolicy.DllPath)))
+                        preservedCustomPlugins.Add(identity);
+                }
                 afterHash = Hash(merged);
                 afterLength = merged.Length;
                 action = before is null ? "Add profile" : "Merge profile";
                 detail = before is null ? "New package profile. Package sign-in fields are omitted; review your controller profile before use." : "Refresh package sector/settings references and shipped plugins; keep all LastSession fields, personal keys and custom plugin/display entries.";
-                if (before is null) warnings.Add("New profile needs controller settings review: " + entry.Path + ". Sign-in details and custom plugins are not copied from other profiles.");
+                if (before is null) AddKnownWarning("New profile needs controller settings review: " + entry.Path + ". Sign-in details and custom plugins are not copied from other profiles.");
             }
             if (action != "Keep personal file" && before?.Hash == afterHash) { action = "Unchanged"; detail = "Already matches the planned result."; }
-            else if (before is not null && previous is not null && previous.TryGetValue(entry.Path, out var baseline) && baseline.AfterHash != before.Value.Hash && action == "Replace package default")
+            else if (before is not null && previous is not null && previous.TryGetValue(entry.Path, out var baseline) && baseline.AfterHash != before.Value.Hash &&
+                action is "Replace package default" or "Promote plugin")
             {
-                action = "Replace customized default";
-                detail = "Changed since the previous managed install. Installing refreshes this package default; your current bytes will be backed up.";
-                warnings.Add("Customized package default will be replaced: " + entry.Path);
+                if (action == "Replace package default") action = "Replace customized default";
+                detail += " Changed since the previous managed install; your current bytes will be backed up.";
+                customizedReplacements.Add(entry.Path);
+                AddKnownWarning("Customized package default will be replaced: " + entry.Path);
+            }
+            if (before is not null && previous is not null && !previous.ContainsKey(entry.Path) && action is "Replace package default" or "Promote plugin")
+            {
+                unmatchedReplacements.Add(entry.Path);
+                AddKnownWarning("Existing file is outside the previous package inventory and will be replaced: " + entry.Path);
             }
             files.Add(new(entry.Path, action, detail) { BeforeHash = before?.Hash, BeforeLength = before?.Length ?? 0, AfterHash = afterHash, AfterLength = afterLength, MergedBytes = merged,
                 Dependencies = saamanPolicy is not null && Paths.Equals(path, saamanPolicy.ProfilePath) ? saamanDependencies.ToArray() : [] });
         }
         if (preserveListLayout) ApplyListLayouts(root, package, archive, files, protections, dependencies);
         foreach (var unchanged in files.Where(f => !f.WritesFile))
+        {
             warnings.Remove("Customized package default will be replaced: " + unchanged.RelativePath);
+            warnings.Remove("Existing file is outside the previous package inventory and will be replaced: " + unchanged.RelativePath);
+        }
         if (package.ProfilePlugins.Any(IsRdfPlugin))
             foreach (var settings in new[] { "TopSkySettingsLocal.txt", @"Plugins\TopSkySettingsLocal.txt", @"ESAA\Plugins\TopSkySettingsLocal.txt" }.Select(p => Contained(root, p)))
             {
@@ -225,10 +259,28 @@ public static partial class GngUpdateService
                 if (!File.Exists(settings)) continue;
                 if (new FileInfo(settings).Length > 4 * 1024 * 1024) throw new IOException("A local TopSky settings file is too large to check safely.");
                 if (File.ReadLines(settings, PrfEncoding).Any(line => Regex.IsMatch(line, @"^\s*RDF_Mode\s*=", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)))
-                    warnings.Add("A preserved local TopSky file overrides RDF_Mode: " + Path.GetRelativePath(root, settings) + ". Review RDF/TopSky compatibility after updating; Launchpad does not change this preference.");
+                {
+                    rdfOverrideCount++;
+                    AddKnownWarning("A preserved local TopSky file overrides RDF_Mode: " + Path.GetRelativePath(root, settings) + ". Review RDF/TopSky compatibility after updating; Launchpad does not change this preference.");
+                }
             }
         return new(Path.GetFileName(zipPath), FormatVersion(package.Generation), root, zipPath, files, warnings)
-            { PackageHash = package.Hash, Generation = package.Generation, ProtectedPaths = protections, Dependencies = dependencies, PreserveListLayout = preserveListLayout, SaamanPolicy = saamanPolicy,
+            { PackageHash = package.Hash, Generation = package.Generation, IsTestingPackage = testing, ProtectedPaths = protections, Dependencies = dependencies, PreserveListLayout = preserveListLayout, SaamanPolicy = saamanPolicy,
+                ReviewContext = new GngReviewContext
+                {
+                    HasExistingFiles = installedGenerations.Count > 0 || files.Any(file => file.BeforeHash is not null),
+                    HasVerifiedBaseline = previousPackage is not null,
+                    ReinstallsGeneration = installedGenerations.Any(g => Paths.Equals(g, package.Generation)),
+                    CustomizedReplacementCount = files.Count(file => file.WritesFile && customizedReplacements.Contains(file.RelativePath)),
+                    UnmatchedReplacementCount = files.Count(file => file.WritesFile && unmatchedReplacements.Contains(file.RelativePath)),
+                    PreservedCustomPluginCount = preservedCustomPlugins.Count,
+                    RdfOverrideCount = rdfOverrideCount,
+                    UnverifiedDependencyCount = reusedPlugins.Count(dependency => previous is null ||
+                        !previous.TryGetValue(Path.GetRelativePath(root, dependency.Path), out var baseline) ||
+                        baseline.AfterHash != dependency.Hash || baseline.AfterLength != dependency.Length),
+                    UnchangedProfiles = unchangedProfiles.ToArray(),
+                    ClassifiedWarnings = classifiedWarnings.ToArray()
+                },
                 ReferencePackagePath = fullPackagePath, ReferencePackageHash = reference?.Hash, ReferencePackageName = fullPackagePath is null ? null : Path.GetFileName(fullPackagePath) };
     }
 
@@ -246,7 +298,7 @@ public static partial class GngUpdateService
         using var parents = new DirectoryGuard(backupBase, true);
         using var updateLock = new FileStream(Path.Combine(backupBase, "update.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
         progress?.Report("Rechecking the package and the files shown in the preview…");
-        var fresh = BuildPlan(plan.PackagePath, root, plan.ProtectedPaths, context, plan.ReferencePackagePath, plan.PreserveListLayout, plan.SaamanPolicy);
+        var fresh = BuildPlan(plan.PackagePath, root, plan.ProtectedPaths, context, plan.ReferencePackagePath, plan.PreserveListLayout, plan.SaamanPolicy, plan.IsTestingPackage);
         if (Fingerprint(fresh) != Fingerprint(plan)) throw new InvalidOperationException("The package or local files changed after preview. Review a fresh preview before installing.");
         var writePaths = fresh.Files.Where(f => f.WritesFile).Select(f => CanonicalPath(Contained(root, f.RelativePath))).ToHashSet(Paths);
         // Inputs which are also replacements are checked by their reviewed before hashes during backup/move.
@@ -275,7 +327,7 @@ public static partial class GngUpdateService
         }
         using (var archive = ZipFile.OpenRead(cache))
         {
-            var package = ReadPackage(cache);
+            var package = ReadPackage(cache, fresh.IsTestingPackage);
             foreach (var file in writes)
             {
                 context.RequireClosed();
@@ -398,6 +450,29 @@ public static partial class GngUpdateService
         return VerifiedCachedPackage(installation) is not null ? installation!.PackagePath : null;
     }
 
+    /// <summary>Identifies the last managed testing package only while its sector pair is still current and unchanged.</summary>
+    public static bool IsTestingInstallation(string dataFolder) => IsTestingInstallation(dataFolder, ProductionContext());
+    internal static bool IsTestingInstallation(string dataFolder, OperationContext context)
+    {
+        if (string.IsNullOrWhiteSpace(dataFolder)) return false;
+        var root = CanonicalPath(dataFolder);
+        var installation = ReadInstallation(root, context);
+        if (installation is null || !IsTestingPackage(installation.PackagePath) || !Directory.Exists(root)) return false;
+        var newest = Directory.EnumerateFiles(root, "ESAA-Sweden_*.sct")
+            .OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase).LastOrDefault();
+        if (newest is null || !Paths.Equals(Path.GetFileNameWithoutExtension(newest), installation.Generation)) return false;
+        foreach (var extension in new[] { ".sct", ".ese" })
+        {
+            var relative = installation.Generation + extension;
+            var saved = installation.Files.SingleOrDefault(file => Paths.Equals(file.RelativePath, relative));
+            var path = Contained(root, relative);
+            if (saved is null || !File.Exists(path)) return false;
+            var actual = Snapshot(path);
+            if (actual.Hash != saved.AfterHash || actual.Length != saved.AfterLength) return false;
+        }
+        return true;
+    }
+
     public static string GetBackupRoot(string dataFolder) => BackupBase(CanonicalPath(dataFolder), ProductionContext());
 
     private static Package? VerifiedCachedPackage(Installation? installation)
@@ -407,7 +482,7 @@ public static partial class GngUpdateService
         {
             EnsureNoReparse(installation.PackagePath);
             if (!File.Exists(installation.PackagePath)) return null;
-            var package = ReadPackage(installation.PackagePath);
+            var package = ReadPackage(installation.PackagePath, allowTesting: true);
             return package.Hash == installation.PackageHash && Paths.Equals(package.Generation, installation.Generation) ? package : null;
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException or UnauthorizedAccessException or ArgumentException) { return null; }
@@ -432,6 +507,7 @@ public static partial class GngUpdateService
         var a = SectorName.Match(first); var b = SectorName.Match(second);
         return a.Success && b.Success && a.Groups[2].Value == b.Groups[2].Value && a.Groups[3].Value == b.Groups[3].Value;
     }
+    private static bool IsTestingPackage(string path) => PackageName.Match(Path.GetFileName(path)).Groups[1].Value.Equals("Testing", StringComparison.OrdinalIgnoreCase);
     private static bool IsCompletePackage(string path) => PackageName.Match(Path.GetFileName(path)).Groups[1].Value.Equals("Full-Package", StringComparison.OrdinalIgnoreCase);
 
     private static List<string> Recover(string backup, Journal journal, IProgress<string>? progress, IReadOnlyList<string> protections, OperationContext context)
@@ -480,11 +556,15 @@ public static partial class GngUpdateService
         return skipped;
     }
 
-    private static Package ReadPackage(string path)
+    private static Package ReadPackage(string path, bool allowTesting = false)
     {
         var name = PackageName.Match(Path.GetFileName(path));
         if (!name.Success || !DateTime.TryParseExact(name.Groups[2].Value, "yyyyMMddHHmmss", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
-            throw new InvalidOperationException("Choose an original ESAA Full-Package or Update-Only ZIP, retaining its AeroNav filename.");
+            throw new InvalidOperationException("Choose an original ESAA Full-Package, Update-Only or Testing ZIP, retaining its AeroNav filename.");
+        bool testing = name.Groups[1].Value.Equals("Testing", StringComparison.OrdinalIgnoreCase);
+        if (testing && !allowTesting)
+            throw new InvalidOperationException("Testing packages must be selected explicitly with Import ZIP. Automatic downloads use stable packages only.");
+        bool requiresCompleteContents = IsCompletePackage(path) || testing;
         var generation = "ESAA-Sweden_" + name.Groups[2].Value + "-" + name.Groups[3].Value + "-" + name.Groups[4].Value;
         using var input = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
         if (input.Length > MaxTotal) throw new InvalidOperationException("The compressed package exceeds supported size limits.");
@@ -533,7 +613,7 @@ public static partial class GngUpdateService
                 if (files.ContainsKey(parent)) throw new InvalidOperationException("The ZIP contains conflicting file and directory paths.");
         if (!files.ContainsKey(generation + ".sct") || !files.ContainsKey(generation + ".ese") ||
             !files.Keys.Any(p => !p.Contains('\\') && Path.GetExtension(p).Equals(".prf", StringComparison.OrdinalIgnoreCase)) ||
-            (IsCompletePackage(path) && !files.Keys.Any(p => p.StartsWith("ESAA\\Plugins\\", StringComparison.OrdinalIgnoreCase) && Path.GetExtension(p).Equals(".dll", StringComparison.OrdinalIgnoreCase))))
+            (requiresCompleteContents && !files.Keys.Any(p => p.StartsWith("ESAA\\Plugins\\", StringComparison.OrdinalIgnoreCase) && Path.GetExtension(p).Equals(".dll", StringComparison.OrdinalIgnoreCase))))
             throw new InvalidOperationException("The ZIP must contain matching SCT/ESE files, root profiles and ESAA plugin DLLs for its named generation.");
         if (files.Keys.Any(p => !p.Contains('\\') && SectorName.IsMatch(Path.GetFileNameWithoutExtension(p)) && !Paths.Equals(Path.GetFileNameWithoutExtension(p), generation)))
             throw new InvalidOperationException("The ZIP contains a sector generation that differs from its filename.");
@@ -575,7 +655,7 @@ public static partial class GngUpdateService
             foreach (var plugin in plugins)
             {
                 var relative = NormalizePackagePluginPath(plugin.Path);
-                if (IsCompletePackage(path) && !files.ContainsKey(relative)) throw new InvalidOperationException("A packaged profile loads a DLL missing from the Full Package: " + profile.Path + " → " + relative);
+                if (requiresCompleteContents && !files.ContainsKey(relative)) throw new InvalidOperationException("A packaged profile loads a DLL missing from the " + (testing ? "Testing package" : "Full Package") + ": " + profile.Path + " → " + relative);
                 profilePlugins.Add(relative);
             }
         }
@@ -728,9 +808,14 @@ public static partial class GngUpdateService
             throw new InvalidOperationException("Choose the current or a newer GNG package. Downgrades are not installed.");
     }
 
-    private static string Fingerprint(GngUpdatePlan plan) => Hash(Encoding.UTF8.GetBytes(plan.PackageHash + "\n" + plan.DataFolder + "\n" + plan.ReferencePackagePath + "\n" + plan.ReferencePackageHash + "\n" + plan.PreserveListLayout + "\n" + plan.SaamanPolicy + "\n" + plan.SaamanPolicy?.RestoreStateFingerprint + "\n" + string.Join("\n", plan.ProtectedPaths) + "\n" +
+    private static string Fingerprint(GngUpdatePlan plan) => Hash(Encoding.UTF8.GetBytes(plan.PackageHash + "\n" + plan.IsTestingPackage + "\n" + ReviewContextFingerprint(plan.ReviewContext) + "\n" + plan.DataFolder + "\n" + plan.ReferencePackagePath + "\n" + plan.ReferencePackageHash + "\n" + plan.PreserveListLayout + "\n" + plan.SaamanPolicy + "\n" + plan.SaamanPolicy?.RestoreStateFingerprint + "\n" + string.Join("\n", plan.ProtectedPaths) + "\n" +
         string.Join("\n", plan.Dependencies.Select(d => d.Path + "|" + d.Hash + "|" + d.Length)) + "\n" +
         string.Join("\n", plan.Files.Select(f => f.RelativePath + "|" + f.Action + "|" + f.BeforeHash + "|" + f.BeforeLength + "|" + f.AfterHash + "|" + f.AfterLength))));
+    private static string ReviewContextFingerprint(GngReviewContext? context) => context is null ? "" :
+        string.Join("|", context.HasExistingFiles, context.HasVerifiedBaseline, context.ReinstallsGeneration,
+            context.CustomizedReplacementCount, context.UnmatchedReplacementCount, context.PreservedCustomPluginCount, context.RdfOverrideCount, context.UnverifiedDependencyCount) + "\n" +
+        string.Join("\n", context.UnchangedProfiles.OrderBy(path => path, Paths));
+
     private static string BackupBase(string root, OperationContext context)
     {
         var storage = CanonicalPath(context.StorageRoot);
@@ -754,6 +839,8 @@ public static partial class GngUpdateService
             !MatchesPackageGeneration(Path.GetFileName(package), value.Generation))
             throw new InvalidOperationException("The saved installation metadata has invalid paths.");
         ValidateFiles(value.Files);
+        if (IsTestingPackage(package) && (value.CompletePackagePath is not null || value.CompletePackageHash is not null))
+            throw new InvalidOperationException("A Testing installation cannot carry a stable Full Package reference.");
         string? completePath = null;
         if (value.CompletePackagePath is not null || value.CompletePackageHash is not null)
         {

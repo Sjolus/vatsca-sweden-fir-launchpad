@@ -112,63 +112,18 @@ public static class UpdateChecker
     // -------------------------------------------------------------------------
     public static Task CheckGng(CheckResult result, string euroscopeDataPath) =>
         CheckGng(result, euroscopeDataPath,
-            () => Metadata.GetAsync(new("https://files.aero-nav.com/ESAA"), VendorService.AeroNav), GngUpdateService.RequireNoPendingUpdate);
+            () => Metadata.GetAsync(new("https://files.aero-nav.com/ESAA"), VendorService.AeroNav), GngUpdateService.RequireNoPendingUpdate,
+            GngUpdateService.IsTestingInstallation);
 
     internal static async Task CheckGng(CheckResult result, string euroscopeDataPath,
-        Func<Task<string>> fetchPackagePage, Action<string> requireNoPendingUpdate)
+        Func<Task<string>> fetchPackagePage, Action<string> requireNoPendingUpdate, Func<string, bool>? isTestingInstallation = null)
     {
-        result.ObservedLocalVersion = null;
-        result.InstalledVersion = "—";
+        ResetGngLocal(result);
         result.LatestVersion = "—";
-        result.StatusMessage = string.Empty;
-
-        if (string.IsNullOrWhiteSpace(euroscopeDataPath))
-        {
-            result.Status = CheckStatus.NotConfigured;
-            return;
-        }
-
         try
         {
-            if (!Directory.Exists(euroscopeDataPath))
-            {
-                result.InstalledVersion = "Folder not found";
-                result.Status = CheckStatus.Error;
-                return;
-            }
-
-            // A new sector filename alone cannot establish a completed installation.
-            requireNoPendingUpdate(euroscopeDataPath);
-
-            // Find the most recent ESAA-Sweden_*.sct file (filename contains timestamp so alpha sort = time sort)
-            var sctFiles = Directory.GetFiles(euroscopeDataPath, "ESAA-Sweden_*.sct");
-            if (sctFiles.Length == 0)
-            {
-                result.InstalledVersion = "No SCT file found";
-                result.Status = CheckStatus.Error;
-                return;
-            }
-
-            Array.Sort(sctFiles);
-            result.ObservedLocalVersion = "";
-            var sctName = Path.GetFileNameWithoutExtension(sctFiles[^1]);
-
-            // Filename: ESAA-Sweden_20260320164747-260301-0001.sct
-            //   Group 1 = "260301"  (AIRAC cycle + package, e.g. 2603/01)
-            //   Group 2 = "0001"    (revision within package)
-            var match = Regex.Match(sctName, @"-(\d{6})-(\d{4})$");
-            if (!match.Success)
-            {
-                result.InstalledVersion = "Cannot parse filename";
-                result.Status = CheckStatus.Error;
-                return;
-            }
-
-            var localAirac = match.Groups[1].Value;          // "260301"
-            int localRev   = int.Parse(match.Groups[2].Value); // 1
-
-            result.InstalledVersion = FormatGngVersion(localAirac, localRev);
-            result.ObservedLocalVersion = result.InstalledVersion;
+            if (!ReadGngLocal(result, euroscopeDataPath, requireNoPendingUpdate, isTestingInstallation,
+                out var localAirac, out var localRev)) return;
 
             // Scrape aero-nav.com — table is visible without login
             // This result is UI-bound; its property observers must run on the caller's context.
@@ -196,13 +151,92 @@ public static class UpdateChecker
 
             Logger.Log("CHECK", $"GNG Pack: installed={result.InstalledVersion} latest={result.LatestVersion} → {result.Status}");
         }
-        catch (Exception ex)
+        catch (Exception ex) { GngFailure(result, ex); }
+    }
+
+    // Installation/restore completion must not wait for an external version check.
+    // Keep the last known public version; without one, local presence is not proof of being up to date.
+    public static void RefreshGngLocal(CheckResult result, string euroscopeDataPath) =>
+        RefreshGngLocal(result, euroscopeDataPath, GngUpdateService.RequireNoPendingUpdate, GngUpdateService.IsTestingInstallation);
+
+    internal static void RefreshGngLocal(CheckResult result, string euroscopeDataPath,
+        Action<string> requireNoPendingUpdate, Func<string, bool>? isTestingInstallation = null)
+    {
+        ResetGngLocal(result);
+        try
         {
-            result.StatusMessage = ex.Message;
-            result.Status = CheckStatus.Error;
-            Logger.Log("CHECK", $"GNG Pack: error — {ex.Message}");
-            ObserveFailure(PublicUpdateCheck.Gng, ex);
+            if (!ReadGngLocal(result, euroscopeDataPath, requireNoPendingUpdate, isTestingInstallation,
+                out var localAirac, out var localRev)) return;
+            var latest = Regex.Match(result.LatestVersion, @"^(\d{4})\s*/\s*(\d{2})\s+rev\.\s*(\d{1,4})$");
+            if (latest.Success)
+                result.Status = IsGngUpToDate(localAirac, localRev, latest.Groups[1].Value + latest.Groups[2].Value,
+                    int.Parse(latest.Groups[3].Value)) ? CheckStatus.UpToDate : CheckStatus.UpdateAvailable;
+            else
+            {
+                result.Status = CheckStatus.Installed;
+                result.StatusMessage = "Installed; check for updates.";
+            }
         }
+        catch (Exception ex) { GngFailure(result, ex); }
+    }
+
+    private static void ResetGngLocal(CheckResult result)
+    {
+        result.ObservedLocalVersion = null;
+        result.GngIsTesting = false;
+        result.InstalledVersion = "—";
+        result.StatusMessage = string.Empty;
+    }
+
+    private static bool ReadGngLocal(CheckResult result, string dataFolder, Action<string> requireNoPendingUpdate,
+        Func<string, bool>? isTestingInstallation, out string airac, out int revision)
+    {
+        airac = string.Empty;
+        revision = 0;
+        if (string.IsNullOrWhiteSpace(dataFolder))
+        {
+            result.Status = CheckStatus.NotConfigured;
+            return false;
+        }
+        if (!Directory.Exists(dataFolder))
+        {
+            result.InstalledVersion = "Folder not found";
+            result.Status = CheckStatus.Error;
+            return false;
+        }
+        // A new sector filename alone cannot establish a completed installation.
+        requireNoPendingUpdate(dataFolder);
+        result.GngIsTesting = isTestingInstallation?.Invoke(dataFolder) == true;
+        var sectors = Directory.GetFiles(dataFolder, "ESAA-Sweden_*.sct");
+        if (sectors.Length == 0)
+        {
+            result.InstalledVersion = "No SCT file found";
+            result.Status = CheckStatus.Error;
+            return false;
+        }
+        // Timestamp order identifies the newest sector generation, including retained old files.
+        Array.Sort(sectors);
+        result.ObservedLocalVersion = "";
+        var match = Regex.Match(Path.GetFileNameWithoutExtension(sectors[^1]), @"-(\d{6})-(\d{4})$");
+        if (!match.Success)
+        {
+            result.InstalledVersion = "Cannot parse filename";
+            result.Status = CheckStatus.Error;
+            return false;
+        }
+        airac = match.Groups[1].Value;
+        revision = int.Parse(match.Groups[2].Value);
+        result.InstalledVersion = FormatGngVersion(airac, revision);
+        result.ObservedLocalVersion = result.InstalledVersion;
+        return true;
+    }
+
+    private static void GngFailure(CheckResult result, Exception exception)
+    {
+        result.StatusMessage = exception.Message;
+        result.Status = CheckStatus.Error;
+        Logger.Log("CHECK", $"GNG Pack: error — {exception.Message}");
+        ObserveFailure(PublicUpdateCheck.Gng, exception);
     }
 
     private static string FormatGngVersion(string airac, int rev) =>

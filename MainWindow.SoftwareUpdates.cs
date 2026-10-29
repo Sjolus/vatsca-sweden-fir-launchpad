@@ -108,7 +108,7 @@ public partial class MainWindow
         CheckButton.IsEnabled = !_isChecking && !busy;
         MaintenanceButton.IsEnabled = CanRunSoftwareAction() && CanRunSelfUpdateAction();
         SetupTab.IsEnabled = AppsTab.IsEnabled = ActivityNoticeButton.IsEnabled =
-            !_windowClosed && !busy && !_selfUpdateActionBusy && _openDialogCount == 0 && IsEnabled;
+            !_windowClosed && (!busy || HasGngFlow) && !_selfUpdateActionBusy && _openDialogCount == 0 && IsEnabled;
         // Keep an in-progress inline operation's Cancel button reachable.
         SetupWorkspace.IsEnabled = !_windowClosed && IsEnabled && _openDialogCount == 0;
         SetupWorkspace.SetActionsEnabled(allowed && CanRunSelfUpdateAction());
@@ -235,6 +235,9 @@ public partial class MainWindow
 
     protected override void OnClosing(CancelEventArgs e)
     {
+        // A read-only review can be dismissed; an active download/write must finish or be cancelled first.
+        if (HasGngFlow && _gngUpdateFlow?.CanDismiss != false && _gngCleanupFlow?.CanDismiss != false)
+            DismissGngFlow();
         // Do not abandon a vendor installer or its post-install verification. The user can minimize.
         if (_softwareActionBusy || _softwareUpdates.IsBusy || _openDialogCount > 0)
         {

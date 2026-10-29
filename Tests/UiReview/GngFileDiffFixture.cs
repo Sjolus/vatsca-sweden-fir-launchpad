@@ -115,28 +115,36 @@ internal static partial class LayoutMatrix
             {
                 LayoutValidation.CheckWindowContent(window); DrainBindings(); LayoutValidation.CheckWindowContent(window);
                 CheckFooter(window);
+                Require(window.Content is GngFileDiffControl, "File changes must use the reusable inline view.");
                 foreach (var name in new[] { "FilePathText", "SummaryText" })
                 {
                     var text = Required<TextBox>(window, name);
-                    Require(text.IsReadOnly && text.IsReadOnlyCaretVisible && text.Focusable && text.TextWrapping == TextWrapping.Wrap,
-                        "The file preview must keep its path and summary selectable and wrapped: " + name);
+                    Require(text.IsReadOnly && text.IsReadOnlyCaretVisible && text.Focusable,
+                        "The file preview must keep its path and summary selectable: " + name);
+                    Require(text.TextWrapping == (name == "FilePathText" ? TextWrapping.NoWrap : TextWrapping.Wrap),
+                        "The compact path must remain one line; the separate information page must wrap.");
                     Require(!string.IsNullOrWhiteSpace(text.Text), "Missing file-preview metadata: " + name);
                 }
                 Require(IsPresented(Required<TextBlock>(window, "MaskingNotice")), "The file preview must explain masked values.");
                 var tabs = Required<TabControl>(window, "PreviewTabs");
                 var hasText = GngFileDiffFixture.IsListLayout(state) || state is GngFileDiffFixtureState.Changes or GngFileDiffFixtureState.BeforeAfter or GngFileDiffFixtureState.WithoutDiff;
-                Require(IsPresented(tabs) == hasText, "Summary-only previews must not expose blank text views.");
+                Require(IsPresented(tabs), "File information must remain available in every preview.");
+                Require((Required<TabItem>(window, "ChangesTab").Visibility == Visibility.Visible) ==
+                    (hasText && state != GngFileDiffFixtureState.WithoutDiff), "Text comparison tab does not match the available preview.");
+                Require((Required<TabItem>(window, "BeforeAfterTab").Visibility == Visibility.Visible) == hasText,
+                    "Summary-only previews must not expose blank text views.");
                 if (hasText)
                 {
-                    var metadata = Required<Expander>(window, "MetadataDetails");
-                    Require(!metadata.IsExpanded, "Text changes must get priority over optional file metadata.");
-                    metadata.IsExpanded = true;
+                    Require(!Required<TabItem>(window, "InfoTab").IsSelected, "Text changes must get priority over optional file metadata.");
+                    Require(Required<RowDefinition>(window, "HeaderRow").Height.IsAuto,
+                        "The file preview header must fit its compact path and action.");
+                    var selectedTab = tabs.SelectedItem;
+                    Required<TabItem>(window, "InfoTab").IsSelected = true;
                     LayoutValidation.CheckWindowContent(window);
                     var summary = Required<TextBox>(window, "SummaryText");
-                    var summaryScroll = LayoutValidation.Descendants(summary).OfType<ScrollViewer>().Single();
-                    Require(summary.ActualHeight <= 92.5 && summaryScroll.ScrollableHeight > 0,
-                        "Realistic preview metadata must scroll without consuming the text comparison area.");
-                    metadata.IsExpanded = false;
+                    Require(summary.ActualHeight >= 120 && summary.VerticalScrollBarVisibility == ScrollBarVisibility.Auto,
+                        "File information must use its own content area, not consume the comparison header.");
+                    tabs.SelectedItem = selectedTab;
                     LayoutValidation.CheckWindowContent(window);
                     Require(Required<TextBox>(window, "CurrentText").Text == GngFileDiffFixture.CurrentText(state) &&
                         Required<TextBox>(window, "AfterText").Text == GngFileDiffFixture.PlannedText(state),
@@ -154,6 +162,9 @@ internal static partial class LayoutMatrix
                         Require(next.IsEnabled, "A text comparison with changes must support navigation.");
                         next.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                         Require(Required<TextBlock>(window, "ChangePositionText").Text.StartsWith("Change 1 of ", StringComparison.Ordinal), "Next change did not identify the first change group.");
+                        var changeLine = diff.Selection.Start.Paragraph;
+                        Require(changeLine is not null && new TextRange(changeLine.ContentStart, changeLine.ContentEnd).Text.StartsWith('-'),
+                            "Next change must bring the changed lines into view instead of their preceding context.");
                         Require(diff.Document.Blocks.OfType<Paragraph>().Where(p => new TextRange(p.ContentStart, p.ContentEnd).Text.StartsWith('+')).All(p => p.Background != null) &&
                             diff.Document.Blocks.OfType<Paragraph>().Where(p => new TextRange(p.ContentStart, p.ContentEnd).Text.StartsWith('-')).All(p => p.Background != null),
                             "Additions and removals need a visible highlight as well as their text markers.");
@@ -182,12 +193,32 @@ internal static partial class LayoutMatrix
                         string.IsNullOrWhiteSpace(new TextRange(Required<RichTextBox>(window, "DiffText").Document.ContentStart, Required<RichTextBox>(window, "DiffText").Document.ContentEnd).Text), "Summary-only previews must not populate hidden file contents.");
                     if (state == GngFileDiffFixtureState.Large)
                     {
-                        var scroll = Required<ScrollViewer>(window, "HeaderScroll");
+                        var scroll = LayoutValidation.Descendants(Required<TextBox>(window, "SummaryText")).OfType<ScrollViewer>().Single();
                         scroll.ScrollToEnd(); DrainBindings();
                         Require(scroll.ScrollableHeight > 0 && scroll.VerticalOffset >= scroll.ScrollableHeight - 1,
                             "Long summary-only diagnostics must remain scrollable to their end.");
                     }
                 }
+                window.Preview.SetFileNavigation(0, 3);
+                Require(!Required<Button>(window, "PreviousFileButton").IsEnabled && Required<Button>(window, "NextFileButton").IsEnabled,
+                    "File navigation must respect the first file boundary.");
+                int navigation = 0;
+                window.Preview.FileNavigationRequested += direction => navigation += direction;
+                Required<Button>(window, "NextFileButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Require(navigation == 1, "Next file did not request the next preview.");
+                window.Preview.SetNavigationBusy(true);
+                Required<Button>(window, "NextFileButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Require(navigation == 1 && Required<Button>(window, "CloseButton").IsEnabled,
+                    "Loading must stop duplicate navigation but keep Back available.");
+                window.Preview.SetNavigationBusy(false);
+                window.Preview.SetFileNavigation(2, 3);
+                Require(Required<Button>(window, "PreviousFileButton").IsEnabled && !Required<Button>(window, "NextFileButton").IsEnabled,
+                    "File navigation must respect the last file boundary.");
+                LayoutValidation.CheckWindowContent(window);
+                bool returned = false;
+                window.Preview.CloseRequested += (_, _) => returned = true;
+                Required<Button>(window, "CloseButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Require(returned, "The inline file preview must return to the changes without opening another window.");
                 Require(!window.IsVisible, "A file-diff fixture showed a native window.");
                 CheckFooter(window);
                 count++;

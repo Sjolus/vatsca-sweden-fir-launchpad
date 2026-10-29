@@ -114,8 +114,29 @@ public sealed class SoftwareInstaller : ISoftwareInstaller
     public string? GetUpdateProblem(SoftwareInstallation installation, SoftwareRelease release)
     {
         if (installation.App != SoftwareApp.Vacs || release.App != SoftwareApp.Vacs) return null;
+        _ = VacsExecutableName(release.Version);
+        if (IsNewer(release.Version, "3.0.0"))
+        {
+            // 3.0.1+ reconciles both location keys and removes copies in another recorded
+            // folder. Never allow that cleanup outside the one installation we reviewed.
+            if (installation.Scope is not ("CurrentUser" or "AllUsers"))
+                throw new InvalidDataException("The VACS installation scope is not recognized.");
+            var locations = _environment.ReadVacsDestinations(installation.Scope);
+            foreach (var path in new[] { locations.LegacyRoot, locations.Version300Root })
+                if (path is not null) RejectReparse(path);
+            var source = VacsSourceDestination(installation.Version, locations);
+            if (source is null || !SamePath(source, installation.RootPath))
+                return "The VACS installer location changed. Check the installed copy again before updating.";
+            foreach (var recordedLocation in new[] { locations.LegacyRoot, locations.Version300Root })
+            {
+                if (recordedLocation is null) continue;
+                if (!SamePath(recordedLocation, installation.RootPath))
+                    return "VACS has another recorded installation location. Its installer may move or remove that copy. Resolve the locations with the official installer, then choose the installed vacs.exe in Setup → Applications.";
+            }
+            return null;
+        }
         if (VacsExecutableName(installation.Version) != "vacs-client.exe" || VacsExecutableName(release.Version) != "vacs.exe") return null;
-        // VACS 3 changed the manufacturer registry key. Its NSIS MultiUser initialization
+        // VACS 3.0.0 changed the manufacturer registry key. Its NSIS MultiUser initialization
         // ignores /D for this migration and can silently move a custom 2.x installation.
         var destination = _environment.Vacs3MachineDestination();
         if (installation.Scope != "AllUsers" || !SamePath(installation.RootPath, Path.Combine(_environment.ProgramFiles, "vacs")) ||
@@ -123,6 +144,10 @@ public sealed class SoftwareInstaller : ISoftwareInstaller
             return "VACS 3 cannot safely upgrade this VACS 2 installation in place. Use the official installer to uninstall VACS while keeping its data, then install VACS 3 and select vacs.exe in Setup → Applications.";
         return null;
     }
+
+    private static string? VacsSourceDestination(string version, VacsInstallerDestinations locations) =>
+        SoftwareInstallerEnvironment.VacsDestinationKey(version) == @"Software\The vacs Project\vacs"
+            ? locations.Version300Root : locations.LegacyRoot;
 
     public async Task VerifyPackageAsync(SoftwareRelease release, string packagePath, CancellationToken cancellationToken)
     {

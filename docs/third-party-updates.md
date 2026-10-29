@@ -14,7 +14,9 @@ Launchpad downloads and verifies the official package, applies the reviewed chan
 
 For VACS and TrackAudio, the executable and Windows registration must agree on the version and location. If they differ, Launchpad explains the mismatch and asks you to repair or reinstall through the vendor. vATIS is checked against its package metadata and installed updater. If the vATIS application can be verified but its updater is unsupported, Launchpad still shows the installed and available versions and offers the official download page. Portable, custom or unsupported installations use the download-page fallback.
 
-VACS 3 renamed its executable from `vacs-client.exe` to `vacs.exe`. Launchpad saves the new launch path after a supported upgrade. Managed 2→3 upgrades require the standard all-users Program Files folder and no conflicting VACS 3 destination. Other 2→3 migrations stay manual because the vendor installer can change their location.
+VACS 3 renamed its executable from `vacs-client.exe` to `vacs.exe`. Launchpad saves the new launch path after a supported upgrade. VACS 3.0.1 also restored the Windows installation-location key used before 3.0.0; Launchpad recognizes both formats. If 3.0.1 is already installed but an older Launchpad shows **Needs review**, update Launchpad and check again.
+
+For updates to 3.0.1 or later, Launchpad checks both the older and 3.0.0 installation locations. Conflicting locations stay on the manual route because the vendor installer can move or remove another copy. Updates specifically to 3.0.0 retain the standard all-users Program Files requirement for 2.x migrations.
 
 For a missing application, see [setup](product-onboarding.md). EuroScope has separate [supported-version management](euroscope-management.md). Swedish GNG has a separate [download and installation workflow](gng-updates.md).
 

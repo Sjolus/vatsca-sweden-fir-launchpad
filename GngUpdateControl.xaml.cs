@@ -1,4 +1,4 @@
-using Microsoft.Web.WebView2.Core;
+﻿using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
 using Microsoft.Win32;
 using System.ComponentModel;
@@ -13,7 +13,7 @@ using VatscaUpdateChecker.Services;
 
 namespace VatscaUpdateChecker;
 
-public partial class GngUpdateWindow : Window
+public partial class GngUpdateControl : UserControl, IDisposable
 {
     private const string RuntimeInformation = "https://developer.microsoft.com/en-us/microsoft-edge/webview2/";
     private static readonly string AppDataFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "VatscaUpdateChecker", "Gng");
@@ -21,6 +21,7 @@ public partial class GngUpdateWindow : Window
     private readonly string[] _protectedPaths;
     private readonly string[] _cleanupProtectedPaths;
     private readonly AppSettings? _saamanSettings;
+    private readonly string? _installedVersion;
     private readonly Dictionary<Window, WebView2> _popups = new();
     private readonly HashSet<Window> _downloadHiddenPopups = [];
     private bool _browserInteractionBlocked;
@@ -28,6 +29,7 @@ public partial class GngUpdateWindow : Window
     private readonly HashSet<(WebView2 Browser, ulong Navigation, long Revision)> _selectedDocuments = [];
     private readonly Dictionary<WebView2, GngBrowserNavigationState> _navigations = new();
     private CancellationTokenSource? _downloadWait;
+    private CancellationTokenSource? _preparationCancellation;
     private bool _selectionInFlight;
     private TaskCompletionSource? _selectionFinished;
     private bool _popupRefreshUsed;
@@ -47,6 +49,7 @@ public partial class GngUpdateWindow : Window
     private GngUpdatePlan? _plan;
     private string? _reviewPackagePath;
     private string? _reviewReferencePath;
+    private bool _reviewAllowTesting;
     private string? _cachedFullReferencePath;
     private string? _cachedFullReferenceVersion;
     private ReportingSource _reportingPackageSource = ReportingSource.Import;
@@ -63,6 +66,40 @@ public partial class GngUpdateWindow : Window
     private readonly string? _suggestedRecoveryFolder;
     private readonly DispatcherTimer _euroScopeTimer = new() { Interval = TimeSpan.FromSeconds(3) };
 
+    private bool _writing;
+    private bool _readingFilePreview;
+    private bool _preparationCancelled;
+    private bool _started;
+    private bool _showingIssue;
+    private GngCleanupControl? _cleanupControl;
+    public event Action? StateChanged;
+    public event Action? Dismissed;
+    public event Action<string>? FollowUpRequested;
+    public string? InstalledPackageVersion { get; private set; }
+    public bool PackageAlreadyMatches { get; private set; }
+    public int MutationRevision { get; private set; }
+    public int CompletionRevision { get; private set; }
+    public bool HasError => _showingIssue || _recoveryRequired;
+    private string? _lastBackupFolder;
+    private string? _reviewedRecoveryFolder;
+    public void SetCompletionChecks(string message, bool fontsNeedAction, bool profileNeedsReview)
+    {
+        CompletionChecks.Text = message;
+        CompletionChecks.Visibility = string.IsNullOrWhiteSpace(message) ? Visibility.Collapsed : Visibility.Visible;
+        CheckFontsButton.Visibility = fontsNeedAction ? Visibility.Visible : Visibility.Collapsed;
+        CheckProfileButton.Visibility = profileNeedsReview ? Visibility.Visible : Visibility.Collapsed;
+    }
+    private void CheckFonts_Click(object sender, RoutedEventArgs e) { if (CanDismiss) FollowUpRequested?.Invoke("Fonts"); }
+    private void CheckProfile_Click(object sender, RoutedEventArgs e) { if (CanDismiss) FollowUpRequested?.Invoke("Profile"); }
+    public bool IsBusy => _busy || _queuedPreview || _selectionInFlight || _download is not null || _downloadRequest.IsPending || _cleanupControl?.IsBusy == true;
+    public bool CanDismiss => !_busy && !_queuedPreview && !_selectionInFlight && _download is null && _cleanupControl?.IsBusy != true;
+    public bool CanCancel => !_writing && !_closed && (_busy || _queuedPreview || _download is not null || _downloadRequest.IsPending || _selectionInFlight);
+    public bool NeedsAttentionView => NestedContent?.Content is not null || _readingFilePreview || _showingIssue || _preparationCancelled || _recoveryRequired || _showingCompletion ||
+        (!_busy && !_queuedPreview && _download is null && (ReviewPanel?.Visibility == Visibility.Visible || BrowserToolbar?.Visibility == Visibility.Visible || StartPanel?.Visibility == Visibility.Visible));
+    public string Status => StatusText?.Text ?? string.Empty;
+    public string Stage => DownloadStageText?.Text ?? string.Empty;
+    public double Progress => Activity?.Value ?? 0;
+    public bool ProgressIndeterminate => Activity?.IsIndeterminate == true;
     public string DataFolder { get; }
     public bool AttemptedChanges { get; private set; }
     public bool InstallationCompleted { get; private set; }
@@ -70,18 +107,22 @@ public partial class GngUpdateWindow : Window
     private bool Idle => !_busy && !_queuedPreview && !_cleanupOpen && _download is null && !_closed && !RestartRequired;
     private bool CanGetPackage => Idle && !_recoveryRequired && !_selectionInFlight;
 
-    public GngUpdateWindow(string dataFolder, string? selectedProfile, IEnumerable<string> protectedPaths,
-        IEnumerable<string>? cleanupProtectedPaths = null, string? recoveryFolder = null, AppSettings? saamanSettings = null)
+    public GngUpdateControl(string dataFolder, string? selectedProfile, IEnumerable<string> protectedPaths,
+        IEnumerable<string>? cleanupProtectedPaths = null, string? recoveryFolder = null, AppSettings? saamanSettings = null,
+        string? installedVersion = null)
     {
         InitializeComponent();
+        StatusText.TextChanged += (_, _) => NotifyStateChanged();
+        Activity.ValueChanged += (_, _) => NotifyStateChanged();
         DataFolder = dataFolder ?? string.Empty;
         _selectedProfile = selectedProfile;
         _saamanSettings = saamanSettings?.Copy();
+        _installedVersion = installedVersion;
         _suggestedRecoveryFolder = recoveryFolder;
         _protectedPaths = protectedPaths.Where(path => !string.IsNullOrWhiteSpace(path)).ToArray();
         _cleanupProtectedPaths = (cleanupProtectedPaths ?? _protectedPaths).Where(path => !string.IsNullOrWhiteSpace(path)).ToArray();
-        FolderText.Text = string.IsNullOrWhiteSpace(DataFolder) ? "No folder configured. Choose one in App settings first." : DataFolder;
-        FolderText.ToolTip = "Reviewed EuroScope data destination:\n" + FolderText.Text + "\nClose this window to choose a different folder.";
+        FolderText.Text = string.IsNullOrWhiteSpace(DataFolder) ? "No GNG folder chosen. Select it in Setup." : DataFolder;
+        FolderText.ToolTip = "Swedish GNG folder:\n" + FolderText.Text + "\nChange this folder in Setup.";
         UpdatePackageKind();
         ShowPendingRecovery();
         if (!_recoveryRequired && !string.IsNullOrWhiteSpace(recoveryFolder))
@@ -123,18 +164,56 @@ public partial class GngUpdateWindow : Window
         }
     }
 
-    private async void StartBrowser_Click(object sender, RoutedEventArgs e) => await GetPackageAsync(forceDownload: false);
+    public async Task StartAsync(bool forceDownload = false)
+    {
+        if (_started && !forceDownload) { NotifyStateChanged(); return; }
+        _started = true;
+        if (_recoveryRequired || !string.IsNullOrWhiteSpace(_suggestedRecoveryFolder)) { NotifyStateChanged(); return; }
+        try { await GetPackageAsync(forceDownload); }
+        catch (OperationCanceledException) when (_preparationCancelled) { ShowPreparationStopped(); SetBusy(false); }
+        catch (Exception ex) { ShowIssue("GNG download needs attention", ex.Message); SetBusy(false); }
+    }
+
+    public Task DownloadFreshAsync() => StartDownloadSafelyAsync(true);
+    public Task ImportPackageAsync() => ImportAsync();
+
+    public void CancelPreparation()
+    {
+        if (!CanCancel) return;
+        CancelFilePreviewNavigation();
+        _preparationCancelled = true;
+        _preparationCancellation?.Cancel();
+        if (_download is not null) CancelDownload_Click(this, new RoutedEventArgs());
+        else DisarmDownloadRequest(closeBrowsers: true);
+        ShowPreparationStopped();
+        UpdateControls();
+    }
+
+    private void NotifyStateChanged() { if (!_closed) StateChanged?.Invoke(); }
+    private async void StartBrowser_Click(object sender, RoutedEventArgs e) => await StartDownloadSafelyAsync(false);
+    private async Task StartDownloadSafelyAsync(bool fresh)
+    {
+        try { await GetPackageAsync(fresh); }
+        catch (OperationCanceledException) when (_preparationCancelled) { ShowPreparationStopped(); SetBusy(false); }
+        catch (Exception ex) { ShowIssue("GNG download needs attention", ex.Message); SetBusy(false); }
+    }
 
     private async void FreshDownload_Click(object sender, RoutedEventArgs e)
     {
         if (!CanGetPackage) return;
         _primaryPackagePath = _referenceVersion = null;
-        await GetPackageAsync(forceDownload: true);
+        await StartDownloadSafelyAsync(true);
     }
 
     private async Task GetPackageAsync(bool forceDownload)
     {
         if (!CanGetPackage) return;
+        CancelFilePreviewNavigation();
+        PackageAlreadyMatches = false;
+        _preparationCancelled = false;
+        _preparationCancellation?.Dispose();
+        _preparationCancellation = new CancellationTokenSource();
+        _showingIssue = false;
         _forceFreshCopies = forceDownload;
         _reviewPackagePath = _reviewReferencePath = null;
         _cachedFullReferencePath = _cachedFullReferenceVersion = null;
@@ -145,10 +224,10 @@ public partial class GngUpdateWindow : Window
         if (!forceDownload && _primaryPackagePath is null)
         {
             GngCachedPackages? saved;
-            SetBusy(true, "Checking AeroNav's public version and validating matching saved ZIPs. Sign-in is not needed for this check…", "Checking saved packages");
-            try { saved = await GngPackageCache.TryFindAsync(_requestedPackageKind); }
+            SetBusy(true, "Checking for the latest Swedish GNG update…", "Checking saved packages");
+            try { saved = await GngPackageCache.TryFindAsync(_requestedPackageKind, _preparationCancellation.Token); }
             finally { SetBusy(false); }
-            if (_closed) return;
+            if (_closed || _preparationCancelled) return;
             if (saved is not null)
             {
                 _usingSavedPackages = true;
@@ -207,13 +286,13 @@ public partial class GngUpdateWindow : Window
             Directory.CreateDirectory(profileFolder);
             SoftwareInstaller.RejectReparse(profileFolder);
             _environment = await CoreWebView2Environment.CreateAsync(userDataFolder: profileFolder);
-            if (_closed) return;
+            if (_closed || _preparationCancelled) return;
             _browser?.Dispose();
             _browser = new WebView2();
             SetBrowserBackground(_browser);
             BrowserHost.Content = _browser;
             await _browser.EnsureCoreWebView2Async(_environment);
-            if (_closed) return;
+            if (_closed || _preparationCancelled) { ResetBrowser(); return; }
             ConfigureBrowser(_browser, OriginText);
             StartBrowserButton.Visibility = Visibility.Visible;
             FreshDownloadButton.Visibility = Visibility.Visible;
@@ -225,7 +304,7 @@ public partial class GngUpdateWindow : Window
             _browser.CoreWebView2.Navigate(GngBrowserPolicy.AeroNavHome);
             StatusText.Text = _primaryPackagePath is null
                 ? "Sign in if AeroNav asks. Launchpad will download the Swedish package and show it for review."
-                : "Downloading the matching Full Package for comparison. Your Update Only download is already saved.";
+                : "Continuing the download (2 of 2)…";
         }
         catch (WebView2RuntimeNotFoundException)
         {
@@ -243,7 +322,7 @@ public partial class GngUpdateWindow : Window
     private async void InstallRuntime_Click(object sender, RoutedEventArgs e)
     {
         if (!CanGetPackage) return;
-        if (MessageBox.Show(this, "Download and install Microsoft Edge WebView2 for all Windows users?\n\nWindows may ask for administrator permission. This installs the browser runtime only. You can instead download the GNG ZIP in your normal browser and import it.",
+        if (MessageBox.Show(Window.GetWindow(this), "Download and install Microsoft Edge WebView2 for all Windows users?\n\nWindows may ask for administrator permission. This installs the browser runtime only. You can instead download the GNG ZIP in your normal browser and import it.",
                 "Install Microsoft WebView2", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) != MessageBoxResult.Yes) return;
         if (!MaintenanceLock.TryAcquire(out var lease))
         {
@@ -252,6 +331,7 @@ public partial class GngUpdateWindow : Window
         }
         using (lease)
         {
+            _writing = true;
             SetBusy(true, "Preparing Microsoft WebView2 Runtime setup…");
             string? failure = null;
             try
@@ -276,6 +356,7 @@ public partial class GngUpdateWindow : Window
             finally
             {
                 if (RestartRequired) StatusText.Text = (failure is null ? "" : failure + Environment.NewLine) + "Restart Windows before further installation or recovery.";
+                _writing = false;
                 SetBusy(false);
             }
         }
@@ -586,7 +667,7 @@ public partial class GngUpdateWindow : Window
             var workArea = SystemParameters.WorkArea;
             popup = new Window
             {
-                Owner = this, Title = "AeroNav · Browser window", Width = Math.Min(700, workArea.Width - 24), Height = Math.Min(700, workArea.Height - 24),
+                Owner = Window.GetWindow(this), Title = "AeroNav · Browser window", Width = Math.Min(700, workArea.Width - 24), Height = Math.Min(700, workArea.Height - 24),
                 MinWidth = 460, MinHeight = 400, WindowStartupLocation = WindowStartupLocation.CenterOwner, Content = layout
             };
             popup.SetResourceReference(BackgroundProperty, "RowBg");
@@ -682,8 +763,7 @@ public partial class GngUpdateWindow : Window
             _download.BytesReceivedChanged += Download_ProgressChanged;
             _download.StateChanged += Download_StateChanged;
             _plan = null;
-            ConfirmInstall.IsChecked = false;
-            UpdateControls();
+                UpdateControls();
             UpdateDownloadProgress();
             e.Cancel = _download is null || _downloadFailure is not null;
             Logger.Log("GNG", $"Download accepted: kind={_requestedPackageKind}; expectedBytes={_download?.TotalBytesToReceive}; request={_downloadGeneration}.");
@@ -725,7 +805,7 @@ public partial class GngUpdateWindow : Window
         if (total > 0) Activity.Value = Math.Clamp(received * 100.0 / total, 0, 100);
         SetStage(_primaryPackagePath is not null ? "Downloading Full reference (2 of 2)" :
             _requestedPackageKind == GngPackageKind.UpdateOnly ? "Downloading Update Only (1 of 2)" : "Downloading Full Package");
-        var detail = _primaryPackagePath is not null ? "For cleanup comparison; it will not be installed." : "Nothing is installed until you review and confirm.";
+        var detail = "You will choose when to install.";
         StatusText.Text = (total > 0 ? $"{Activity.Value:0}% · {received / 1048576.0:0.0} of {total / 1048576.0:0.0} MB" : $"{received / 1048576.0:0.0} MB downloaded") + " · " + detail;
     }
 
@@ -750,6 +830,12 @@ public partial class GngUpdateWindow : Window
             ShowIssue(cancelled ? "Download cancelled" : "Download stopped", failure ?? (_primaryPackagePath is not null
                 ? (cancelled ? "Reference download cancelled. " : $"Reference download stopped ({reason}). ") + "Your Update Only ZIP is saved. Retry reference or import its matching Full ZIP; nothing has been installed."
                 : cancelled ? "Download cancelled. Choose Retry download when ready." : $"The transfer stopped ({reason}). Retry the download, or use your browser and Import ZIP."));
+            if (cancelled && failure is null)
+            {
+                _showingIssue = false;
+                _preparationCancelled = true;
+                UpdateControls();
+            }
             return;
         }
         // Leave the WebView callback before disposing popup browsers or showing native UI.
@@ -792,7 +878,7 @@ public partial class GngUpdateWindow : Window
         }
         _preparingReference = true;
         string? referenceFromCache = null;
-        SetBusy(true, "The first download is complete. Checking the ZIP before requesting its matching Full reference…", "Checking downloaded update (1 of 2)");
+        SetBusy(true, "Checking the first download before continuing…", "Checking downloaded update (1 of 2)");
         try
         {
             var version = await Task.Run(() => GngUpdateService.ValidatePackage(path));
@@ -825,7 +911,7 @@ public partial class GngUpdateWindow : Window
                 }
                 _selectedDocuments.Clear();
                 _popupRefreshUsed = false;
-                StatusText.Text = "Getting the matching Full reference package. Your Update Only ZIP is already saved.";
+                StatusText.Text = "Continuing the download (2 of 2)…";
                 Logger.Log("GNG", "Requesting the matching Full reference.");
                 await InitializeBrowserAsync();
             }
@@ -853,36 +939,56 @@ public partial class GngUpdateWindow : Window
         _downloadFailure = null;
     }
 
-    private async Task PreviewPackageAsync(string path, string? referencePath = null)
+    private async Task PreviewPackageAsync(string path, string? referencePath = null, bool allowTesting = false)
     {
         if (!CanGetPackage) return;
+        CancelFilePreviewNavigation();
+        PackageAlreadyMatches = false;
         _plan = null;
         _reviewPackagePath = path;
         _reviewReferencePath = referencePath;
+        _reviewAllowTesting = allowTesting;
+        PackageText.Text = Path.GetFileName(path);
+        PackageSummaryText.Text = string.Empty;
         var preserveListLayout = PreserveListLayout.IsChecked == true;
-        ConfirmInstall.IsChecked = false;
+        var keepDetailsOpen = _showingReviewDetails;
+        InvalidateReviewAssessment();
         ReviewPanel.Visibility = Visibility.Collapsed;
-        SetBusy(true, "Checking package contents and your destination to prepare the file review…", "Preparing installation review");
+        SetBusy(true, "Checking the update and your EuroScope files…", "Preparing installation review");
         try
         {
             var saamanPolicy = _saamanSettings is null ? null : SaamanProfileService.Capture(_saamanSettings, DataFolder);
-            var plan = await Task.Run(() => GngUpdateService.BuildPlan(path, DataFolder, _protectedPaths, referencePath, preserveListLayout, saamanPolicy));
-            if (_closed) return;
+            var plan = await Task.Run(() => GngUpdateService.BuildPlan(path, DataFolder, _protectedPaths, referencePath, preserveListLayout, saamanPolicy, allowTesting: allowTesting));
+            if (_closed || _preparationCancelled) return;
             _plan = plan;
             _primaryPackagePath = _referenceVersion = null;
-            PackageText.Text = plan.PackageName;
-            PackageSummaryText.Text = $"Version {plan.Version} · {plan.Files.Count:N0} package files" +
-                (plan.ReferencePackageName is null ? "" : " · Matching Full Package will be kept for cleanup comparisons; its files will not be installed.");
+            PackageText.Text = (plan.IsTestingPackage ? "Testing package · " : "Swedish GNG ") + plan.Version;
+            var changes = plan.Files.Count(file => file.WritesFile);
+            PackageSummaryText.Text = string.IsNullOrWhiteSpace(_installedVersion) ? "New installation · " + plan.Version : _installedVersion + " → " + plan.Version;
+            InstallButton.Content = plan.IsTestingPackage ? "Install testing package" : "Install update";
             SetPackageNotes(plan.Warnings, GngUpdateService.GetBackupRoot(DataFolder));
-            ReviewSummaryText.Text = ReviewSummaries.Gng(plan, GngUpdateService.GetBackupRoot(DataFolder));
+            ReviewSummaryText.Text = "Your sign-in details are kept. " +
+                (plan.PreserveListLayout ? "List positions are kept where matched. " : "Lists will use the package defaults. ") +
+                "A backup is created before changes.";
+            SetReviewAssessment(GngReviewNotes.Assess(plan, _selectedProfile));
             ReviewSummaryText.ScrollToHome();
             SetReviewFiles(plan.Files);
+            ShowReviewDetails(keepDetailsOpen);
+            if (changes == 0)
+            {
+                PackageAlreadyMatches = true;
+                CompletionRevision++;
+                _plan = null;
+                ShowCompletion("GNG already matches", "Your files already match Swedish GNG " + plan.Version + ". No installation is needed.", string.Empty);
+                StatusText.Text = "No files were changed.";
+                return;
+            }
             BrowserPanel.Visibility = CompletePanel.Visibility = Visibility.Collapsed;
             ReviewPanel.Visibility = Visibility.Visible;
             _showingCompletion = false;
-            StepText.Text = "2  Review the changes, then confirm installation";
-            StatusText.Text = (_usingSavedPackages ? "Saved packages reused. " : "") + "Review replacements carefully. Files changed by this installation are backed up. Nothing has been installed yet.";
-            SetStage("Ready for your review");
+            StepText.Text = string.Empty;
+            StatusText.Text = _usingSavedPackages ? "Saved package ready." : "Package ready.";
+            SetStage("Ready to update");
             Logger.Log("GNG", "Installation preview prepared.");
             if (!string.Equals(_reportedPackagePath, path, StringComparison.OrdinalIgnoreCase))
             {
@@ -897,7 +1003,13 @@ public partial class GngUpdateWindow : Window
         {
             Logger.Log("GNG", "Installation preview failed: " + ex.GetType().Name + ".");
             ReportingEvents.RecordFailure(ex, ReportingApplication.Gng, ReportingOperation.Update);
-            ShowIssue("Installation review needs attention", "The package could not be prepared. Your data folder is unchanged. " + ex.Message +
+            InvalidateReviewAssessment(ex.Message);
+            SetReviewFiles([]);
+            NoFileChangesText.Text = "The file comparison is unavailable until the update checks succeed.";
+            BrowserPanel.Visibility = CompletePanel.Visibility = Visibility.Collapsed;
+            ReviewPanel.Visibility = Visibility.Visible;
+            ShowReviewDetails(keepDetailsOpen);
+            ShowIssue("Update needs attention", "The package could not be prepared. Your data folder is unchanged. " + ex.Message +
                 (_primaryPackagePath is null ? "" : " Your Update Only ZIP is saved. Retry reference, import a matching Full ZIP, or Start over to download both again."));
         }
         finally { SetBusy(false); }
@@ -906,18 +1018,28 @@ public partial class GngUpdateWindow : Window
     private async void PreserveListLayout_Changed(object sender, RoutedEventArgs e)
     {
         // Checked also fires while InitializeComponent is still creating the controls.
-        if (ConfirmInstall is null || !CanGetPackage || _showingCompletion) return;
-        ConfirmInstall.IsChecked = false;
+        if (PreserveListLayout is null || !CanGetPackage || _showingCompletion) return;
         if (_reviewPackagePath is { } path)
-            await PreviewPackageAsync(path, _reviewReferencePath);
+        {
+            _preparationCancelled = _showingIssue = false;
+            await PreviewPackageAsync(path, _reviewReferencePath, _reviewAllowTesting);
+        }
+    }
+
+    private async void RefreshReview_Click(object sender, RoutedEventArgs e)
+    {
+        if (!CanGetPackage || _reviewPackagePath is not { } path) return;
+        _preparationCancelled = _showingIssue = false;
+        await PreviewPackageAsync(path, _reviewReferencePath, _reviewAllowTesting);
     }
 
     private async void Install_Click(object sender, RoutedEventArgs e)
     {
         RefreshEuroScopeStatus();
-        if (!CanGetPackage || _plan is null || ConfirmInstall.IsChecked != true || _euroScopeBlockingReason is not null) return;
+        if (!CanGetPackage || _plan is null || !_plan.Files.Any(file => file.WritesFile) || _euroScopeBlockingReason is not null) return;
         var plan = _plan;
-        SetBusy(true, "Rechecking the reviewed package and creating a recovery backup…", "Installing reviewed package");
+        _writing = true;
+        SetBusy(true, "Checking files and preparing the backup…", "Updating Swedish GNG");
         ReportingEvents.Start(ReportingApplication.Gng, ReportingOperation.Install);
         ClosePopups();
         var progress = new Progress<string>(message => { if (_busy) StatusText.Text = message; });
@@ -927,52 +1049,87 @@ public partial class GngUpdateWindow : Window
             var result = await Task.Run(() => GngUpdateService.Install(plan, progress));
             ActivityHistoryService.Record(ActivityApplication.Gng, ActivityOperation.Install, ActivityOutcome.Completed,
                 plan.Version, result.BackupFolder, DataFolder);
+            InstalledPackageVersion = plan.Version;
             InstallationCompleted = true;
+            CompletionRevision++;
             _newCompleteZip = result.CompletePackagePath;
             _oldCompleteZip = result.PreviousCompletePackagePath;
-            ShowCompletion("Package installed", $"{result.InstalledFileCount:N0} files installed. Check GNG fonts and review your controller profile before controlling. Launchpad has not applied credentials or started EuroScope.", result.BackupFolder);
-            CleanupButton.Visibility = _newCompleteZip is not null ? Visibility.Visible : Visibility.Collapsed;
-            CleanupHint.Text = _newCompleteZip is null
-                ? "This was an Update Only package. Cleanup needs old and new complete ZIPs; it remains available separately from the GNG row."
-                : _oldCompleteZip is null
-                    ? "Optional: review old files for cleanup. The new complete ZIP is ready; choose the old complete ZIP in the cleanup window. If you do not have it, leave those files in place."
-                    : "Optional: compare the saved old and new complete packages, then choose old files to move into a backup. Nothing is selected automatically.";
-            StatusText.Text = "Installation complete. Cleanup is optional; your recovery backup is kept.";
+            ShowCompletion("Swedish GNG is updated", $"Version {plan.Version} is installed.", result.BackupFolder);
+            await PrepareCleanupSummaryAsync();
+            StatusText.Text = "Update complete.";
         }
         catch (Exception ex)
         {
             _plan = null;
-            ConfirmInstall.IsChecked = false;
-            StatusText.Text = "Installation stopped. Keep any recovery backup and review these details before retrying: " + ex.Message;
+                ShowIssue("GNG update stopped", "The update could not finish. " + ex.Message);
             ShowPendingRecovery("Installation stopped: " + ex.Message);
             ReportingEvents.RecordFailure(ex, ReportingApplication.Gng, ReportingOperation.Install);
             ActivityHistoryService.Record(ActivityApplication.Gng, ActivityOperation.Install, ActivityOutcome.Stopped,
                 plan.Version, _pendingBackup, DataFolder);
         }
-        finally { SetBusy(false); }
+        finally { _writing = false; MutationRevision++; SetBusy(false); }
     }
 
-    private async void Restore_Click(object sender, RoutedEventArgs e)
+    private async Task PrepareCleanupSummaryAsync()
+    {
+        CleanupButton.Visibility = Visibility.Collapsed;
+        CleanupHint.Text = string.Empty;
+        if (_oldCompleteZip is not { } oldZip || _newCompleteZip is not { } newZip) return;
+        StatusText.Text = "Checking whether old package files can be archived…";
+        try
+        {
+            var paths = _saamanSettings is null ? _cleanupProtectedPaths :
+                _cleanupProtectedPaths.Concat(SaamanProfileService.GetProtectedPaths(_saamanSettings)).ToArray();
+            var comparison = await Task.Run(() => GngCleanupService.BuildPlan(DataFolder, oldZip, newZip, _selectedProfile, paths));
+            int count = comparison.Candidates.Count(file => file.IsEligible);
+            CleanupHint.Text = count == 0 ? "No old files need cleanup." :
+                $"{count:N0} old {(count == 1 ? "file can" : "files can")} be archived. Cleanup is optional.";
+            CleanupButton.Visibility = count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        }
+        catch (Exception ex)
+        {
+            Logger.Log("GNG", "Optional cleanup comparison failed: " + ex.GetType().Name + ".");
+            CleanupHint.Text = "Cleanup could not be checked. You can retry from Setup.";
+        }
+    }
+
+    private void Restore_Click(object sender, RoutedEventArgs e)
     {
         RefreshEuroScopeStatus();
         if (!Idle || _selectionInFlight || _euroScopeBlockingReason is not null) return;
         DisarmDownloadRequest(closeBrowsers: true);
-        var dialog = new OpenFolderDialog { Title = "Choose a GNG installation backup" };
-        try
+        var backupFolder = _pendingBackup ?? _lastBackupFolder ?? _suggestedRecoveryFolder;
+        if (string.IsNullOrWhiteSpace(backupFolder))
         {
-            var backups = GngUpdateService.GetBackupRoot(DataFolder);
-            if (Directory.Exists(backups)) dialog.InitialDirectory = backups;
-            if (_pendingBackup is not null) dialog.FolderName = _pendingBackup;
-            else if (_suggestedRecoveryFolder is not null && Directory.Exists(_suggestedRecoveryFolder)) dialog.FolderName = _suggestedRecoveryFolder;
+            var picker = new OpenFolderDialog { Title = "Choose a GNG installation backup" };
+            try { var root = GngUpdateService.GetBackupRoot(DataFolder); if (Directory.Exists(root)) picker.InitialDirectory = root; }
+            catch (Exception ex) { ShowIssue("Recovery unavailable", ex.Message); return; }
+            if (picker.ShowDialog(Window.GetWindow(this)) != true) return;
+            backupFolder = picker.FolderName;
         }
-        catch (Exception ex) { StatusText.Text = "The recovery location could not be checked: " + ex.Message; return; }
-        if (dialog.ShowDialog(this) != true) return;
+        _reviewedRecoveryFolder = backupFolder;
+        ShowCompletion("Restore GNG backup", "Files edited since the update are kept for review. EuroScope must be closed.", backupFolder);
+        RestoreConfirmText.Text = "Restore to " + DataFolder;
+        RestoreConfirmPanel.Visibility = Visibility.Visible;
         ReportingEvents.Feature(ReportingFeature.GngRestoreReview, ReportingApplication.Gng);
-        if (MessageBox.Show(this, $"Restore this GNG update backup?\n\nBackup:\n{dialog.FolderName}\n\nDestination:\n{DataFolder}\n\nClose EuroScope first. Files changed since installation will be kept for review. Only backups for this data folder can be restored.",
-                "Restore GNG installation", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) != MessageBoxResult.Yes) return;
+        NotifyStateChanged();
+    }
+
+    private void CancelRestore_Click(object sender, RoutedEventArgs e)
+    {
+        _reviewedRecoveryFolder = null;
+        RestoreConfirmPanel.Visibility = Visibility.Collapsed;
+        NotifyStateChanged();
+    }
+
+    private async void ConfirmRestore_Click(object sender, RoutedEventArgs e)
+    {
+        if (!Idle || _reviewedRecoveryFolder is not { } backupFolder) return;
         RefreshEuroScopeStatus();
         if (_euroScopeBlockingReason is not null) return;
         _primaryPackagePath = _referenceVersion = null;
+        _writing = true;
+        RestoreConfirmPanel.Visibility = Visibility.Collapsed;
         SetBusy(true, "Checking the backup and restoring files…", "Restoring backup");
         ReportingEvents.Start(ReportingApplication.Gng, ReportingOperation.Restore);
         ClosePopups();
@@ -984,7 +1141,7 @@ public partial class GngUpdateWindow : Window
             InstallationCompleted = false;
             _newCompleteZip = _oldCompleteZip = null;
             CleanupButton.Visibility = Visibility.Collapsed;
-            var result = await Task.Run(() => GngUpdateService.Restore(dialog.FolderName, DataFolder, _protectedPaths, progress));
+            var result = await Task.Run(() => GngUpdateService.Restore(backupFolder, DataFolder, _protectedPaths, progress));
             ActivityHistoryService.Record(ActivityApplication.Gng, ActivityOperation.Restore,
                 result.SkippedFiles.Count == 0 ? ActivityOutcome.Completed : ActivityOutcome.NeedsAttention,
                 recoveryFolder: result.BackupFolder, dataFolder: DataFolder);
@@ -994,71 +1151,125 @@ public partial class GngUpdateWindow : Window
             if (result.SkippedFiles.Count > 0)
                 details += $" {result.SkippedFiles.Count:N0} files need attention. Recovery remains incomplete. Preserve changed files outside the data folder, resolve the items below, then restore again.\n\n" + string.Join(Environment.NewLine, result.SkippedFiles);
             ShowCompletion(result.SkippedFiles.Count == 0 ? "Backup restored" : "Recovery needs attention", details, result.BackupFolder);
-            StatusText.Text = result.SkippedFiles.Count == 0 ? "Restore finished. Close this window to refresh Launchpad." : "Keep the recovery backup and resolve the listed files before using EuroScope.";
+            StatusText.Text = result.SkippedFiles.Count == 0 ? "Restore finished." : "Keep the recovery backup and resolve the listed files before using EuroScope.";
         }
         catch (Exception ex)
         {
-            ShowCompletion("Restore stopped", "Keep the backup and resolve this problem before trying recovery again. " + ex.Message, dialog.FolderName);
+            ShowCompletion("Restore stopped", "Keep the backup and resolve this problem before trying recovery again. " + ex.Message, backupFolder);
             StatusText.Text = "Restore did not complete. Review the recovery details above before using EuroScope.";
             ShowPendingRecovery("Restore stopped: " + ex.Message);
+            _showingIssue = true;
             ReportingEvents.RecordFailure(ex, ReportingApplication.Gng, ReportingOperation.Restore);
             ActivityHistoryService.Record(ActivityApplication.Gng, ActivityOperation.Restore, ActivityOutcome.Stopped,
-                recoveryFolder: dialog.FolderName, dataFolder: DataFolder);
+                recoveryFolder: backupFolder, dataFolder: DataFolder);
         }
-        finally { SetBusy(false); }
+        finally { _writing = false; MutationRevision++; SetBusy(false); }
     }
 
     private void ShowCompletion(string title, string text, string backup)
     {
-        OtherOptions.IsExpanded = true;
+        OtherOptions.IsExpanded = false;
+        _reviewAssessment = null;
+        _reviewIsCurrent = false;
+        _showingReviewDetails = false;
+        _showingIssue = false;
+        CompletionChecks.Visibility = CheckFontsButton.Visibility = CheckProfileButton.Visibility = Visibility.Collapsed;
         SetStage(title);
         _plan = null;
         _reviewPackagePath = _reviewReferencePath = null;
         _showingCompletion = true;
-        ConfirmInstall.IsChecked = false;
         BrowserPanel.Visibility = ReviewPanel.Visibility = Visibility.Collapsed;
         CompletePanel.Visibility = Visibility.Visible;
         CompleteTitle.Text = title;
         CompleteText.Text = text;
         CompleteText.ScrollToHome();
+        _lastBackupFolder = string.IsNullOrWhiteSpace(backup) ? null : backup;
         BackupText.Text = backup;
+        RecoveryDetails.Visibility = string.IsNullOrWhiteSpace(backup) ? Visibility.Collapsed : Visibility.Visible;
+        RecoveryDetails.IsExpanded = _recoveryRequired || title == "Review GNG recovery";
+        RestoreConfirmPanel.Visibility = Visibility.Collapsed;
         CleanupButton.Visibility = Visibility.Collapsed;
         CleanupHint.Text = string.Empty;
-        StepText.Text = "3  Review the result and keep your backup";
+        StepText.Text = string.Empty;
+        BackupText.Visibility = string.IsNullOrWhiteSpace(backup) ? Visibility.Collapsed : Visibility.Visible;
         CloseButton.Content = "Done";
+        UpdateControls();
     }
 
     private void Cleanup_Click(object sender, RoutedEventArgs e)
     {
         if (!Idle || _newCompleteZip is null) return;
-        _cleanupOpen = true;
-        UpdateControls();
         try
         {
             GngUpdateService.RequireNoPendingUpdate(DataFolder);
-            // A just-completed GNG installation may have saved MAESTRO restoration
-            // information after this window opened. Refresh its cleanup protections.
             var cleanupPaths = _saamanSettings is null ? _cleanupProtectedPaths :
                 _cleanupProtectedPaths.Concat(SaamanProfileService.GetProtectedPaths(_saamanSettings)).ToArray();
-            var cleanup = new GngCleanupWindow(DataFolder, _selectedProfile, cleanupPaths, _oldCompleteZip, _newCompleteZip) { Owner = this };
-            cleanup.ShowDialog();
-            AttemptedChanges |= cleanup.AttemptedChanges;
+            var cleanup = new GngCleanupControl(DataFolder, _selectedProfile, cleanupPaths, _oldCompleteZip, _newCompleteZip);
+            _cleanupControl = cleanup;
+            _cleanupOpen = true;
+            cleanup.StateChanged += NotifyStateChanged;
+            cleanup.CloseRequested += (_, _) =>
+            {
+                if (!cleanup.CanDismiss) return;
+                AttemptedChanges |= cleanup.AttemptedChanges;
+                if (cleanup.AttemptedChanges) MutationRevision++;
+                cleanup.StateChanged -= NotifyStateChanged;
+                _cleanupControl = null;
+                _cleanupOpen = false;
+                CloseNestedView();
+            };
+            ShowNestedView(cleanup);
         }
-        catch (Exception ex) { StatusText.Text = "Cleanup could not open: " + ex.Message; ShowPendingRecovery(StatusText.Text); }
-        finally { _cleanupOpen = false; UpdateControls(); }
+        catch (Exception ex) { _cleanupOpen = false; ShowIssue("Cleanup unavailable", ex.Message); ShowPendingRecovery(); }
+        UpdateControls();
+    }
+
+    private void ShowNestedView(UIElement content)
+    {
+        NestedContent.Content = content;
+        OperationBody.Visibility = Visibility.Collapsed;
+        NestedContent.Visibility = Visibility.Visible;
+        NotifyStateChanged();
+    }
+
+    private void CloseNestedView()
+    {
+        NestedContent.Content = null;
+        NestedContent.Visibility = Visibility.Collapsed;
+        OperationBody.Visibility = Visibility.Visible;
+        UpdateControls();
     }
 
     private void SetStage(string title)
     {
-        DownloadStageText.Text = title;
+        DownloadStageText.Text = title switch
+        {
+            "Checking saved packages" or "Preparing installation review" or "Checking downloaded update (1 of 2)" or "Checking reviewed package" => "Checking update",
+            "Preparing download" or "Finding your package" or "Starting package download" => "Starting download",
+            "Getting Full reference (2 of 2)" or "Starting Full reference (2 of 2)" => "Downloading update (2 of 2)",
+            "Downloading Full reference (2 of 2)" => "Downloading update (2 of 2)",
+            "Downloading Update Only (1 of 2)" => "Downloading update (1 of 2)",
+            "Downloading Full Package" => "Downloading update",
+            "Updating Swedish GNG" => "Installing update",
+            _ => title
+        };
         DownloadStageText.Visibility = string.IsNullOrWhiteSpace(title) ? Visibility.Collapsed : Visibility.Visible;
+        NotifyStateChanged();
     }
 
     private void ShowIssue(string title, string details)
     {
+        _showingIssue = true;
         SetStage(title);
         StatusText.Text = details;
         StatusText.ScrollToHome();
+    }
+
+    private void ShowPreparationStopped()
+    {
+        _showingIssue = false;
+        SetStage("GNG preparation stopped");
+        StatusText.Text = "Nothing was installed. Retry when you are ready.";
     }
 
     private void SetBusy(bool busy, string? message = null, string? stage = null)
@@ -1080,11 +1291,21 @@ public partial class GngUpdateWindow : Window
         StartBrowserButton.IsEnabled = CanGetPackage && !_downloadRequest.IsPending;
         FreshDownloadButton.IsEnabled = CanGetPackage && !_downloadRequest.IsPending;
         PreserveListLayout.IsEnabled = CanGetPackage && !_showingCompletion && !_downloadRequest.IsPending;
-        FilesGrid.IsEnabled = CanGetPackage;
+        FilesGrid.IsEnabled = FileSearchBox.IsEnabled = FileFilterBox.IsEnabled = CanGetPackage;
         CleanupButton.IsEnabled = CanGetPackage && _newCompleteZip is not null;
-        CloseButton.IsEnabled = !_busy && !_queuedPreview && !_cleanupOpen && _download is null;
+        CloseButton.IsEnabled = CanDismiss;
         ExternalBrowserButton.IsEnabled = RuntimeInfoButton.IsEnabled = CanGetPackage;
-        InstallButton.Visibility = ReviewPanel.Visibility == Visibility.Visible ? Visibility.Visible : Visibility.Collapsed;
+        bool reviewing = ReviewPanel.Visibility == Visibility.Visible;
+        ViewDetailsButton.Visibility = reviewing && !_showingReviewDetails ? Visibility.Visible : Visibility.Collapsed;
+        OtherOptions.Visibility = reviewing && _showingReviewDetails && OptionsTab.IsSelected || BrowserPanel.Visibility == Visibility.Visible && (StartPanel.Visibility == Visibility.Visible || _showingIssue)
+            ? Visibility.Visible : Visibility.Collapsed;
+        CloseButton.Content = _showingCompletion ? "Done" : "Cancel";
+        InstallButton.Visibility = reviewing && _plan is not null ? Visibility.Visible : Visibility.Collapsed;
+        RefreshReviewButton.Visibility = _reviewPackagePath is not null && _plan is null && !_busy ? Visibility.Visible : Visibility.Collapsed;
+        RefreshReviewButton.IsEnabled = CanGetPackage;
+        DownloadActivityPanel.Visibility = !_busy && !_showingIssue && !_preparationCancelled &&
+            (ReviewPanel.Visibility == Visibility.Visible || CompletePanel.Visibility == Visibility.Visible)
+            ? Visibility.Collapsed : Visibility.Visible;
         UpdateEuroScopeControls(CanGetPackage && _plan is not null, Idle && !_selectionInFlight);
         CancelDownloadButton.Visibility = _download is not null ? Visibility.Visible : Visibility.Collapsed;
         var core = _browser?.CoreWebView2;
@@ -1100,6 +1321,8 @@ public partial class GngUpdateWindow : Window
         StartOverButton.Visibility = _primaryPackagePath is null ? Visibility.Collapsed : Visibility.Visible;
         StartOverButton.IsEnabled = CanGetPackage;
         UpdateBrowserInteraction();
+        UpdateReviewContentLayout();
+        NotifyStateChanged();
     }
 
     private void UpdateBrowserInteraction()
@@ -1131,6 +1354,7 @@ public partial class GngUpdateWindow : Window
     private void ShowBrowserFallback(string message, bool runtimeMissing = false)
     {
         if (_closed) return;
+        _showingIssue = true;
         OtherOptions.IsExpanded = true;
         DisarmDownloadRequest();
         BrowserToolbar.Visibility = Visibility.Collapsed;
@@ -1146,17 +1370,20 @@ public partial class GngUpdateWindow : Window
         UpdateControls();
     }
 
-    private async void Import_Click(object sender, RoutedEventArgs e)
+    private async void Import_Click(object sender, RoutedEventArgs e) => await ImportAsync();
+    public async Task ImportAsync()
     {
         if (!CanGetPackage) return;
+        _preparationCancelled = false;
+        _showingIssue = false;
         DisarmDownloadRequest(closeBrowsers: true);
         var dialog = new OpenFileDialog { Title = _primaryPackagePath is null ? "Import an original ESAA GNG ZIP" : "Import the matching Swedish Full Package reference ZIP", Filter = "GNG ZIP packages (*.zip)|*.zip", CheckFileExists = true, Multiselect = false };
-        if (dialog.ShowDialog(this) == true)
+        if (dialog.ShowDialog(Window.GetWindow(this)) == true)
         {
             _reportingPackageSource = ReportingSource.Import;
             _cachedFullReferencePath = _cachedFullReferenceVersion = null;
             if (_primaryPackagePath is null) _usingSavedPackages = false;
-            if (_primaryPackagePath is null) await PreviewPackageAsync(dialog.FileName);
+            if (_primaryPackagePath is null) await PreviewPackageAsync(dialog.FileName, allowTesting: true);
             else await PreviewPackageAsync(_primaryPackagePath, dialog.FileName);
         }
     }
@@ -1164,6 +1391,8 @@ public partial class GngUpdateWindow : Window
     private void ChooseAnother_Click(object sender, RoutedEventArgs e)
     {
         if (!CanGetPackage) return;
+        _preparationCancelled = _showingIssue = false;
+        _showingReviewDetails = false;
         DisarmDownloadRequest(closeBrowsers: true);
         _primaryPackagePath = _referenceVersion = null;
         _plan = null;
@@ -1172,7 +1401,6 @@ public partial class GngUpdateWindow : Window
         _usingSavedPackages = false;
         _forceFreshCopies = false;
         _showingCompletion = false;
-        ConfirmInstall.IsChecked = false;
         BrowserPanel.Visibility = Visibility.Visible;
         StartPanel.Visibility = Visibility.Visible;
         BrowserToolbar.Visibility = Visibility.Collapsed;
@@ -1183,11 +1411,10 @@ public partial class GngUpdateWindow : Window
         SetStage("");
         ReviewPanel.Visibility = CompletePanel.Visibility = Visibility.Collapsed;
         StepText.Text = "1  Get a package   →   2  Review and install   →   3  Optional cleanup";
-        CloseButton.Content = "Close";
+        CloseButton.Content = "Cancel";
         UpdateControls();
     }
 
-    private void ConfirmationChanged(object sender, RoutedEventArgs e) { if (InstallButton is not null) UpdateControls(); }
     private void Back_Click(object sender, RoutedEventArgs e)
     {
         var browser = _browser;
@@ -1217,7 +1444,7 @@ public partial class GngUpdateWindow : Window
     }
     private async void RetryDownload_Click(object sender, RoutedEventArgs e)
     {
-        if (CanGetPackage && !_downloadRequest.IsPending) await GetPackageAsync(_forceFreshCopies);
+        if (CanGetPackage && !_downloadRequest.IsPending) await StartDownloadSafelyAsync(_forceFreshCopies);
     }
     private void StartOver_Click(object sender, RoutedEventArgs e) => ChooseAnother_Click(sender, e);
     private void StopRequest_Click(object sender, RoutedEventArgs e)
@@ -1246,7 +1473,7 @@ public partial class GngUpdateWindow : Window
             UpdateControls();
         }
     }
-    private void Close_Click(object sender, RoutedEventArgs e) => Close();
+    private void Close_Click(object sender, RoutedEventArgs e) { if (CanDismiss) Dismissed?.Invoke(); }
     private void ExternalBrowser_Click(object sender, RoutedEventArgs e)
     {
         if (!CanGetPackage) return;
@@ -1262,16 +1489,14 @@ public partial class GngUpdateWindow : Window
     }
 
     private void ClosePopups() { foreach (var popup in _popups.Keys.ToArray()) popup.Close(); }
-    private void Window_Closing(object? sender, CancelEventArgs e)
+    public void Dispose()
     {
-        if (!_busy && !_queuedPreview && !_cleanupOpen && _download is null) return;
-        e.Cancel = true;
-        StatusText.Text = _download is not null ? "Cancel the download or wait for it to finish before closing." : "Wait for the current operation and close its review before closing this window.";
-    }
-
-    private void Window_Closed(object? sender, EventArgs e)
-    {
+        if (_closed) return;
+        if (!CanDismiss) throw new InvalidOperationException("Finish or cancel the GNG operation before disposing its view.");
+        CancelFilePreviewNavigation();
         _closed = true;
+        _preparationCancellation?.Dispose();
+        _preparationCancellation = null;
         _euroScopeTimer.Stop();
         DisarmDownloadRequest();
         DetachDownload();
