@@ -17,6 +17,8 @@ internal sealed class SoftwareInstallerEnvironment
 {
     public VatEfsInstallerEnvironment? VatEfs { get; init; }
     public string LocalAppData { get; init; } = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+    public string ProgramFiles { get; init; } = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+    public Func<string?> Vacs3MachineDestination { get; init; } = ReadVacs3MachineDestination;
     public Func<SoftwareApp, IReadOnlyList<SoftwareRegistration>> ReadRegistrations { get; init; } = ReadWindowsRegistrations;
     public Func<string, SoftwareBinary> ReadBinary { get; init; } = ReadFileIdentity;
     public Action<string, string> VerifyPublisher { get; init; } = SoftwareInstallerNative.VerifyPublisher;
@@ -47,11 +49,11 @@ internal sealed class SoftwareInstallerEnvironment
             var expectedName = app == SoftwareApp.Vacs ? "vacs" : "TrackAudio";
             if (!Get("DisplayName").Equals(expectedName, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException("The product registration has an unexpected identity.");
-            using var destinationKey = baseKey.OpenSubKey(app == SoftwareApp.Vacs ? @"Software\vacs\vacs" : @"Software\" + SoftwareInstaller.TrackAudioGuid, writable: false);
+            using var destinationKey = baseKey.OpenSubKey(app == SoftwareApp.Vacs ? VacsDestinationKey(Get("DisplayVersion")) : @"Software\" + SoftwareInstaller.TrackAudioGuid, writable: false);
             var restoreRoot = Unquote(destinationKey?.GetValue(app == SoftwareApp.Vacs ? "" : "InstallLocation") as string ?? "");
             var root = app == SoftwareApp.Vacs ? Unquote(Get("InstallLocation")) : restoreRoot;
             var mainName = app == SoftwareApp.Vacs ? Get("MainBinaryName") : "trackaudio.exe";
-            if (!mainName.Equals(app == SoftwareApp.Vacs ? "vacs-client.exe" : "trackaudio.exe", StringComparison.OrdinalIgnoreCase) ||
+            if (!mainName.Equals(app == SoftwareApp.Vacs ? SoftwareInstaller.VacsExecutableName(Get("DisplayVersion")) : "trackaudio.exe", StringComparison.OrdinalIgnoreCase) ||
                 !SoftwareInstaller.SamePath(root, restoreRoot))
                 throw new InvalidDataException("The registered installer destination/main executable is not recognized.");
             SoftwareInstaller.RejectReparse(root);
@@ -71,6 +73,19 @@ internal sealed class SoftwareInstallerEnvironment
         return registrations.Distinct().ToArray();
     }
 
+    internal static string VacsDestinationKey(string version) => SoftwareInstaller.VacsExecutableName(version) == "vacs.exe"
+        ? @"Software\The vacs Project\vacs" : @"Software\vacs\vacs";
+
+    private static string? ReadVacs3MachineDestination()
+    {
+        using var machine = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64);
+        using var key = machine.OpenSubKey(VacsDestinationKey("3.0.0"), writable: false);
+        if (key == null) return null;
+        var value = key.GetValue("");
+        if (value is not string path) throw new InvalidDataException("The VACS installer destination is not recognized.");
+        return string.IsNullOrWhiteSpace(path) ? null : Unquote(path);
+    }
+
     private static string Unquote(string value)
     {
         value = value.Trim();
@@ -84,18 +99,29 @@ internal sealed class SoftwareInstallerEnvironment
         if (app == SoftwareApp.VatEfs) return VatEfsInstaller.GetBlockingReason() is not null;
         // Process-name enumeration spans sessions without reading another user's credentials or profiles.
         // Any matching process blocks; we never terminate one on the user's behalf.
-        var name = app switch { SoftwareApp.Vacs => "vacs-client", SoftwareApp.Vatis => "vATIS", _ => "trackaudio" };
         try
         {
-            var processes = Process.GetProcessesByName(name);
-            try { return processes.Length != 0; }
-            finally { foreach (var process in processes) process.Dispose(); }
+            foreach (var name in ProductProcessNames(app))
+            {
+                var processes = Process.GetProcessesByName(name);
+                try { if (processes.Length != 0) return true; }
+                finally { foreach (var process in processes) process.Dispose(); }
+            }
+            return false;
         }
         catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
         {
             throw new IOException("The application process state could not be checked in every Windows session. Update manually.");
         }
     }
+
+    internal static IReadOnlyList<string> ProductProcessNames(SoftwareApp app) => app switch
+    {
+        SoftwareApp.Vacs => ["vacs-client", "vacs"],
+        SoftwareApp.Vatis => ["vATIS"],
+        SoftwareApp.TrackAudio => ["trackaudio"],
+        _ => throw new ArgumentOutOfRangeException(nameof(app))
+    };
 
     private static string? ReadPrerequisiteProblem(SoftwareApp app)
     {

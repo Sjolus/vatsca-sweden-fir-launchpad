@@ -23,7 +23,7 @@ Close affected applications first. Browser-session reset also requires Microsoft
 | --- | --- | --- |
 | EuroScope | A supported Windows Installer installation. Portable or unfamiliar copies need manual removal. | The installer can remove its sample files in `%APPDATA%\EuroScope`, so Launchpad requires a recovery export. Custom external profiles remain. Remove Swedish GNG separately. |
 | Swedish GNG | The configured folder's `ESAA` directory, root files beginning `ESAA `, and recognized generated `ESAA-Sweden_…` SCT/ESE/RWY files. | Package defaults and personal files are mixed together. There is no settings-only reset; keeping them means exporting for manual restoration. Unrelated files and the parent folder remain. |
-| VACS | Supported VACS 2.x installations. | Optional deletion of the current user's Roaming/Local `app.vacs.vacs-client` folders. Custom locations remain. |
+| VACS | Supported VACS 2.x and 3.x installations. | Optional deletion of the current user's Roaming/Local `app.vacs.vacs-client` folders. Custom locations remain. |
 | TrackAudio | Supported current-user installations. | `%APPDATA%\trackaudio` stays unless settings deletion is selected. |
 | vATIS | The supported standard installation. Its uninstaller removes the whole folder, including data. | Keeping settings means export and manual restoration. A settings-only reset removes known profiles, logs and configuration files while retaining binaries and unknown files. |
 | VatEFS | The configured `VatEFS.dll` only. | Optional deletion of Launchpad's VatEFS browser profile. Disable or repair the EuroScope plugin references yourself; other VatEFS components remain. |

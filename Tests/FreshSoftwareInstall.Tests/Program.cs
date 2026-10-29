@@ -26,6 +26,24 @@ var tests = new (string Name, Func<Task> Run)[]
         using var f = new Fixture(); f.Settings.VacsExePath = f.File("Existing/vacs-client.exe");
         await Reject(() => f.Preview()); Check(f.SourceCalls == 0 && f.Downloads == 0);
     }),
+    ("fresh VACS 3 reviews and returns its renamed executable", async () =>
+    {
+        using var f = new Fixture(vacsVersion: "3.0.0"); var plan = await f.Preview();
+        Check(plan.ExecutablePath == Path.Combine(f.TargetRoot, "vacs.exe") && plan.Release.Version == "3.0.0");
+        var result = await f.Service.ApplyAsync(plan);
+        Check(result.ExecutablePath == plan.ExecutablePath && f.Commands.Count == 1 && !f.Running);
+        Check(f.Registrations.Single().MainBinaryName == "vacs.exe");
+    }),
+    ("fresh VACS rejects unknown generations before download", async () =>
+    {
+        using var f = new Fixture(vacsVersion: "4.0.0");
+        await Reject(() => f.Preview()); Check(f.Downloads == 0 && f.Commands.Count == 0);
+    }),
+    ("fresh VACS protects the per-user Programs installation folder", async () =>
+    {
+        using var f = new Fixture(vacsVersion: "3.0.0"); f.File("Local/Programs/vacs/vacs.exe");
+        await Reject(() => f.Preview()); Check(f.SourceCalls == 0 && f.Commands.Count == 0);
+    }),
     ("VatEFS fresh install reviews its prerelease and installs the plugin and backend without starting them", async () =>
     {
         using var f = new Fixture(SoftwareApp.VatEfs); var plan = await f.Preview();
@@ -295,12 +313,12 @@ sealed class Fixture : IDisposable
     public Func<Task>? BeforeVatEfsBoundary;
     public FreshSoftwareInstallService Service { get; }
     private readonly HttpClient _http;
-    public Fixture(SoftwareApp app = SoftwareApp.Vacs, TimeSpan? timeout = null)
+    public Fixture(SoftwareApp app = SoftwareApp.Vacs, TimeSpan? timeout = null, string vacsVersion = "2.8.0")
     {
         App = app; Dir("Recovery");
-        string version = app == SoftwareApp.Vacs ? "2.8.0" : app == SoftwareApp.TrackAudio ? "1.4.0" : app == SoftwareApp.VatEfs ? "0.0.15" : "4.1.0-beta.19";
-        string fileName = app == SoftwareApp.Vacs ? "vacs_2.8.0_x64-setup.exe" : app == SoftwareApp.TrackAudio ? "trackaudio-1.4.0-x64-setup.exe" : app == SoftwareApp.VatEfs ? "vatefs-0.0.15.msi" : "org.vatsim.vatis-4.1.0-beta.19-full.nupkg";
-        string uri = app == SoftwareApp.Vacs ? "https://github.com/vacs-project/vacs/releases/download/vacs-client-v2.8.0/" + fileName :
+        string version = app == SoftwareApp.Vacs ? vacsVersion : app == SoftwareApp.TrackAudio ? "1.4.0" : app == SoftwareApp.VatEfs ? "0.0.15" : "4.1.0-beta.19";
+        string fileName = app == SoftwareApp.Vacs ? $"vacs_{version}_x64-setup.exe" : app == SoftwareApp.TrackAudio ? "trackaudio-1.4.0-x64-setup.exe" : app == SoftwareApp.VatEfs ? "vatefs-0.0.15.msi" : "org.vatsim.vatis-4.1.0-beta.19-full.nupkg";
+        string uri = app == SoftwareApp.Vacs ? $"https://github.com/vacs-project/vacs/releases/download/vacs-client-v{version}/" + fileName :
             app == SoftwareApp.TrackAudio ? "https://github.com/pierr3/TrackAudio/releases/download/1.4.0/" + fileName : app == SoftwareApp.VatEfs ? "https://github.com/minsulander/vatefs/releases/download/v0.0.15/" + fileName : "https://vatis.app/downloads/windows/" + fileName;
         Bytes = app == SoftwareApp.Vatis ? Package() : Encoding.UTF8.GetBytes("Synthetic inert installer " + app);
         Release = new(app, version, new(uri), fileName, Convert.ToHexString(SHA256.HashData(Bytes)), Bytes.Length) { IsPrerelease = app == SoftwareApp.VatEfs };
@@ -357,7 +375,7 @@ sealed class Fixture : IDisposable
     public string File(string relative, string contents = "synthetic") { var path = PathOf(relative); Directory.CreateDirectory(Path.GetDirectoryName(path)!); System.IO.File.WriteAllText(path, contents); return path; }
     public int Simulate(FreshSoftwareCommand command)
     {
-        Directory.CreateDirectory(command.InstallDirectory); var main = App == SoftwareApp.Vacs ? "vacs-client.exe" : "trackaudio.exe";
+        Directory.CreateDirectory(command.InstallDirectory); var main = App == SoftwareApp.Vacs ? (Release.Version.StartsWith("3.") ? "vacs.exe" : "vacs-client.exe") : "trackaudio.exe";
         System.IO.File.WriteAllText(Path.Combine(command.InstallDirectory, main), "synthetic installed binary");
         var scope = App == SoftwareApp.Vacs ? "AllUsers" : "CurrentUser";
         Registrations.Add(new(command.InstallDirectory, command.InstallDirectory, scope, Release.Version, main)); return 0;

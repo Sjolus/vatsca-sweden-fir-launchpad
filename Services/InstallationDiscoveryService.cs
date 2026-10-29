@@ -30,7 +30,7 @@ public sealed class InstallationDiscoveryService
                 {
                     try
                     {
-                        var expected = app == SoftwareApp.Vacs ? "vacs-client.exe" : "trackaudio.exe";
+                        var expected = app == SoftwareApp.Vacs ? SoftwareInstaller.VacsExecutableName(item.Version) : "trackaudio.exe";
                         if (!item.MainBinaryName.Equals(expected, StringComparison.OrdinalIgnoreCase)) continue;
                         var exe = SoftwareInstaller.FullPath(Path.Combine(item.RootPath, expected));
                         if (!IsRegularFile(exe)) continue;

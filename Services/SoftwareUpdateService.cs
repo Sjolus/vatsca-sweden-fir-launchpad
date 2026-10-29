@@ -17,6 +17,7 @@ public interface ISoftwareInstaller
     bool RestartRequired => false;
     SoftwareInstallation Inspect(SoftwareApp app, string exePath);
     bool IsRunning(SoftwareInstallation installation);
+    string? GetUpdateProblem(SoftwareInstallation installation, SoftwareRelease release) => null;
     Task VerifyPackageAsync(SoftwareRelease release, string packagePath, CancellationToken cancellationToken);
     Task<string?> BackupAsync(SoftwareInstallation installation, IProgress<string>? progress, CancellationToken cancellationToken);
     Task<SoftwareInstallResult> InstallAsync(SoftwareInstallation installation, SoftwareRelease release,
@@ -110,6 +111,8 @@ public sealed class SoftwareUpdateService
                     "No compatible release was found.", installation));
             ValidateRelease(app, release);
             var comparison = Compare(release.Version, installation.Version);
+            if (comparison > 0 && _installer.GetUpdateProblem(installation, release) is { } problem)
+                return SetState(new(app, SoftwareUpdatePhase.Unavailable, problem, installation, release));
             return SetState(new(app, comparison > 0 ? SoftwareUpdatePhase.Available : SoftwareUpdatePhase.Current,
                 comparison > 0 ? "Update available." : "Installed version is current or newer.", installation, release));
         }
@@ -140,6 +143,7 @@ public sealed class SoftwareUpdateService
             var release = preview.Release;
             ValidateRelease(app, release);
             await Task.Run(() => ValidateUnchangedInstallation(installation), token).ConfigureAwait(false);
+            if (_installer.GetUpdateProblem(installation, release) is { } problem) throw new SoftwareUpdateCompatibilityException(problem);
             token.ThrowIfCancellationRequested();
 
             SetState(preview with { Phase = SoftwareUpdatePhase.Downloading, Message = "Downloading update…", ProgressPercent = 0 });

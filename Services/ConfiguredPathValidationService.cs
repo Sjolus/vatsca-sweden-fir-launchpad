@@ -171,7 +171,7 @@ public sealed class ConfiguredPathValidationService
         {
             ConfiguredPathKind.EuroScopeExecutable => ("EuroScope", "EuroScope.exe", new[] { "EuroScope", "EuroScope Application" }),
             ConfiguredPathKind.TrackAudioExecutable => ("TrackAudio", "trackaudio.exe", new[] { "TrackAudio" }),
-            ConfiguredPathKind.VacsExecutable => ("VACS", "vacs-client.exe", new[] { "vacs", "vacs-client", "VACS Client" }),
+            ConfiguredPathKind.VacsExecutable => ("VACS", binary.ProductVersion.StartsWith("3.", StringComparison.Ordinal) ? "vacs.exe" : "vacs-client.exe", new[] { "vacs", "vacs-client", "VACS Client" }),
             ConfiguredPathKind.VatisExecutable => ("vATIS", "vATIS.exe", new[] { "vATIS" }),
             _ => ("VatEFS", "VatEFS.dll", new[] { "VatEFS" })
         };
@@ -197,7 +197,8 @@ public sealed class ConfiguredPathValidationService
             return result(PathValidationStatus.Warning, name + " was recognized under a different filename. Keep only if this is your intended copy.");
         if (kind == ConfiguredPathKind.EuroScopeExecutable && binary.ProductVersion.Trim() != EuroScopePolicy.SupportedVersion)
             return result(PathValidationStatus.Warning, "EuroScope was recognized, but the supported Swedish version " + EuroScopePolicy.SupportedVersion + " was not confirmed. Use Manage to review the version.");
-        if (kind == ConfiguredPathKind.VacsExecutable && !binary.ProductVersion.StartsWith("2.", StringComparison.Ordinal))
+        if (kind == ConfiguredPathKind.VacsExecutable && !binary.ProductVersion.StartsWith("2.", StringComparison.Ordinal) &&
+            !binary.ProductVersion.StartsWith("3.", StringComparison.Ordinal))
             return result(PathValidationStatus.Warning, "VACS was recognized, but this version may need manual management. This location can still be kept.");
         return result(PathValidationStatus.Verified, name + " file identified. Installation/update support is checked separately.");
     }
