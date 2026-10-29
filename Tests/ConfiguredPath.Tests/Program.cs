@@ -61,6 +61,16 @@ try
     });
     Check("older EuroScope remains optional warning", () => Status(kinds[0], Binary(names[0], products[0], "3.2.2.3"), PathValidationStatus.Warning));
     Check("older VACS remains optional warning", () => Status(kinds[2], Binary(names[2], products[2], "1.9.0"), PathValidationStatus.Warning));
+    Check("VACS 3 canonical executable is verified", () => Status(kinds[2], Binary("vacs.exe", products[2], "3.0.0"), PathValidationStatus.Verified));
+    Check("VACS filename from another generation remains a custom-copy warning", () =>
+    {
+        Status(kinds[2], Binary("vacs-client.exe", products[2], "3.0.0"), PathValidationStatus.Warning);
+        Status(kinds[2], Binary("vacs.exe", products[2], "2.8.0"), PathValidationStatus.Warning);
+        Status(kinds[2], Binary("my-vacs.exe", products[2], "3.0.0"), PathValidationStatus.Warning);
+    });
+    Check("future VACS generation remains a management warning", () => Status(kinds[2], Binary("vacs.exe", products[2], "4.0.0"), PathValidationStatus.Warning));
+    Check("VACS 3 executable still needs matching product identity", () => Status(kinds[2], Binary("vacs.exe", "TrackAudio", "3.0.0"), PathValidationStatus.Invalid));
+    Check("VACS 3 renamed NSIS installer is rejected", () => Status(kinds[2], Binary("vacs.exe", products[2], "3.0.0", nsis: true), PathValidationStatus.Invalid));
     Check("recognized custom executable name warns", () => Status(kinds[1], Binary("my-audio.exe", products[1]), PathValidationStatus.Warning));
     Check("renamed unrelated executable rejected", () => Status(kinds[1], Binary(names[1], "Unrelated Editor"), PathValidationStatus.Invalid));
     Check("wrong ATC application's identity rejected", () => Status(kinds[2], Binary(names[2], "TrackAudio"), PathValidationStatus.Invalid));

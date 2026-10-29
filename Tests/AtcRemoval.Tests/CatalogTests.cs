@@ -75,6 +75,34 @@ internal static class CatalogTests
                 Check(!f.Find(AtcRemovalApp.TrackAudio).CanRemoveApplication);
                 return Task.CompletedTask;
             }),
+            ("VACS 3 discovery and removal use its renamed registered executable", () =>
+            {
+                foreach (var scope in new[] { "CurrentUser", "AllUsers" })
+                {
+                    using var f = new Fixture(); f.Install(SoftwareApp.Vacs, scope, "3.0.0");
+                    var found = new InstallationDiscoveryService(f.Environment).Discover().Single(c => c.Id == AtcRemovalApp.Vacs);
+                    Check(found.ExecutablePath == f.Settings.VacsExePath && Path.GetFileName(found.ExecutablePath) == "vacs.exe");
+                    Check(found.CanManage && found.Scope == scope);
+                    var target = f.Find(AtcRemovalApp.Vacs);
+                    Check(target.CanRemoveApplication && target.VendorSpec!.Installation!.ExePath == found.ExecutablePath);
+                    var command = AtcRemovalVendor.BuildCommand(target.VendorSpec!, "staged.exe");
+                    Check(command.Arguments.SequenceEqual(new[] { "/S", "/" + scope }) && command.Elevate == (scope == "AllUsers"));
+                    Check(f.RunCount == 0);
+                }
+                return Task.CompletedTask;
+            }),
+            ("VACS discovery rejects renamed arbitrary binaries and generation mismatches", () =>
+            {
+                foreach (var name in new[] { "vacs-client.exe", "other.exe", "../vacs.exe" })
+                {
+                    using var f = new Fixture(); f.Install(SoftwareApp.Vacs, version: "3.0.0");
+                    var original = f.Registrations[SoftwareApp.Vacs][0];
+                    f.Registrations[SoftwareApp.Vacs][0] = original with { MainBinaryName = name };
+                    Check(!new InstallationDiscoveryService(f.Environment).Discover().Any(c => c.Id == AtcRemovalApp.Vacs));
+                    Check(f.RunCount == 0);
+                }
+                return Task.CompletedTask;
+            }),
             ("MSI path, publisher and numeric product version prove EuroScope identity", () =>
             {
                 using var f = new Fixture(); f.InstallEuroScope();
@@ -310,12 +338,12 @@ internal static class CatalogTests
         internal string PathOf(string relative) => Path.Combine(Root, relative.Replace('/', Path.DirectorySeparatorChar));
         internal string Dir(string relative) { var path = PathOf(relative); Directory.CreateDirectory(path); return path; }
         internal string File(string relative, string content = "synthetic") { var path = PathOf(relative); Directory.CreateDirectory(Path.GetDirectoryName(path)!); System.IO.File.WriteAllText(path, content); return path; }
-        internal void Install(SoftwareApp app, string scope = "CurrentUser")
+        internal void Install(SoftwareApp app, string scope = "CurrentUser", string? version = null)
         {
-            var main = app == SoftwareApp.Vacs ? "vacs-client.exe" : "trackaudio.exe";
+            version ??= app == SoftwareApp.Vacs ? "2.8.0" : "1.4.0";
+            var main = app == SoftwareApp.Vacs ? version.StartsWith("3.", StringComparison.Ordinal) ? "vacs.exe" : "vacs-client.exe" : "trackaudio.exe";
             var root = Dir("Apps/" + app); var path = File("Apps/" + app + "/" + main);
             File("Apps/" + app + "/" + (app == SoftwareApp.Vacs ? "uninstall.exe" : "Uninstall TrackAudio.exe"));
-            var version = app == SoftwareApp.Vacs ? "2.8.0" : "1.4.0";
             Binaries[path] = new(version, app == SoftwareApp.Vacs ? "vacs" : "TrackAudio");
             Registrations[app] = new() { new(root, root, scope, version, main) };
             if (app == SoftwareApp.Vacs) Settings.VacsExePath = path; else Settings.TrackAudioExePath = path;

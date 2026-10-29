@@ -40,7 +40,9 @@ public sealed class SoftwareInstaller : ISoftwareInstaller
             RequireFile(exe);
             if (app == SoftwareApp.Vatis) return InspectVatis(exe);
 
-            var expectedName = app == SoftwareApp.Vacs ? "vacs-client.exe" : "trackaudio.exe";
+            var binary = _environment.ReadBinary(exe);
+            var version = NormalizeVersion(binary.ProductVersion);
+            var expectedName = app == SoftwareApp.Vacs ? VacsExecutableName(version) : "trackaudio.exe";
             if (!Path.GetFileName(exe).Equals(expectedName, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException("The configured executable is not the supported product executable.");
             var registrations = _environment.ReadRegistrations(app);
@@ -58,16 +60,12 @@ public sealed class SoftwareInstaller : ISoftwareInstaller
             RejectReparse(root);
             if (!SamePath(Path.GetDirectoryName(exe)!, root) || Path.GetPathRoot(root) == root)
                 throw new InvalidDataException("Unsupported installation layout.");
-            var binary = _environment.ReadBinary(exe);
-            var version = NormalizeVersion(binary.ProductVersion);
             var registeredVersion = NormalizeVersion(registration.Version);
             var appName = app == SoftwareApp.Vacs ? "VACS" : "TrackAudio";
             if (!binary.ProductName.Equals(app == SoftwareApp.Vacs ? "vacs" : "TrackAudio", StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException($"The selected program is not identified as {appName}. Choose the installed {expectedName} file in Settings.");
             if (registeredVersion != version)
                 throw new InvalidDataException($"{appName} is version {VersionForMessage(version)}, but Windows lists version {VersionForMessage(registeredVersion)}. Repair or reinstall {appName} using its official installer before updating it in Launchpad.");
-            if (app == SoftwareApp.Vacs && !version.StartsWith("2.", StringComparison.Ordinal))
-                throw new InvalidDataException("Only the VACS 2.x NSIS installation layout is supported.");
             var prerequisite = _environment.PrerequisiteProblem(app);
             if (prerequisite != null) throw new InvalidDataException(prerequisite);
             return new(app, exe, version, root, registration.Scope, null, true, null);
@@ -112,6 +110,19 @@ public sealed class SoftwareInstaller : ISoftwareInstaller
 
     public bool IsRunning(SoftwareInstallation installation) => installation.App == SoftwareApp.VatEfs
         ? _vatEfs.IsRunning(installation) : _environment.IsRunning(installation.App);
+
+    public string? GetUpdateProblem(SoftwareInstallation installation, SoftwareRelease release)
+    {
+        if (installation.App != SoftwareApp.Vacs || release.App != SoftwareApp.Vacs) return null;
+        if (VacsExecutableName(installation.Version) != "vacs-client.exe" || VacsExecutableName(release.Version) != "vacs.exe") return null;
+        // VACS 3 changed the manufacturer registry key. Its NSIS MultiUser initialization
+        // ignores /D for this migration and can silently move a custom 2.x installation.
+        var destination = _environment.Vacs3MachineDestination();
+        if (installation.Scope != "AllUsers" || !SamePath(installation.RootPath, Path.Combine(_environment.ProgramFiles, "vacs")) ||
+            destination != null && !SamePath(destination, installation.RootPath))
+            return "VACS 3 cannot safely upgrade this VACS 2 installation in place. Use the official installer to uninstall VACS while keeping its data, then install VACS 3 and select vacs.exe in Setup → Applications.";
+        return null;
+    }
 
     public async Task VerifyPackageAsync(SoftwareRelease release, string packagePath, CancellationToken cancellationToken)
     {
@@ -232,6 +243,7 @@ public sealed class SoftwareInstaller : ISoftwareInstaller
             return await _vatEfs.InstallAsync(installation, release, packagePath, progress).ConfigureAwait(false);
         if (release.App != installation.App) throw new InvalidDataException("Installation and package products differ.");
         Revalidate(installation);
+        if (GetUpdateProblem(installation, release) is { } problem) throw new SoftwareUpdateCompatibilityException(problem);
         await using var packageLock = new FileStream(packagePath, FileMode.Open, FileAccess.Read, FileShare.Read);
         await VerifyPackageAsync(release, packagePath, CancellationToken.None).ConfigureAwait(false);
         if (!IsNewer(release.Version, installation.Version)) throw new InvalidDataException("Only an explicitly selected newer version may be installed.");
@@ -250,11 +262,16 @@ public sealed class SoftwareInstaller : ISoftwareInstaller
         Revalidate(installation);
         RequireStopped(installation);
         progress?.Report("Installing in the background. Do not start the application until this finishes…");
+        if (GetUpdateProblem(installation, release) is { } changedDestination) throw new SoftwareUpdateCompatibilityException(changedDestination);
         var exitCode = await _environment.RunAsync(command).ConfigureAwait(false);
         RestartRequired |= exitCode == 3010;
         if (exitCode == 1223) throw new IOException("Windows permission approval was cancelled; the update was not completed.");
         if (exitCode != 0) throw new IOException($"The vendor installer returned exit code {exitCode}. Check the installed version before retrying; keep the backup.");
-        var after = Inspect(installation.App, installation.ExePath);
+        // VACS 3 renamed its main executable. Verify the target version in the reviewed
+        // root; never adopt another installation just because the vendor exited successfully.
+        var updatedExe = installation.App == SoftwareApp.Vacs
+            ? Path.Combine(installation.RootPath, VacsExecutableName(release.Version)) : installation.ExePath;
+        var after = Inspect(installation.App, updatedExe);
         if (!after.CanUpdate || !SamePath(after.RootPath, installation.RootPath) || after.Scope != installation.Scope || after.Version != release.Version)
             throw new IOException("The installer exited, but the expected installed version and destination could not be verified. Keep the backup and update manually if needed.");
         if (IsRunning(after)) throw new IOException("The vendor installation finished, but the application is running unexpectedly. It was not stopped by Launchpad.");
@@ -331,9 +348,9 @@ public sealed class SoftwareInstaller : ISoftwareInstaller
             NormalizeVersion(release.Version) != release.Version || release.DownloadUri.Scheme != Uri.UriSchemeHttps ||
             !string.IsNullOrEmpty(release.DownloadUri.UserInfo) || !release.DownloadUri.IsDefaultPort)
             throw new InvalidDataException("Invalid release metadata.");
-        if (release.App != SoftwareApp.Vatis && release.Version.Contains('-') ||
-            release.App == SoftwareApp.Vacs && !release.Version.StartsWith("2.", StringComparison.Ordinal))
+        if (release.App != SoftwareApp.Vatis && release.Version.Contains('-'))
             throw new InvalidDataException("This release generation/channel has not been verified for background installation.");
+        if (release.App == SoftwareApp.Vacs) _ = VacsExecutableName(release.Version);
         var expected = release.App switch
         {
             SoftwareApp.Vatis => $"{VatisId}-{release.Version}-full.nupkg",
@@ -352,6 +369,16 @@ public sealed class SoftwareInstaller : ISoftwareInstaller
         if (!release.DownloadUri.AbsoluteUri.StartsWith(expectedPrefix, StringComparison.Ordinal) ||
             !string.IsNullOrEmpty(release.DownloadUri.Query) || !string.IsNullOrEmpty(release.DownloadUri.Fragment))
             throw new InvalidDataException("The release is not from the supported official distribution source.");
+    }
+
+    internal static string VacsExecutableName(string version)
+    {
+        if (SoftwareVersion.TryParse(NormalizeVersion(version), out var parsed) && !parsed.IsPrerelease)
+        {
+            if (parsed.Value.StartsWith("2.", StringComparison.Ordinal)) return "vacs-client.exe";
+            if (parsed.Value.StartsWith("3.", StringComparison.Ordinal)) return "vacs.exe";
+        }
+        throw new InvalidDataException("Only the VACS 2.x and 3.x NSIS installation layouts are supported.");
     }
 
     private static Manifest ReadManifestFile(string path)

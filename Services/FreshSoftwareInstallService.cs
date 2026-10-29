@@ -103,6 +103,8 @@ public sealed class FreshSoftwareInstallService
                     ? "No compatible stable vATIS package is currently available. You can explicitly select the official beta channel or use the vendor's installer manually."
                     : "The vendor has no compatible verified Windows package for a fresh installation.");
             ValidateRelease(app, release, allowVatisBeta);
+            if (app == SoftwareApp.Vacs)
+                layout = (layout.Root, Path.Combine(layout.Root, SoftwareInstaller.VacsExecutableName(release.Version)), layout.Scope, layout.Candidates);
             if (app == SoftwareApp.Vatis) _validateVatisRelease(release);
             return await Task.Run(() =>
             {
@@ -300,7 +302,7 @@ public sealed class FreshSoftwareInstallService
         {
             case SoftwareApp.Vacs:
                 root = Path.Combine(_environment.ProgramFiles, "vacs"); name = "vacs-client.exe"; scope = "AllUsers";
-                candidates = [root, Path.Combine(_environment.ProgramFilesX86, "vacs"), Path.Combine(local, "vacs")]; break;
+                candidates = [root, Path.Combine(_environment.ProgramFilesX86, "vacs"), Path.Combine(local, "vacs"), Path.Combine(local, "Programs", "vacs")]; break;
             case SoftwareApp.TrackAudio:
                 root = Path.Combine(local, "Programs", "trackaudio"); name = "trackaudio.exe"; scope = "CurrentUser";
                 candidates = [root, Path.Combine(_environment.ProgramFiles, "TrackAudio"), Path.Combine(_environment.ProgramFilesX86, "TrackAudio")]; break;
@@ -388,7 +390,8 @@ internal static class FreshSoftwareInstallNative
             using var root = RegistryKey.OpenBaseKey(hive, view);
             using var registration = root.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Uninstall\" + name);
             using var destination = root.OpenSubKey(app == SoftwareApp.Vacs ? @"Software\vacs\vacs" : @"Software\" + SoftwareInstaller.TrackAudioGuid);
-            if (registration != null || destination != null) return true;
+            using var vacs3Destination = app == SoftwareApp.Vacs ? root.OpenSubKey(SoftwareInstallerEnvironment.VacsDestinationKey("3.0.0")) : null;
+            if (registration != null || destination != null || vacs3Destination != null) return true;
         }
         return false;
     }

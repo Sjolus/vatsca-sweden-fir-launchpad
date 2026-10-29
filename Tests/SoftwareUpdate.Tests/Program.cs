@@ -52,6 +52,43 @@ var tests = new (string Name, Func<Task> Body)[]
         using var f = new Fixture(); f.Installer.Current = f.Installer.Current with { CanUpdate = false, Reason = "Portable copy" };
         Equal(SoftwareUpdatePhase.Unavailable, (await f.Check()).Phase); Equal(0, f.Source.Calls);
     }),
+    ("blocked VACS migration retains installed and available versions without downloading", async () =>
+    {
+        using var f = new Fixture(SoftwareApp.Vacs); f.ConfigureVacs3Upgrade();
+        f.Installer.UpdateProblem = "Use the official installer for this custom VACS 2 location.";
+        var state = await f.Check();
+        Equal(SoftwareUpdatePhase.Unavailable, state.Phase);
+        Equal("2.8.0", state.InstalledVersion); Equal("3.0.0", state.LatestVersion);
+        Equal(f.Installer.UpdateProblem, state.Message); True(!state.CanUpdate);
+        Equal(1, f.Source.Calls); Equal(0, f.Handler.Calls); Equal(0, f.Installer.Installs); Equal(0, f.Installer.Backups);
+        Equal(SoftwareUpdatePhase.Error, (await f.Update()).Phase);
+        Equal(0, f.Handler.Calls); Equal(0, f.Installer.Installs);
+    }),
+    ("VACS migration policy changing after checking stops before download", async () =>
+    {
+        using var f = new Fixture(SoftwareApp.Vacs); f.ConfigureVacs3Upgrade();
+        Equal(SoftwareUpdatePhase.Available, (await f.Check()).Phase);
+        f.Installer.UpdateProblem = "The VACS 3 installer destination changed.";
+        var result = await f.Update();
+        Equal(SoftwareUpdatePhase.Error, result.Phase); Equal("2.8.0", result.InstalledVersion);
+        Equal(f.Installer.UpdateProblem, result.Message);
+        Equal(0, f.Handler.Calls); Equal(0, f.Installer.Installs); Equal(0, f.Installer.Backups);
+    }),
+    ("VACS completed update retains the verified renamed executable path", async () =>
+    {
+        using var f = new Fixture(SoftwareApp.Vacs); f.ConfigureVacs3Upgrade();
+        string expected = Path.Combine(f.Root, "vacs.exe");
+        f.Installer.OnInstall = () =>
+        {
+            f.Installer.Current = f.Installer.Current with { ExePath = expected };
+            return Task.CompletedTask;
+        };
+        Equal(SoftwareUpdatePhase.Available, (await f.Check()).Phase);
+        var result = await f.Update();
+        Equal(SoftwareUpdatePhase.Completed, result.Phase); Equal("3.0.0", result.InstalledVersion);
+        Equal(expected, result.Installation!.ExePath); Equal(expected, f.Installer.InspectedPaths.Last());
+        Equal(1, f.Installer.Installs); True(!f.Installer.Running);
+    }),
     ("manual-only vATIS reports verified installed and latest versions but cannot update", async () =>
     {
         foreach (var version in new[] { "4.0.0", "4.1.0-beta.18" })
@@ -416,6 +453,15 @@ sealed class Fixture : IDisposable
     }
     public Task<SoftwareUpdateState> Check() => Service.CheckAsync(App, Installer.Current.ExePath);
     public Task<SoftwareUpdateState> Update() => Service.UpdateAsync(App);
+    public void ConfigureVacs3Upgrade()
+    {
+        Installer.Current = Installer.Current with { Version = "2.8.0", ExePath = Path.Combine(Root, "vacs-client.exe"), Scope = "AllUsers" };
+        Source.Release = Source.Release! with
+        {
+            Version = "3.0.0", FileName = "vacs_3.0.0_x64-setup.exe",
+            DownloadUri = new Uri("https://github.com/vacs-project/vacs/releases/download/vacs-client-v3.0.0/vacs_3.0.0_x64-setup.exe")
+        };
+    }
     public void Dispose()
     {
         _http.Dispose();
@@ -446,11 +492,14 @@ sealed class FakeInstaller(SoftwareInstallation installation, string backupPath)
     public string BackupPath => backupPath;
     public bool Running, AdoptVersion = true;
     public int Installs, Backups, Verifications;
+    public string? UpdateProblem;
+    public List<string> InspectedPaths { get; } = [];
     public Func<CancellationToken, Task>? OnVerify, OnBackup;
     public Func<Task>? OnInstall;
     public Action<string>? OnPackageInstall;
-    public SoftwareInstallation Inspect(SoftwareApp app, string path) => Current;
+    public SoftwareInstallation Inspect(SoftwareApp app, string path) { InspectedPaths.Add(path); return Current; }
     public bool IsRunning(SoftwareInstallation current) => Running;
+    public string? GetUpdateProblem(SoftwareInstallation current, SoftwareRelease release) => UpdateProblem;
     public async Task VerifyPackageAsync(SoftwareRelease release, string packagePath, CancellationToken token)
     { Verifications++; if (OnVerify != null) await OnVerify(token); }
     public async Task<string?> BackupAsync(SoftwareInstallation current, IProgress<string>? progress, CancellationToken token)

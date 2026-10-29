@@ -40,6 +40,17 @@ public static class SourceTests
             Assert(actual is { Version: "2.8.0", FileName: "vacs_2.8.0_x64-setup.exe" }, "Wrong VACS release");
             Assert(actual!.Sha256 == Hash.ToUpperInvariant() && actual.Size == 11164891, "Metadata was lost");
         });
+        await Run("VACS 3 stable client is selected for updates and fresh installs", async () =>
+        {
+            var catalog = GitHub(Release(SoftwareApp.Vacs, "99.0.0", tag: "vacs-server-v99.0.0"),
+                Release(SoftwareApp.Vacs, "3.1.0-rc.1", prerelease: true),
+                Release(SoftwareApp.Vacs, "3.0.0"), Release(SoftwareApp.Vacs, "2.8.0"));
+            var actual = await Latest(SoftwareApp.Vacs, catalog, "2.8.0");
+            Assert(actual is { Version: "3.0.0", FileName: "vacs_3.0.0_x64-setup.exe", IsPrerelease: false }, "Wrong VACS 3 release");
+            Assert(actual!.DownloadUri.AbsoluteUri == "https://github.com/vacs-project/vacs/releases/download/vacs-client-v3.0.0/vacs_3.0.0_x64-setup.exe", "Wrong VACS 3 asset URL");
+            using var client = Client((request, _) => Task.FromResult(Response(catalog, request)));
+            Assert(await new SoftwareReleaseSource(client).GetLatestFreshAsync(SoftwareApp.Vacs, false) == actual, "VACS fresh/update catalogs differ");
+        });
         await Run("TrackAudio excludes falsely stable beta tags and actual prereleases/drafts", async () =>
         {
             var actual = await Latest(SoftwareApp.TrackAudio, GitHub(
