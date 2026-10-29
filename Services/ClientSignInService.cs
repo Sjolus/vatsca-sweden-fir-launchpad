@@ -78,6 +78,8 @@ public static class ClientSignInService
             return Result(ClientSignInStatus.Updated, "sign-in details copied.");
         }
         catch (ClientRunningException) { return Result(ClientSignInStatus.Running, "the application started before saving; its settings were left unchanged."); }
+        catch (ClientConfigurationVersionException)
+        { return Result(ClientSignInStatus.Unsupported, "this version needs a Launchpad compatibility update for sign-in setup. Its settings were left unchanged."); }
         catch (Exception ex) when (ex is InvalidDataException or JsonException or ArgumentException or NotSupportedException)
         { return Result(ClientSignInStatus.Unsupported, "this installation or settings format is not supported for sign-in setup. Its settings were left unchanged."); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException or
@@ -90,7 +92,6 @@ public static class ClientSignInService
     {
         string exe = ClientConfigurationFiles.ValidatePath(configuredExe);
         string expectedName;
-        string expectedVersion;
         if (app == SoftwareApp.Vatis)
         {
             string root = ClientConfigurationFiles.ValidatePath(Path.Combine(options.LocalAppData, "org.vatsim.vatis"));
@@ -99,12 +100,10 @@ public static class ClientSignInService
                 throw new InvalidDataException("Unsupported client location.");
             exe = ClientConfigurationFiles.ValidatePath(current);
             expectedName = "vATIS";
-            expectedVersion = "4.1.0-beta.19";
         }
         else if (app == SoftwareApp.TrackAudio)
         {
             expectedName = "TrackAudio";
-            expectedVersion = "1.4.0";
         }
         else throw new ArgumentOutOfRangeException(nameof(app));
         if (!Path.GetFileName(exe).Equals(expectedName + ".exe", StringComparison.OrdinalIgnoreCase) || !File.Exists(exe))
@@ -114,10 +113,29 @@ public static class ClientSignInService
         var binary = options.ReadBinary(exe);
         string version = binary.ProductVersion.Split('+')[0].Trim();
         if (version == "1.4.0.0") version = "1.4.0";
-        if (binary.IsDll || binary.IsInstaller || !binary.ProductName.Equals(expectedName, StringComparison.OrdinalIgnoreCase) || version != expectedVersion)
-            throw new InvalidDataException("Unsupported client identity or version.");
+        if (binary.IsDll || binary.IsInstaller || !binary.ProductName.Equals(expectedName, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("Unsupported client identity.");
+        bool compatible = app == SoftwareApp.Vatis
+            ? SupportsVatisConfiguration(binary.ProductVersion.Trim())
+            : version == "1.4.0";
+        if (!compatible)
+            throw new ClientConfigurationVersionException();
         if (app == SoftwareApp.Vatis) options.VerifyVatisPublisher(exe);
         return exe;
+    }
+
+    private static bool SupportsVatisConfiguration(string version)
+    {
+        // Accept later beta/rc and patch builds under the 4.1 configuration contract
+        // reviewed from beta.19 onward. A new minor version needs review.
+        if (!SoftwareVersion.TryParse(version, out var parsed) ||
+            !SoftwareVersion.TryCompare(version, "4.1.0-beta.19", out int minimum) || minimum < 0 ||
+            !SoftwareVersion.TryCompare(version, "4.2.0-0", out int maximum) || maximum >= 0)
+            return false;
+        if (!parsed.IsPrerelease) return true;
+        string[] prerelease = version.Split('+')[0].Split('-', 2)[1].Split('.');
+        return prerelease.Length == 2 && prerelease[0] is ("beta" or "rc") &&
+            prerelease[1].All(character => character is >= '0' and <= '9');
     }
 
     public static ClientConfigurationPatch PatchVatis(byte[]? existing, AppSettings settings, string password)
@@ -236,8 +254,8 @@ public static class ClientSignInService
             throw UnsupportedFormat();
     }
 
-    // vATIS beta.19 AppConfig uses this deterministic vendor format. It is not a secure secret store.
-    // https://github.com/vatis-project/vatis/blob/v4.1.0-beta.19/vATIS.Desktop/Config/AppConfig.cs
+    // vATIS beta.19–22 AppConfig uses this deterministic vendor format. It is not a secure secret store.
+    // https://github.com/vatis-project/vatis/blob/v4.1.0-beta.22/vATIS.Desktop/Config/AppConfig.cs
     private static string EncodeVatisPassword(string password)
     {
         using var cipher = TripleDES.Create();

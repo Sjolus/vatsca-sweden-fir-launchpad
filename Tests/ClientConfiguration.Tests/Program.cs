@@ -220,6 +220,91 @@ Check("vATIS root launcher resolves the supported current executable", () =>
     f.Settings.VatisExePath = Path.Combine(f.Local, "org.vatsim.vatis", "vATIS.exe");
     Require(ClientSignInService.Apply(f.Settings, Password, SoftwareApp.Vatis, f.Options()).Single().Changed);
 });
+foreach (string version in new[] { "4.1.0-beta.19", "4.1.0-beta.20", "4.1.0-beta.21", "4.1.0-beta.22", "4.1.0-beta.23",
+    "4.1.0-beta.100", "4.1.0-rc.1", "4.1.0", "4.1.1", "4.1.1-beta.1" })
+Check($"vATIS {version} updates identity while preserving preferences and repeated apply", () =>
+{
+    using var f = new Fixture();
+    byte[] original = Bytes("""{"name":"Old synthetic name","userId":"7654321","password":"old-encoded","networkRating":"Obs","miniWindowUseMagneticWind":true,"autoFetchDatis":false,"microphoneDevice":"synthetic-device","future":{"keep":[1,2,3]}}""");
+    File.WriteAllBytes(f.VatisConfig, original);
+    int publisherChecks = 0;
+    var options = f.Options(binary: _ => new(false, "vATIS", ProductVersion: version + "+synthetic"),
+        publisher: path => { Require(path == f.Settings.VatisExePath); publisherChecks++; });
+    var outcome = ClientSignInService.Apply(f.Settings, Password, SoftwareApp.Vatis, options).Single();
+    Require(outcome.Status == ClientSignInStatus.Updated && publisherChecks > 0);
+    byte[] saved = File.ReadAllBytes(f.VatisConfig);
+    var result = Json(saved);
+    Require(result["name"]!.GetValue<string>() == "Synthetic Övning" && result["userId"]!.GetValue<string>() == "1234567");
+    Require(result["networkRating"]!.GetValue<string>() == "S2" && result["password"]!.GetValue<string>() == "OiK+mMeJH5bVxqdHjsc1i5CJ9nXXsSyx");
+    foreach (var field in Json(original).Where(entry => entry.Key is not ("name" or "userId" or "password" or "networkRating")))
+        Require(JsonNode.DeepEquals(field.Value, result[field.Key]));
+    Require(ClientSignInService.Apply(f.Settings, Password, SoftwareApp.Vatis, options).Single().Status == ClientSignInStatus.Unchanged);
+    Require(File.ReadAllBytes(f.VatisConfig).SequenceEqual(saved));
+});
+foreach (string version in new[] { "4.1.0-beta.18", "4.0.9", "4.2.0-beta.1", "4.2.0-0", "5.0.0",
+    "4.1.1-alpha.1", "4.1.1-dev.1", "4.1.1-custom.1", "4.1.0-beta.preview", "4.1.0-rc",
+    "4.1.0-beta.23.preview", "4.1.0-beta.023", "4.1.0-beta.23+", "4.1.0-beta.23+build+extra", "04.1.0-beta.23" })
+Check($"unsupported vATIS family or version {version} is blocked before reading settings", () =>
+{
+    using var f = new Fixture();
+    byte[] original = Bytes("{\"synthetic-preserve\":true}");
+    File.WriteAllBytes(f.VatisConfig, original);
+    int reads = 0;
+    var options = f.Options(binary: _ => new(false, "vATIS", ProductVersion: version),
+        read: (path, bound) => { reads++; return ClientConfigurationFiles.Read(path, bound); });
+    var outcome = ClientSignInService.Apply(f.Settings, Password, SoftwareApp.Vatis, options).Single();
+    Require(outcome.Status == ClientSignInStatus.Unsupported && outcome.Message.Contains("Launchpad compatibility update"));
+    Require(reads == 0 && File.ReadAllBytes(f.VatisConfig).SequenceEqual(original));
+});
+Check("future vATIS beta23 still rejects wrong identity and untrusted publisher before reading settings", () =>
+{
+    using var f = new Fixture();
+    int reads = 0;
+    byte[]? Read(string path, int bound) { reads++; return ClientConfigurationFiles.Read(path, bound); }
+    foreach (var binary in new[] { new ConfiguredBinaryMetadata(false, "Other", ProductVersion: "4.1.0-beta.23"),
+        new ConfiguredBinaryMetadata(true, "vATIS", ProductVersion: "4.1.0-beta.23"),
+        new ConfiguredBinaryMetadata(false, "vATIS", ProductVersion: "4.1.0-beta.23", IsInstaller: true) })
+        Require(ClientSignInService.Apply(f.Settings, Password, SoftwareApp.Vatis, f.Options(binary: _ => binary, read: Read)).Single().Status == ClientSignInStatus.Unsupported);
+    var outcome = ClientSignInService.Apply(f.Settings, Password, SoftwareApp.Vatis,
+        f.Options(binary: _ => new(false, "vATIS", ProductVersion: "4.1.0-beta.23"), read: Read,
+            publisher: _ => throw new InvalidDataException("synthetic untrusted publisher"))).Single();
+    Require(outcome.Status == ClientSignInStatus.Unsupported && reads == 0 && !File.Exists(f.VatisConfig));
+});
+foreach (int runningAtProbe in new[] { 1, 3 })
+Check($"future vATIS beta23 starting at probe {runningAtProbe} preserves its original settings", () =>
+{
+    using var f = new Fixture();
+    byte[] original = Bytes("{\"name\":\"Old synthetic name\",\"autoFetchDatis\":true}");
+    File.WriteAllBytes(f.VatisConfig, original);
+    int probes = 0;
+    var options = f.Options(binary: _ => new(false, "vATIS", ProductVersion: "4.1.0-beta.23"), running: _ => ++probes >= runningAtProbe);
+    Require(ClientSignInService.Apply(f.Settings, Password, SoftwareApp.Vatis, options).Single().Status == ClientSignInStatus.Running);
+    Require(File.ReadAllBytes(f.VatisConfig).SequenceEqual(original) && !Directory.EnumerateFiles(f.Root, "*.tmp", SearchOption.AllDirectories).Any());
+});
+Check("future vATIS beta23 still rejects malformed or incompatible settings without changing them", () =>
+{
+    using var f = new Fixture();
+    foreach (string contents in new[] { "{", "{\"name\":{\"value\":\"synthetic\"}}", "{\"password\":42}", "{\"networkRating\":\"NewRating\"}" })
+    {
+        byte[] original = Bytes(contents);
+        File.WriteAllBytes(f.VatisConfig, original);
+        var options = f.Options(binary: _ => new(false, "vATIS", ProductVersion: "4.1.0-beta.23"));
+        var outcome = ClientSignInService.Apply(f.Settings, Password, SoftwareApp.Vatis, options).Single();
+        Require(outcome.Status == ClientSignInStatus.Unsupported && !outcome.Message.Contains("Launchpad compatibility update"));
+        Require(File.ReadAllBytes(f.VatisConfig).SequenceEqual(original) && !Directory.EnumerateFiles(f.Root, "*.tmp", SearchOption.AllDirectories).Any());
+    }
+});
+Check("vATIS changing to an unsupported family before commit preserves original settings and clears the temporary file", () =>
+{
+    using var f = new Fixture();
+    byte[] original = Bytes("{\"name\":\"Old synthetic name\",\"autoFetchDatis\":true}");
+    File.WriteAllBytes(f.VatisConfig, original);
+    int binaryProbes = 0;
+    var options = f.Options(binary: _ => new(false, "vATIS", ProductVersion: ++binaryProbes >= 3 ? "4.2.0-beta.1" : "4.1.0-beta.23"));
+    var outcome = ClientSignInService.Apply(f.Settings, Password, SoftwareApp.Vatis, options).Single();
+    Require(binaryProbes == 3 && outcome.Status == ClientSignInStatus.Unsupported && outcome.Message.Contains("Launchpad compatibility update"));
+    Require(File.ReadAllBytes(f.VatisConfig).SequenceEqual(original) && !Directory.EnumerateFiles(f.Root, "*.tmp", SearchOption.AllDirectories).Any());
+});
 Check("unexpected vATIS root and nonlocal paths are rejected", () =>
 {
     using var f = new Fixture();

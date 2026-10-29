@@ -53,6 +53,91 @@ await Test("Recognizes user-imported local ID without creating duplicate", async
     Assert((await f.Run()).Status == VatisSwedenProfileStatus.AlreadyConfigured && f.RequestCount == 0);
 });
 
+foreach (bool overridden in new[] { false, true })
+await Test($"Preserves an existing profile with isNameOverridden={overridden}", async () =>
+{
+    using var f = new Fixture();
+    string id = Guid.NewGuid().ToString();
+    var profile = JsonNode.Parse(Fixture.Profile(id))!.AsObject();
+    profile["name"] = "My synthetic Swedish profile";
+    profile["isNameOverridden"] = overridden;
+    string original = profile.ToJsonString();
+    f.Add(id, original);
+    Assert((await f.Run()).Status == VatisSwedenProfileStatus.AlreadyConfigured && f.RequestCount == 0);
+    Assert(File.ReadAllText(f.ProfilePath(id)) == original && Directory.GetFiles(f.Profiles).Length == 1);
+});
+
+foreach (bool overridden in new[] { false, true })
+await Test($"Accepts the optional boolean isNameOverridden={overridden} in the official profile", async () =>
+{
+    using var f = new Fixture { Body = Fixture.Edit("isNameOverridden", JsonValue.Create(overridden)) };
+    Assert((await f.Run()).Status == VatisSwedenProfileStatus.Installed);
+    Assert(File.ReadAllText(f.ProfilePath(Fixture.RemoteId)) == f.Body);
+});
+
+foreach (string invalidFlag in new[] { "null", "\"true\"", "1", "{}", "[]" })
+await Test($"Rejects malformed name override {invalidFlag} without changing an existing profile", async () =>
+{
+    using var f = new Fixture();
+    var profile = JsonNode.Parse(Fixture.Profile())!.AsObject();
+    profile["isNameOverridden"] = JsonNode.Parse(invalidFlag);
+    string original = profile.ToJsonString();
+    f.Add(Fixture.RemoteId, original);
+    Assert((await f.Run()).Status == VatisSwedenProfileStatus.Conflict && f.RequestCount == 0);
+    Assert(File.ReadAllText(f.ProfilePath(Fixture.RemoteId)) == original);
+    using var download = new Fixture { Body = original };
+    Assert(!(await download.Run()).Success && !Directory.Exists(download.Profiles));
+});
+
+await Test("Preserves additional local profile fields without allowing them in downloads", async () =>
+{
+    using var f = new Fixture();
+    var profile = JsonNode.Parse(Fixture.Profile())!.AsObject();
+    profile["isNameOverridden"] = true;
+    profile["futurePreference"] = new JsonObject { ["enabled"] = true, ["options"] = new JsonArray("synthetic") };
+    string original = profile.ToJsonString();
+    f.Add(Fixture.RemoteId, original);
+    Assert((await f.Run()).Status == VatisSwedenProfileStatus.AlreadyConfigured && f.RequestCount == 0);
+    Assert(File.ReadAllText(f.ProfilePath(Fixture.RemoteId)) == original);
+    using var download = new Fixture { Body = original };
+    Assert(!(await download.Run()).Success && !Directory.Exists(download.Profiles));
+});
+
+await Test("Preserves valid local name override fields regardless of casing", async () =>
+{
+    using var f = new Fixture();
+    var profile = JsonNode.Parse(Fixture.Profile())!.AsObject();
+    profile["IsNameOverridden"] = true;
+    string original = profile.ToJsonString();
+    f.Add(Fixture.RemoteId, original);
+    Assert((await f.Run()).Status == VatisSwedenProfileStatus.AlreadyConfigured && f.RequestCount == 0);
+    Assert(File.ReadAllText(f.ProfilePath(Fixture.RemoteId)) == original);
+});
+
+await Test("Known local name override fields keep their type check regardless of casing", async () =>
+{
+    using var f = new Fixture();
+    var profile = JsonNode.Parse(Fixture.Profile())!.AsObject();
+    profile["IsNameOverridden"] = "not-a-boolean";
+    string original = profile.ToJsonString();
+    f.Add(Fixture.RemoteId, original);
+    Assert((await f.Run()).Status == VatisSwedenProfileStatus.Conflict && f.RequestCount == 0);
+    Assert(File.ReadAllText(f.ProfilePath(Fixture.RemoteId)) == original);
+});
+
+foreach (int schema in new[] { 3, 5 })
+await Test($"Additional local fields do not admit unsupported profile schema {schema}", async () =>
+{
+    using var f = new Fixture();
+    var profile = JsonNode.Parse(Fixture.Profile())!.AsObject();
+    profile["version"] = schema;
+    profile["futurePreference"] = true;
+    string original = profile.ToJsonString();
+    f.Add(Fixture.RemoteId, original);
+    Assert((await f.Run()).Status == VatisSwedenProfileStatus.Conflict && f.RequestCount == 0);
+    Assert(File.ReadAllText(f.ProfilePath(Fixture.RemoteId)) == original);
+});
+
 await Test("Recognizes an existing UTF-8 BOM profile without rewriting it", async () =>
 {
     using var f = new Fixture();
@@ -132,6 +217,16 @@ await Test("Invalid executable identity cannot seed a profile", async () =>
     using var f = new Fixture { Validate = _ => throw new InvalidDataException("private fixture path") };
     var result = await f.Run();
     Assert(!result.Success && !result.Message.Contains("private") && f.RequestCount == 0 && !Directory.Exists(f.Profiles));
+});
+
+await Test("Unreviewed client version explains the compatibility block without reading profiles", async () =>
+{
+    using var f = new Fixture { Validate = _ => throw new ClientConfigurationVersionException() };
+    // A malformed profile would produce Conflict if inspection ran before the version guard.
+    f.Add(Fixture.RemoteId, "synthetic unchanged invalid profile");
+    var result = await f.Run();
+    Assert(result.Status == VatisSwedenProfileStatus.Blocked && result.Message.Contains("Launchpad compatibility update") && f.RequestCount == 0);
+    Assert(File.ReadAllText(f.ProfilePath(Fixture.RemoteId)) == "synthetic unchanged invalid profile");
 });
 
 await Test("Publisher verification errors return a safe result", async () =>
