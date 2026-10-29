@@ -9,5 +9,6 @@
     <Compile Include="../../Services/VatisSwedenProfileService.cs" Link="Services/VatisSwedenProfileService.cs" />
     <Compile Include="../../Models/AppSettings.cs" Link="Models/AppSettings.cs" />
     <Compile Include="../../Models/ApplicationPreferences.cs" Link="Models/ApplicationPreferences.cs" />
+    <Compile Include="../../Models/ClientSignIn.cs" Link="Models/ClientSignIn.cs" />
   </ItemGroup>
 </Project>

@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.6.3] — 2026-10-29
+
+- Fix controller Save & apply rejecting newer vATIS 4.1 releases. Accept numbered beta/RC builds and stable 4.1.x patches from beta.19 onward, with publisher and settings-format checks retained.
+- Recognize renamed Swedish vATIS profiles and preserve additional fields in existing profiles. Keep validation strict for newly downloaded profiles.
+- Explain when a vATIS version needs a Launchpad compatibility update instead of reporting a generic setup failure.
+
 ## [2.6.2] — 2026-10-29
 
 - Support VACS 3 installations and its renamed `vacs.exe`. Update the saved launch path after upgrading from VACS 2, and check both process names before installation or removal.

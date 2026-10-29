@@ -7,6 +7,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../Services/ClientSignInService.cs" Link="ClientSignInService.cs" />
+    <Compile Include="../../Services/SoftwareVersion.cs" Link="SoftwareVersion.cs" />
     <Compile Include="../../Services/ClientConfigurationFiles.cs" Link="ClientConfigurationFiles.cs" />
     <Compile Include="../../Services/ConfiguredPathValidationService.cs" Link="ConfiguredPathValidationService.cs" />
     <Compile Include="../../Services/EuroScopePolicy.cs" Link="EuroScopePolicy.cs" />

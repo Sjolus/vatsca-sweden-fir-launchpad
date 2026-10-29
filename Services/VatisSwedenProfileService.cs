@@ -73,7 +73,7 @@ public sealed class VatisSwedenProfileService
 
             byte[] downloaded = await DownloadAsync(cancellationToken).ConfigureAwait(false);
             using var document = Parse(downloaded);
-            Guid profileId = ValidateDownloaded(document.RootElement);
+            Guid profileId = ValidateProfile(document.RootElement);
             RequireReady(settings);
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -110,6 +110,10 @@ public sealed class VatisSwedenProfileService
         catch (ProfileBlockedException)
         {
             return new(VatisSwedenProfileStatus.Blocked, "Close vATIS and finish other maintenance before setting up its Swedish profile.");
+        }
+        catch (ClientConfigurationVersionException)
+        {
+            return new(VatisSwedenProfileStatus.Blocked, "This vATIS version needs a Launchpad compatibility update for profile setup. Existing profiles were kept unchanged.");
         }
         catch (HttpRequestException)
         {
@@ -178,7 +182,7 @@ public sealed class VatisSwedenProfileService
     {
         if (bytes.Length > MaximumProfileBytes) throw new InvalidDataException("Profile size limit exceeded.");
         using var document = Parse(bytes);
-        return ValidateDownloaded(document.RootElement);
+        return ValidateProfile(document.RootElement);
     }
 
     private static void RequireUnambiguousJson(JsonElement value)
@@ -196,13 +200,16 @@ public sealed class VatisSwedenProfileService
             foreach (var child in value.EnumerateArray()) RequireUnambiguousJson(child);
     }
 
-    private static Guid ValidateDownloaded(JsonElement root)
+    private static Guid ValidateProfile(JsonElement root, bool allowAdditionalFields = false)
     {
         if (root.ValueKind != JsonValueKind.Object) throw new InvalidDataException("Invalid profile.");
         // These are profile fields, not a personal AppConfig. Station-specific schema remains the vendor's.
-        string[] allowed = ["name", "id", "updateUrl", "updateSerial", "stations", "version"];
-        if (root.EnumerateObject().Any(field => !allowed.Contains(field.Name, StringComparer.Ordinal)))
+        string[] allowed = ["name", "id", "updateUrl", "updateSerial", "stations", "version", "isNameOverridden"];
+        if (!allowAdditionalFields && root.EnumerateObject().Any(field => !allowed.Contains(field.Name, StringComparer.Ordinal)))
             throw new InvalidDataException("Unexpected profile field.");
+        if (root.EnumerateObject().Any(field => field.Name.Equals("isNameOverridden", StringComparison.OrdinalIgnoreCase) &&
+            field.Value.ValueKind is not (JsonValueKind.True or JsonValueKind.False)))
+            throw new InvalidDataException("Invalid profile name override.");
         if (!TryGuid(root, "id", out var id) || !IsOfficialUrl(Text(root, "updateUrl")) ||
             !root.TryGetProperty("version", out var version) || !version.TryGetInt32(out int schema) || schema != 4 ||
             !root.TryGetProperty("updateSerial", out var serial) || !serial.TryGetInt32(out int revision) || revision < 2000010100 ||
@@ -256,7 +263,9 @@ public sealed class VatisSwedenProfileService
                     throw new ProfileConflictException();
                 if (official)
                 {
-                    _ = ValidateDownloaded(root);
+                    // Recognizing a local profile never rewrites it. Retain additional fields
+                    // from compatible vATIS releases; downloaded profiles keep the strict shape.
+                    _ = ValidateProfile(root, allowAdditionalFields: true);
                     if (++matching > 1) throw new ProfileConflictException();
                 }
                 else if (reservedId) throw new ProfileConflictException();
