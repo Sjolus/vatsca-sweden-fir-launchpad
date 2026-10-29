@@ -5,10 +5,13 @@ import { createContext, runInContext } from 'node:vm';
 import { usageFixture, emptyUsageFixture } from './admin-usage-fixture.mjs';
 
 class TestNode {
-  constructor(tag, text = '') { this.tag = tag; this.textContent = text; this.children = []; this.dataset = {}; this.attributes = {}; }
+  constructor(tag, text = '') { this.tag = tag; this.textContent = text; this.children = []; this.dataset = {}; this.attributes = {}; this.listeners = new Map(); this.value = ''; }
   append(...children) { this.children.push(...children); }
+  replaceChildren(...children) { this.children = []; this.textContent = ''; this.append(...children); }
   setAttribute(name, value) { this.attributes[name] = value; }
-  addEventListener() {}
+  addEventListener(name, listener) { const list = this.listeners.get(name) ?? []; list.push(listener); this.listeners.set(name, list); }
+  fire(name) { for (const listener of this.listeners.get(name) ?? []) listener({ target: this, preventDefault() {} }); }
+  focus() { this.focused = true; }
   get text() { return [this.textContent, ...this.children.map(child => child.text ?? String(child))].join(' ').replace(/\s+/g, ' ').trim(); }
 }
 function renderer() {
@@ -194,6 +197,47 @@ test('plugin cards distinguish observed DLL metadata from package release versio
   assert.doesNotMatch(plugin.text, /0\.1\.0|up to date|outdated|latest release|current release/);
 });
 
+const dllRow = (index, values = {}) => ({sha256:index.toString(16).padStart(64,'0'),product:'topsky',role:'current',version:'2.6-beta.4',file_version:'0.0.0.0',version_source:'registration',installations:2,copies:3,...values});
+const dllSample = rows => ({complete_installations:10,partial_installations:3,unavailable_installations:2,not_shared_installations:15,
+  shared_installations:15,unreadable_files:4,current_installations:12,staged_installations:2,total_groups:rows.length,omitted_groups:0,rows});
+const plain = value => JSON.parse(JSON.stringify(value));
+const hasClass = (node, name) => (node.className ?? '').split(/\s+/).includes(name);
+
+test('DLL grouping preserves individual observations and orders products and locations predictably',()=>{
+  const render=renderer(),rows=[
+    dllRow(4,{product:'unknown',version:null,version_source:'unknown'}),
+    dllRow(3,{role:'staged',installations:20,copies:27}),
+    dllRow(2,{installations:4,copies:8}),
+    dllRow(1,{product:'cdm',version:'2.27',installations:1}),
+    dllRow(2,{version_source:'resource',installations:3,copies:5}),
+    dllRow(5,{version:'2.6-beta.3',installations:4,copies:9}),
+  ];
+  const before=JSON.stringify(rows),groups=render.dllInventoryGroups(rows);
+  assert.deepEqual(plain(groups.map(group=>group.product)),['cdm','topsky','unknown']);
+  const topsky=groups.find(group=>group.product==='topsky');
+  assert.deepEqual(plain(topsky.rows.map(row=>row.role)),['current','current','current','staged']);
+  assert.deepEqual(plain(topsky.rows.map(row=>row.installations)),[4,4,3,20]);
+  assert.equal(topsky.rows.length,4,'Identical fingerprints with distinct metadata remain separate observations');
+  for(const row of groups.flatMap(group=>group.rows))assert.ok(rows.includes(row),'Grouping retains original observation objects without fabricating counts');
+  assert.equal(JSON.stringify(rows),before,'Grouping does not mutate the source response');
+  assert.deepEqual(plain(render.dllInventoryGroups([...rows].reverse())),plain(groups),'Input order cannot change grouping or tie ordering');
+});
+
+test('DLL search matches names, versions and exact fingerprints independently of location',()=>{
+  const render=renderer(),rows=[dllRow(11),dllRow(12,{role:'staged',version:'2.6-beta.3'}),
+    dllRow(13,{product:'arrival_load_balancer',version:'0.2.11T',file_version:'1.2.3.4'}),dllRow(14,{product:'unknown',version:null,file_version:null,version_source:'unknown'})];
+  const matches=options=>render.dllInventoryGroups(rows,options).flatMap(group=>group.rows);
+  for(const query of [' TOPSKY ','2.6 beta 4','2.6-beta.4','ARRIVAL LOAD BALANCER','arrival_load_balancer','1.2.3.4',rows[3].sha256.toUpperCase()]) {
+    assert.ok(matches({query}).length>0,`Search finds ${query}`);
+  }
+  assert.equal(matches({query:'topsky'}).length,2);
+  assert.equal(matches({query:'topsky',role:'current'}).length,1);
+  assert.equal(matches({query:'topsky',role:'staged'})[0],rows[1]);
+  assert.equal(matches({query:'2.6 beta 4',role:'staged'}).length,0,'Search and location both restrict results');
+  assert.equal(matches({query:'not-a-reported-plugin'}).length,0);
+  assert.equal(matches({role:'all'}).length,rows.length);
+});
+
 test('all-DLL view shows fingerprints, both version sources and locations without treating copies as installations',()=>{
   const render=renderer(),data=usageFixture();
   data.inventory.dll_inventory={complete_installations:10,partial_installations:3,unavailable_installations:2,not_shared_installations:15,
@@ -207,9 +251,23 @@ test('all-DLL view shows fingerprints, both version sources and locations withou
   assert.match(panel.text,/Not shared includes older clients and installations without this optional consent/);
   assert.match(panel.text,/Partial or unavailable scans cannot establish that an unlisted DLL is absent/);
   assert.match(panel.text,/Current and staged describe file locations, not whether a plugin is loaded/);
-  assert.match(panel.text,/TopSky.*3\.0\.0 beta 19 Embedded version label File version: 0\.0\.0\.0 Current 10 \/ 30 · 33% 24 file copies/);
-  assert.match(panel.text,/Unidentified DLL · b{12} Full fingerprint b{64} Version unknown No readable version; age is unknown Staged 2 \/ 30/);
+  const coverage=walk(panel).find(node=>hasClass(node,'dll-coverage'));
+  assert.ok(coverage?.tag==='details' && !coverage.open,'Lengthy scan coverage starts collapsed');
+  assert.match(coverage.children[0].text,/15 of 30 installations shared DLL details/);
+  assert.ok(panel.children.some(node=>node.tag==='p' && /Partial or unavailable scans/.test(node.text)),'Incomplete coverage warning stays visible outside the disclosure');
+  const builds=walk(panel).filter(node=>hasClass(node,'dll-build'));
+  assert.equal(builds.length,2);assert.ok(builds.every(node=>node.tag==='details' && !node.open));
+  const [known,unknown]=builds;
+  assert.match(known.children[0].text,/3\.0\.0 beta 19 Current 10 \/ 30 · 33%/);
+  assert.doesNotMatch(known.children[0].text,/Embedded version|File version|file copies|a{64}/,'Technical details stay out of the collapsed row');
+  assert.match(known.text,/Embedded version label File version: 0\.0\.0\.0 24 file copies across 10 installations/);
+  assert.match(unknown.children[0].text,/Version unknown b{12} Staged 2 \/ 30/);
+  assert.match(unknown.text,/No readable version; age is unknown 5 file copies across 2 installations/);
+  assert.deepEqual(builds.map(build=>walk(build).find(node=>node.tag==='code').text),['a'.repeat(64),'b'.repeat(64)],'Full fingerprints remain available in each native disclosure');
+  assert.match(known.children[0].attributes['aria-label'],/TopSky, 3\.0\.0 beta 19, current, 10 of 30 installations/);
+  assert.match(unknown.children[0].attributes['aria-label'],/Unidentified DLL/);
   assert.match(panel.text,/Showing 2 of 102 binary groups; 100 additional groups are not displayed/);
+  assert.match(panel.text,/Search and location filters cover the displayed groups only/);
   assert.doesNotMatch(panel.text,/24 \/ 30|latest release|up to date|outdated|\.dll|C:\\/);
   const legacy=walk(inventory).find(node=>node.tag==='details' && node.children[0]?.text==='Recognized component summaries · includes older clients');
   assert.ok(legacy && !legacy.open);assert.match(legacy.text,/four component checks predate detailed DLL reporting/);
@@ -217,10 +275,32 @@ test('all-DLL view shows fingerprints, both version sources and locations withou
   data.inventory.dll_inventory.rows[0].version_source='resource';
   assert.match(render.renderInventory(data).text,/Windows version resource/);
   Object.assign(data.inventory.dll_inventory.rows[0],{product:'vatcan_bookings',version:'1.1.6-2022wb',file_version:'1.0.0.1',version_source:'registration'});
-  assert.match(render.renderInventory(data).text,/VATCAN Bookings.*1\.1\.6-2022wb EuroScope plugin registration File version: 1\.0\.0\.1/);
+  assert.match(render.renderInventory(data).text,/VATCAN Bookings.*1\.1\.6-2022wb.*EuroScope plugin registration File version: 1\.0\.0\.1/);
   Object.assign(data.inventory.dll_inventory.rows[0],{product:'saaman',version:'1.3.37',file_version:null,version_source:'registration'});
-  assert.match(render.renderInventory(data).text,/SAAMAN.*1\.3\.37 EuroScope plugin registration/);
+  assert.match(render.renderInventory(data).text,/SAAMAN.*1\.3\.37.*EuroScope plugin registration/);
   assertFiniteChart(inventory);
+});
+
+test('DLL search and location controls refresh results, explain empty matches and reset without losing observations',()=>{
+  const render=renderer(),rows=[dllRow(11),dllRow(12,{role:'staged',version:'2.6-beta.3'}),
+    dllRow(13,{product:'cdm',version:'2.27'}),dllRow(14,{product:'unknown',version:null,version_source:'unknown'})];
+  const panel=render.dllInventoryPanel(dllSample(rows),30),find=id=>walk(panel).find(node=>node.id===id);
+  const search=find('dll-search'),location=find('dll-location'),result=find('dll-results'),reset=walk(panel).find(node=>node.tag==='button' && node.text==='Reset filters');
+  const builds=()=>walk(panel).filter(node=>hasClass(node,'dll-build'));
+  assert.ok(search && location && result && reset);
+  assert.equal(result.attributes['aria-live'],'polite');assert.equal(result.attributes.role,'status');
+  assert.ok(reset.disabled);assert.equal(builds().length,4);
+  search.value='TOPSKY';search.fire('input');
+  assert.equal(builds().length,2);assert.match(result.text,/2 of 4 binary entries · 1 group/);assert.equal(reset.disabled,false);
+  location.value='staged';location.fire('change');
+  assert.equal(builds().length,1);assert.match(builds()[0].children[0].text,/2\.6 beta 3.*Staged/);
+  search.value='not-a-reported-plugin';search.fire('input');
+  assert.equal(builds().length,0);assert.match(result.text,/0 of 4 binary entries/);
+  assert.match(panel.text,/No DLLs match these filters/);assert.doesNotMatch(panel.text,/No DLLs installed|No plugins installed|uninstalled/);
+  assert.equal(search.value,'not-a-reported-plugin','Filtering retains the input instead of replacing the toolbar');
+  reset.fire('click');
+  assert.equal(search.value,'');assert.equal(location.value,'all');assert.equal(builds().length,4);assert.ok(reset.disabled);assert.ok(search.focused);
+  assert.doesNotMatch(panel.text,/No DLLs match these filters/);assertFiniteChart(panel);
 });
 
 test('missing or unavailable detailed DLL data stays distinct from absence and can render without fixed components',()=>{
