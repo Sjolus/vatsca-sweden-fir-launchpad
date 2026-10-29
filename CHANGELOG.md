@@ -4,6 +4,7 @@
 
 - Support VACS 3 installations and its renamed `vacs.exe`. Update the saved launch path after upgrading from VACS 2, and check both process names before installation or removal.
 - Keep custom VACS 2 installations on the manual upgrade route when the VACS 3 installer cannot preserve their location.
+- Keep SAAMAN updates in the Apps view, with progress, cancellation and results in its row.
 - Reopen the setup guide from Setup → Preferences. Remove its duplicate entry from the Help menu; first-run guidance still opens automatically.
 
 ## [2.6.1] — 2026-10-24

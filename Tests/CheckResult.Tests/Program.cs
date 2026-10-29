@@ -85,6 +85,115 @@ try
         row.Status = CheckStatus.NotConfigured;
         True(row.RowExplanation.Contains("SAAMAN.dll"));
     });
+    Run("SAAMAN row shows progress and keeps Cancel reachable while other actions are blocked", () =>
+    {
+        var row = new CheckResult { HasSaamanManagement = true, Status = CheckStatus.UpdateAvailable,
+            SoftwareActionsAllowed = false, ApplicationActionsAllowed = false,
+            SaamanOperation = new("Downloading the verified DLL…", Busy: true, Percent: 42, CanCancel: true) };
+        Equal("Updating 42%", row.RowStatusText);
+        True(row.RowProgressVisible && !row.RowProgressIndeterminate);
+        Equal(42d, row.RowProgressValue);
+        RowAction(row, CheckRowAction.SaamanCancel, "Cancel", true);
+        True(row.DetailText.Contains("Downloading the verified DLL"));
+        row.SaamanOperation = row.SaamanOperation with { Message = "Applying the update…", Percent = null, CanCancel = false };
+        Equal("Updating…", row.RowStatusText);
+        Equal("Keep Launchpad open", row.RowExplanation);
+        True(row.RowProgressVisible && row.RowProgressIndeterminate);
+        RowAction(row, CheckRowAction.None, "", false);
+    });
+    Run("SAAMAN update failure survives a successful local DLL refresh", () =>
+    {
+        var row = new CheckResult { HasSaamanManagement = true, Status = CheckStatus.UpdateAvailable,
+            SaamanOperation = new("Download failed. The installed DLL is unchanged.", Warning: true) };
+        row.Status = CheckStatus.UpToDate;
+        row.StatusMessage = "Installed SAAMAN 1.3.37.";
+        Equal("Needs attention", row.RowStatusText);
+        Equal("Warning", row.RowStatusKind);
+        True(row.DetailText.StartsWith("Download failed.", StringComparison.Ordinal));
+        True(row.DetailText.Contains("Installed SAAMAN"));
+        True(!row.RowProgressVisible);
+        RowAction(row, CheckRowAction.SaamanManage, "Retry", true);
+        row.ApplicationActionsAllowed = false;
+        RowAction(row, CheckRowAction.SaamanManage, "Retry", false);
+        row.ApplicationActionsAllowed = true;
+        row.Status = CheckStatus.NotConfigured;
+        RowAction(row, CheckRowAction.Setup, "Set up", true);
+        row.Status = CheckStatus.Error;
+        RowAction(row, CheckRowAction.Setup, "Set up", true);
+    });
+    Run("SAAMAN cancelled and successful results stay visible until the next check clears them", () =>
+    {
+        var row = new CheckResult { HasSaamanManagement = true, Status = CheckStatus.UpdateAvailable,
+            SaamanOperation = new("Preparation cancelled. No files changed.", Cancelled: true) };
+        Equal("Update cancelled", row.RowStatusText);
+        RowAction(row, CheckRowAction.SaamanManage, "Retry", true);
+        row.SaamanOperation = new("SAAMAN 1.3.37 installed.");
+        row.Status = CheckStatus.UpToDate;
+        Equal("Updated", row.RowStatusText);
+        Equal("Success", row.RowStatusKind);
+        True(!row.RowProgressVisible);
+        RowAction(row, CheckRowAction.None, "", false);
+        row.SaamanOperation = null;
+        row.Status = CheckStatus.Checking;
+        Equal("Checking…", row.RowStatusText);
+        True(!row.DetailText.Contains("SAAMAN 1.3.37 installed."));
+        RowAction(row, CheckRowAction.None, "", false);
+    });
+    Run("SAAMAN persistence and runtime problems offer explicit remedies without another update", () =>
+    {
+        var row = new CheckResult { HasSaamanManagement = true, Status = CheckStatus.UpToDate,
+            SaamanOperation = new("Updated; saving the location failed.", Warning: true, CanRetrySave: true) };
+        Equal("Needs attention", row.RowStatusText);
+        RowAction(row, CheckRowAction.SaamanRetrySave, "Retry save", true);
+        True(row.RowActionTooltip.Contains("without downloading"));
+        row.SoftwareActionsAllowed = false;
+        RowAction(row, CheckRowAction.SaamanRetrySave, "Retry save", false);
+        row.SoftwareActionsAllowed = true;
+        row.SaamanOperation = new("SAAMAN needs WebView2.", Warning: true, RuntimeRequired: true);
+        RowAction(row, CheckRowAction.Setup, "Set up", true);
+        True(row.RowExplanation.Contains("WebView2") && row.RowActionTooltip.Contains("WebView2"));
+        row.SaamanOperation = new("Cancelled after installation; some changes remain.", Warning: true, Cancelled: true);
+        Equal("Needs attention", row.RowStatusText);
+    });
+    Run("SAAMAN operation changes notify row actions, diagnostics and progress", () =>
+    {
+        var row = new CheckResult { HasSaamanManagement = true };
+        var notices = new HashSet<string?>();
+        row.PropertyChanged += (_, args) => notices.Add(args.PropertyName);
+        foreach (var state in new SaamanOperationState?[]
+        {
+            new("Checking…", Busy: true, CanCancel: true),
+            new("Downloading…", Busy: true, Percent: 35, CanCancel: true),
+            new("Applying…", Busy: true), new("Failed.", Warning: true), null
+        })
+        {
+            notices.Clear(); row.SaamanOperation = state;
+            foreach (var name in new[] { nameof(CheckResult.SaamanOperation), nameof(CheckResult.RowStatusText),
+                nameof(CheckResult.RowStatusKind), nameof(CheckResult.RowExplanation), nameof(CheckResult.DetailText),
+                nameof(CheckResult.RowAction), nameof(CheckResult.RowActionEnabled), nameof(CheckResult.RowActionText),
+                nameof(CheckResult.RowProgressVisible), nameof(CheckResult.RowProgressValue), nameof(CheckResult.RowProgressIndeterminate) })
+                True(notices.Contains(name));
+        }
+    });
+    Run("shared row progress preserves vendor updates and ignores SAAMAN state on other rows", () =>
+    {
+        var row = Software(SoftwareApp.VatEfs, SoftwareUpdatePhase.Downloading);
+        row.SoftwareExecutablePath = fakeExe;
+        var notices = new HashSet<string?>();
+        row.PropertyChanged += (_, args) => notices.Add(args.PropertyName);
+        row.SoftwareUpdate = row.SoftwareUpdate! with { ProgressPercent = 25 };
+        True(row.RowProgressVisible && !row.RowProgressIndeterminate);
+        Equal(25d, row.RowProgressValue);
+        foreach (var name in new[] { nameof(CheckResult.RowProgressVisible), nameof(CheckResult.RowProgressValue), nameof(CheckResult.RowProgressIndeterminate) })
+            True(notices.Contains(name));
+        row.SaamanOperation = new("Unrelated", Busy: true, Percent: 99, CanCancel: true);
+        Equal(25d, row.RowProgressValue);
+        row.SoftwareUpdate = row.SoftwareUpdate with { Phase = SoftwareUpdatePhase.Installing, ProgressPercent = null };
+        True(row.RowProgressVisible && row.RowProgressIndeterminate);
+        row.SoftwareUpdate = row.SoftwareUpdate with { Phase = SoftwareUpdatePhase.Completed };
+        True(!row.RowProgressVisible && !row.RowProgressIndeterminate);
+        Equal("Updated", row.RowStatusText);
+    });
     Run("unknown, missing and unreported versions remain distinct", () =>
     {
         var row = new CheckResult { AppName = "EuroScope", HasEuroScopeManagement = true };

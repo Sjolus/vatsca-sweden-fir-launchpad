@@ -37,6 +37,8 @@ public partial class MainWindow
             case CheckRowAction.GngUpdate: GngUpdate_Click(sender, e); break;
             case CheckRowAction.Fonts: Fonts_Click(sender, e); break;
             case CheckRowAction.SaamanManage: SaamanManage_Click(sender, e); break;
+            case CheckRowAction.SaamanCancel: CancelSaamanOperation(); break;
+            case CheckRowAction.SaamanRetrySave: SaamanRetrySave_Click(sender, e); break;
             case CheckRowAction.EuroScopeManage: EuroScopeManage_Click(sender, e); break;
         }
     }

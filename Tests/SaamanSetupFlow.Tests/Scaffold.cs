@@ -8,7 +8,7 @@ namespace SaamanSetupFlow.Tests
 {
     internal sealed record Completion(ReportingOperation Operation, ReportingOutcome Outcome,
         ReportingReason? Reason, ReportingDetails? Details);
-    internal sealed record Status(string Message, bool Warning, bool Busy);
+    internal sealed record Status(string Message, bool Warning, bool Busy, bool CanCancel, bool Cancelled);
 
     internal sealed class Fixture : IDisposable
     {
@@ -127,8 +127,9 @@ namespace VatscaUpdateChecker
         internal void Cancel() => CancelSaamanOperation();
         private bool CanRunSoftwareAction() => !_softwareActionBusy;
         private bool CanRunSelfUpdateAction() => true;
-        private void SetPluginStatus(string key, string message, bool warning = false, double? percent = null, bool busy = false)
-            => SaamanSetupFlow.Tests.Fixture.Current.Statuses.Add(new(message, warning, busy));
+        private void BeginSaamanFeedback(ReportingOperation operation) { }
+        private void SetPluginStatus(string key, string message, bool warning = false, double? percent = null, bool busy = false, bool cancelled = false)
+            => SaamanSetupFlow.Tests.Fixture.Current.Statuses.Add(new(message, warning, busy, busy && SaamanCanCancel, cancelled));
         private void UpdateSelfUpdateActionEnabled() { }
         private Task RefreshSaamanLocalAsync() { SaamanSetupFlow.Tests.Fixture.Current.Calls.Add("refresh"); return Task.CompletedTask; }
         private void ApplyApplicationUsage() { }

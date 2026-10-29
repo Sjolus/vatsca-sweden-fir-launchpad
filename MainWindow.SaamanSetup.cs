@@ -144,6 +144,7 @@ public partial class MainWindow
     {
         if (!CanRunSoftwareAction() || !CanRunSelfUpdateAction()) return;
         var action = new SaamanSetupAction();
+        BeginSaamanFeedback(operation);
         _softwareActionBusy = true;
         _processTimer.Stop();
         _saamanCancellation = new CancellationTokenSource();
@@ -173,7 +174,7 @@ public partial class MainWindow
                 details: new ReportingDetails { RecoveryAvailable = action.RecoveryFolder is not null });
             SetPluginStatus("SAAMAN", WithSaamanSaveWarning(action.ChangedFiles
                 ? "SAAMAN setup stopped after the DLL was installed. Profile activation did not complete."
-                : "SAAMAN preparation cancelled. No plugin or profile was changed."), warning: action.ChangedFiles);
+                : "SAAMAN preparation cancelled. No plugin or profile was changed."), warning: action.ChangedFiles, cancelled: !action.ChangedFiles);
         }
         catch (Exception ex)
         {
@@ -292,6 +293,8 @@ public partial class MainWindow
     {
         SaamanInstallPlan? plan = null;
         bool installing = false;
+        bool acceptingProgress = false;
+        var activeOperation = _saamanCancellation;
         var operation = File.Exists(SaamanInstallService.GetSuggestedPath(choices)) ? ActivityOperation.Update : ActivityOperation.Install;
         var reportOperation = operation == ActivityOperation.Update ? ReportingOperation.Update : ReportingOperation.Install;
         if (reportInstallation) ReportingEvents.Start(ReportingApplication.Saaman, reportOperation);
@@ -318,13 +321,15 @@ public partial class MainWindow
             }
             installing = true;
             action.Stage = ReportingStage.Download;
+            acceptingProgress = true;
             var result = await _saamanInstaller.InstallAsync(plan, choices, new Progress<SaamanProgress>(progress =>
             {
-                if (_saamanCancellation is null) return;
+                if (!acceptingProgress || !ReferenceEquals(_saamanCancellation, activeOperation)) return;
                 if (progress.Message.StartsWith("Applying", StringComparison.Ordinal))
                 { SaamanCanCancel = false; action.Stage = ReportingStage.Apply; }
                 SetPluginStatus("SAAMAN", progress.Message, percent: progress.Percent, busy: true);
             }), token);
+            acceptingProgress = false;
             action.ChangedFiles = true;
             action.RecoveryFolder = Path.GetDirectoryName(result.ReceiptPath);
             choices.SaamanDllPath = result.DllPath;
@@ -352,6 +357,6 @@ public partial class MainWindow
             }
             throw;
         }
-        finally { SaamanCanCancel = false; }
+        finally { acceptingProgress = false; SaamanCanCancel = false; }
     }
 }
