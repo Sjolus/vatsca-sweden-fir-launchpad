@@ -14,6 +14,8 @@ public sealed record GngUpdateFile(string RelativePath, string Action, string De
     internal bool WritesFile => Action is not "Keep personal file" and not "Unchanged";
 }
 
+public sealed record GngReviewPlugin(string FileName, string Location, IReadOnlyList<string> Profiles, bool SuppliedByPackage = false);
+
 /// <summary>Read-only installation checks gathered while building the package plan.</summary>
 public sealed record GngReviewContext
 {
@@ -23,8 +25,10 @@ public sealed record GngReviewContext
     public int CustomizedReplacementCount { get; init; }
     public int UnmatchedReplacementCount { get; init; }
     public int PreservedCustomPluginCount { get; init; }
+    public IReadOnlyList<GngReviewPlugin> PreservedCustomPlugins { get; init; } = [];
     public int RdfOverrideCount { get; init; }
     public int UnverifiedDependencyCount { get; init; }
+    public IReadOnlyList<GngReviewPlugin> UnverifiedDependencies { get; init; } = [];
     public IReadOnlyList<string> UnchangedProfiles { get; init; } = [];
     internal IReadOnlyList<string> ClassifiedWarnings { get; init; } = [];
 }

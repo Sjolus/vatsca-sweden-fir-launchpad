@@ -10,6 +10,7 @@
     <Compile Include="..\..\Services\GngPackageSelection.cs" Link="GngPackageSelection.cs" />
     <Compile Include="..\..\Services\GngDownloadRequestState.cs" Link="GngDownloadRequestState.cs" />
     <Compile Include="..\..\Services\GngBrowserNavigationState.cs" Link="GngBrowserNavigationState.cs" />
+    <Compile Include="..\..\Services\GngDownloadProgress.cs" Link="GngDownloadProgress.cs" />
     <None Update="SelectionDomTests.js" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

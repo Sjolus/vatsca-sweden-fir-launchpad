@@ -55,6 +55,7 @@
     <Compile Include="../../Models/CheckResult.cs" Link="CheckResult.cs" />
     <Compile Include="../../Models/ApplicationRows.cs" Link="ApplicationRows.cs" />
     <Compile Include="../../MainWindow.WorkspacePresentation.cs" Link="MainWindow.WorkspacePresentation.cs" />
+    <Compile Include="../../MainWindow.GngPresentation.cs" Link="MainWindow.GngPresentation.cs" />
     <Compile Include="../../GngUpdateControl.Review.cs" Link="GngUpdateControl.Review.cs" />
     <Compile Include="../../GngUpdateControl.FilePreview.cs" Link="GngUpdateControl.FilePreview.cs" />
     <Compile Include="../../GngUpdateControl.EuroScope.cs" Link="GngUpdateControl.EuroScope.cs" />

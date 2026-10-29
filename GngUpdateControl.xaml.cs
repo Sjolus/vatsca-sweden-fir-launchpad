@@ -37,9 +37,15 @@ public partial class GngUpdateControl : UserControl, IDisposable
     private string? _primaryPackagePath;
     private string? _referenceVersion;
     private bool _preparingReference;
+    private bool _startingBrowser;
     private WebView2? _browser;
     private CoreWebView2Environment? _environment;
     private CoreWebView2DownloadOperation? _download;
+    private readonly GngDownloadProgressMeter _downloadProgressMeter = new();
+    private readonly Stopwatch _downloadClock = new();
+    private readonly DispatcherTimer _downloadProgressTimer = new() { Interval = TimeSpan.FromSeconds(1) };
+    private TimeSpan? _lastDownloadProgressUpdate;
+    private string? _transferSummary;
     private WebView2? _downloadOwner;
     private string? _downloadPath;
     private string? _downloadFailure;
@@ -94,10 +100,9 @@ public partial class GngUpdateControl : UserControl, IDisposable
     public bool IsBusy => _busy || _queuedPreview || _selectionInFlight || _download is not null || _downloadRequest.IsPending || _cleanupControl?.IsBusy == true;
     public bool CanDismiss => !_busy && !_queuedPreview && !_selectionInFlight && _download is null && _cleanupControl?.IsBusy != true;
     public bool CanCancel => !_writing && !_closed && (_busy || _queuedPreview || _download is not null || _downloadRequest.IsPending || _selectionInFlight);
-    public bool NeedsAttentionView => NestedContent?.Content is not null || _readingFilePreview || _showingIssue || _preparationCancelled || _recoveryRequired || _showingCompletion ||
-        (!_busy && !_queuedPreview && _download is null && (ReviewPanel?.Visibility == Visibility.Visible || BrowserToolbar?.Visibility == Visibility.Visible || StartPanel?.Visibility == Visibility.Visible));
     public string Status => StatusText?.Text ?? string.Empty;
     public string Stage => DownloadStageText?.Text ?? string.Empty;
+    public string? TransferSummary => _transferSummary;
     public double Progress => Activity?.Value ?? 0;
     public bool ProgressIndeterminate => Activity?.IsIndeterminate == true;
     public string DataFolder { get; }
@@ -129,6 +134,7 @@ public partial class GngUpdateControl : UserControl, IDisposable
             ShowCompletion("Review GNG recovery", "Choose Restore backup to review the selected recovery copy. Nothing is restored until you confirm the backup and destination.", recoveryFolder);
         RefreshEuroScopeStatus();
         _euroScopeTimer.Tick += (_, _) => RefreshEuroScopeStatus();
+        _downloadProgressTimer.Tick += (_, _) => UpdateDownloadProgress();
         Loaded += (_, _) => _euroScopeTimer.Start();
     }
 
@@ -270,6 +276,14 @@ public partial class GngUpdateControl : UserControl, IDisposable
 
     private async Task InitializeBrowserAsync()
     {
+        // Present the native host before either async creation step, including
+        // a replacement browser needed for the second package download.
+        _startingBrowser = true;
+        UpdateControls();
+        using var startupCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+            _preparationCancellation?.Token ?? CancellationToken.None);
+        startupCancellation.CancelAfter(TimeSpan.FromSeconds(60));
+        var startupToken = startupCancellation.Token;
         try
         {
             if (_browser?.CoreWebView2 is { } existing)
@@ -285,13 +299,13 @@ public partial class GngUpdateControl : UserControl, IDisposable
             SoftwareInstaller.RejectReparse(profileFolder);
             Directory.CreateDirectory(profileFolder);
             SoftwareInstaller.RejectReparse(profileFolder);
-            _environment = await CoreWebView2Environment.CreateAsync(userDataFolder: profileFolder);
+            _environment = await CoreWebView2Environment.CreateAsync(userDataFolder: profileFolder).WaitAsync(startupToken);
             if (_closed || _preparationCancelled) return;
             _browser?.Dispose();
             _browser = new WebView2();
             SetBrowserBackground(_browser);
             BrowserHost.Content = _browser;
-            await _browser.EnsureCoreWebView2Async(_environment);
+            await _browser.EnsureCoreWebView2Async(_environment).WaitAsync(startupToken);
             if (_closed || _preparationCancelled) { ResetBrowser(); return; }
             ConfigureBrowser(_browser, OriginText);
             StartBrowserButton.Visibility = Visibility.Visible;
@@ -306,6 +320,15 @@ public partial class GngUpdateControl : UserControl, IDisposable
                 ? "Sign in if AeroNav asks. Launchpad will download the Swedish package and show it for review."
                 : "Continuing the download (2 of 2)…";
         }
+        catch (Exception) when (_preparationCancelled || _closed)
+        {
+            ResetBrowser();
+        }
+        catch (OperationCanceledException)
+        {
+            ResetBrowser();
+            ShowBrowserFallback("The AeroNav browser took too long to start. Retry the download, or use your normal browser and import the ZIP.");
+        }
         catch (WebView2RuntimeNotFoundException)
         {
             ResetBrowser();
@@ -317,6 +340,7 @@ public partial class GngUpdateControl : UserControl, IDisposable
             ResetBrowser();
             ShowBrowserFallback("The embedded browser could not start. Use your normal browser and Import ZIP, or check the WebView2 Runtime and reopen Launchpad.");
         }
+        finally { _startingBrowser = false; UpdateControls(); }
     }
 
     private async void InstallRuntime_Click(object sender, RoutedEventArgs e)
@@ -757,13 +781,17 @@ public partial class GngUpdateControl : UserControl, IDisposable
             _downloadPath = Path.Combine(folder, filename);
             e.ResultFilePath = _downloadPath;
             _download = e.DownloadOperation;
+            _downloadProgressMeter.Reset();
+            _downloadClock.Restart();
+            _lastDownloadProgressUpdate = null;
+            _downloadProgressTimer.Start();
             _downloadGeneration = _downloadRequest.Generation;
             _downloadOwner = owner;
             _downloadFailure = null;
             _download.BytesReceivedChanged += Download_ProgressChanged;
             _download.StateChanged += Download_StateChanged;
             _plan = null;
-                UpdateControls();
+            UpdateControls();
             UpdateDownloadProgress();
             e.Cancel = _download is null || _downloadFailure is not null;
             Logger.Log("GNG", $"Download accepted: kind={_requestedPackageKind}; expectedBytes={_download?.TotalBytesToReceive}; request={_downloadGeneration}.");
@@ -791,7 +819,26 @@ public partial class GngUpdateControl : UserControl, IDisposable
 
     private void UpdateDownloadProgress()
     {
+        try { UpdateDownloadProgressCore(); }
+        catch (Exception error) when (error is System.Runtime.InteropServices.COMException or InvalidOperationException)
+        {
+            // A timer tick can precede the browser's queued ProcessFailed cleanup.
+            // Native errors can contain URLs, so report a fixed message only.
+            DisarmDownloadRequest();
+            try { _download?.Cancel(); } catch (Exception) { }
+            DetachDownload();
+            ClosePopups();
+            ResetBrowser();
+            Activity.Visibility = Visibility.Collapsed;
+            ShowIssue("Download stopped", "The browser stopped reporting the download. Nothing was installed. Retry the download, or import a complete ZIP.");
+            UpdateControls();
+        }
+    }
+
+    private void UpdateDownloadProgressCore()
+    {
         if (_download is null || _closed) return;
+        var elapsed = _downloadClock.Elapsed;
         var total = _download.TotalBytesToReceive.GetValueOrDefault();
         var received = _download.BytesReceived;
         if (received > GngBrowserPolicy.MaximumDownloadBytes || total > GngBrowserPolicy.MaximumDownloadBytes)
@@ -800,13 +847,19 @@ public partial class GngUpdateControl : UserControl, IDisposable
             _download.Cancel();
             return;
         }
+        if (_lastDownloadProgressUpdate is { } previous && elapsed - previous < TimeSpan.FromMilliseconds(250)) return;
+        _lastDownloadProgressUpdate = elapsed;
+        var progress = _downloadProgressMeter.Sample(received, (long)total, elapsed);
+        _transferSummary = progress.CompactText;
         Activity.Visibility = Visibility.Visible;
-        Activity.IsIndeterminate = total <= 0;
-        if (total > 0) Activity.Value = Math.Clamp(received * 100.0 / total, 0, 100);
+        Activity.IsIndeterminate = progress.Percent is null;
+        if (progress.Percent is { } percent) Activity.Value = percent;
         SetStage(_primaryPackagePath is not null ? "Downloading Full reference (2 of 2)" :
             _requestedPackageKind == GngPackageKind.UpdateOnly ? "Downloading Update Only (1 of 2)" : "Downloading Full Package");
-        var detail = "You will choose when to install.";
-        StatusText.Text = (total > 0 ? $"{Activity.Value:0}% · {received / 1048576.0:0.0} of {total / 1048576.0:0.0} MB" : $"{received / 1048576.0:0.0} MB downloaded") + " · " + detail;
+        StatusText.Text = progress.DetailText + (_primaryPackagePath is not null
+            ? " · Reference copy for future cleanup comparisons. It will not be installed."
+            : " · You will review the update before installing.");
+        NotifyStateChanged();
     }
 
     private void Download_StateChanged(object? sender, object e)
@@ -928,6 +981,11 @@ public partial class GngUpdateControl : UserControl, IDisposable
 
     private void DetachDownload()
     {
+        _downloadProgressTimer.Stop();
+        _downloadClock.Stop();
+        _downloadProgressMeter.Reset();
+        _lastDownloadProgressUpdate = null;
+        _transferSummary = null;
         if (_download is not null)
         {
             _download.BytesReceivedChanged -= Download_ProgressChanged;
@@ -1246,9 +1304,9 @@ public partial class GngUpdateControl : UserControl, IDisposable
         {
             "Checking saved packages" or "Preparing installation review" or "Checking downloaded update (1 of 2)" or "Checking reviewed package" => "Checking update",
             "Preparing download" or "Finding your package" or "Starting package download" => "Starting download",
-            "Getting Full reference (2 of 2)" or "Starting Full reference (2 of 2)" => "Downloading update (2 of 2)",
-            "Downloading Full reference (2 of 2)" => "Downloading update (2 of 2)",
-            "Downloading Update Only (1 of 2)" => "Downloading update (1 of 2)",
+            "Getting Full reference (2 of 2)" or "Starting Full reference (2 of 2)" => "Starting reference copy",
+            "Downloading Full reference (2 of 2)" => "Reference 2/2",
+            "Downloading Update Only (1 of 2)" => "Download 1/2",
             "Downloading Full Package" => "Downloading update",
             "Updating Swedish GNG" => "Installing update",
             _ => title
@@ -1312,7 +1370,7 @@ public partial class GngUpdateControl : UserControl, IDisposable
         BackButton.IsEnabled = CanGetPackage && core?.CanGoBack == true;
         ReloadButton.IsEnabled = HomeButton.IsEnabled = CanGetPackage && core is not null;
         RetryDownloadButton.IsEnabled = CanGetPackage && !_downloadRequest.IsPending;
-        StopRequestButton.IsEnabled = Idle && _downloadRequest.IsPending ||
+        StopRequestButton.IsEnabled = _startingBrowser && !_preparationCancelled || Idle && _downloadRequest.IsPending ||
             _preparingReference && _downloadRequest.Phase == GngDownloadRequestPhase.Downloading;
         StopRequestButton.Visibility = StopRequestButton.IsEnabled ? Visibility.Visible : Visibility.Collapsed;
         StartBrowserButton.Content = _primaryPackagePath is null ? "Download Swedish GNG" : "Retry reference download";
@@ -1328,7 +1386,7 @@ public partial class GngUpdateControl : UserControl, IDisposable
     private void UpdateBrowserInteraction()
     {
         var blocked = _download is not null || _queuedPreview ||
-            _busy && BrowserToolbar.Visibility == Visibility.Visible && StartPanel.Visibility != Visibility.Visible;
+            _busy && !_startingBrowser && BrowserToolbar.Visibility == Visibility.Visible && StartPanel.Visibility != Visibility.Visible;
         var justBlocked = blocked && !_browserInteractionBlocked;
         _browserInteractionBlocked = blocked;
         SetBrowserInteractionBlocked(blocked);
@@ -1449,6 +1507,7 @@ public partial class GngUpdateControl : UserControl, IDisposable
     private void StartOver_Click(object sender, RoutedEventArgs e) => ChooseAnother_Click(sender, e);
     private void StopRequest_Click(object sender, RoutedEventArgs e)
     {
+        if (_startingBrowser) { CancelPreparation(); return; }
         if (!(Idle && _downloadRequest.IsPending) &&
             !(_preparingReference && _downloadRequest.Phase == GngDownloadRequestPhase.Downloading)) return;
         DisarmDownloadRequest(closeBrowsers: true);

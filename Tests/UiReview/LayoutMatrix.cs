@@ -40,6 +40,8 @@ internal static partial class LayoutMatrix
                 CheckThemeReadability();
                 layouts += CheckGngUpdateLayouts();
                 layouts += GngFileNavigationTests.Run();
+                layouts += GngBrowserStartupTests.Run();
+                layouts += CheckGngDownloadLayouts();
                 layouts += CheckGngInvestigationLayouts();
                 layouts += CheckCompactGngChangeNavigation();
                 layouts += CheckGngFileDiffLayouts();

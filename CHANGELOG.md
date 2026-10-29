@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.6.5] — 2026-10-29
+
+- Fix the AeroNav browser getting stuck at startup when a GNG update needs a download. Keep the browser panel visible during startup, allow stopping it, and offer retry or ZIP import if it cannot start.
+- Show GNG download percentage, size and recent speed in Apps, including compact mode. Full progress includes an estimated time remaining for the current file and explains the second reference download.
+- Name plugins and affected EuroScope profiles when a GNG update keeps an extra plugin. Explain what will change, what stays untouched and what to check before installing.
+
 ## [2.6.4] — 2026-10-29
 
 - Recognize VACS 3.0.1 after its Windows registration change. Check both old installation locations before updating, keeping conflicting copies on the manual route.

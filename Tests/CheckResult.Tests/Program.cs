@@ -24,6 +24,27 @@ try
         Equal(CheckRowAction.None, row.RowAction);
         Equal(true, row.RowProgressIndeterminate);
     });
+    Run("GNG transfer metrics update the row and clear between phases", () =>
+    {
+        var row = new CheckResult { AppName = "EuroScope (GNG Pack)", HasFontsCheck = true };
+        var notifications = new HashSet<string?>();
+        row.PropertyChanged += (_, e) => notifications.Add(e.PropertyName);
+        row.GngOperation = new("25.2 of 60 MB · 1.2 MB/s · About 29 s left for this file.", "Download 1/2",
+            Busy: true, CanCancel: true, Percent: 42, TransferSummary: "25.2 / 60 MB · 1.2 MB/s");
+        True(row.HasGngTransfer && notifications.Contains(nameof(CheckResult.HasGngTransfer)));
+        Equal("42% · Download 1/2", row.RowStatusText);
+        Equal("25.2 / 60 MB · 1.2 MB/s", row.RowExplanation);
+        True(row.DetailText.Contains("29 s left for this file"));
+        row.GngOperation = new("Size not provided by server", "Reference 2/2", Busy: true,
+            CanCancel: true, TransferSummary: "8 MB · 500 KB/s");
+        True(row.HasGngTransfer && row.RowProgressIndeterminate);
+        Equal("Reference 2/2", row.RowStatusText);
+        row.GngOperation = new("Checking the ZIP", "Checking files", Busy: true);
+        True(!row.HasGngTransfer);
+        Equal("Keep Launchpad open", row.RowExplanation);
+        row.GngOperation = null;
+        True(!row.HasGngTransfer);
+    });
     Run("GNG review remains reachable and clearing it restores the real update state", () =>
     {
         var row = new CheckResult { AppName = "EuroScope (GNG Pack)", HasFontsCheck = true,

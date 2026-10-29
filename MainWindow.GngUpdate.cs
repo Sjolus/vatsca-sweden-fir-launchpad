@@ -65,7 +65,7 @@ public partial class MainWindow
         _setupRestartRequired |= flow.RestartRequired;
         var row = _results[1];
         row.GngOperation = new(flow.Status, flow.Stage, flow.IsBusy, flow.CanCancel,
-            flow.NeedsAttentionView, flow.ProgressIndeterminate ? null : flow.Progress, flow.HasWarning);
+            flow.NeedsAttentionView, flow.ProgressIndeterminate ? null : flow.Progress, flow.HasWarning, flow.TransferSummary);
         LastCheckedText.Text = flow.Status;
         SetupWorkspace.SetGngState(row, flow.Status);
         UpdateGngPresentation();
@@ -110,43 +110,6 @@ public partial class MainWindow
             catch (Exception ex) { LastCheckedText.Text = "GNG result could not be refreshed: " + ex.Message; }
             finally { _gngRefreshInProgress = false; if (!_windowClosed) UpdateSelfUpdateActionEnabled(); }
         }
-    }
-
-    private void UpdateGngPresentation()
-    {
-        bool samePage = _workspace == _gngFlowWorkspace &&
-            (_workspace != "Setup" || SetupWorkspace.SelectedSection == _gngFlowSection);
-        bool show = samePage && (_gngUpdateFlow?.NeedsAttentionView == true || _gngCleanupFlow is not null);
-        FrameworkElement? content = (FrameworkElement?)_gngUpdateFlow ?? _gngCleanupFlow;
-        if (_gngFlowWorkspace == "Setup" && content is not null)
-        {
-            GngFlowHost.Content = null;
-            GngFlowHost.Visibility = Visibility.Collapsed;
-            SetupWorkspace.SetGngOperationContent(content);
-            SetupWorkspace.ShowGngOperation(show);
-            PresentWorkspace(_workspace);
-        }
-        else
-        {
-            SetupWorkspace.SetGngOperationContent(null);
-            GngFlowHost.Content = content;
-            GngFlowHost.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
-            if (show)
-            {
-                AppsWorkspace.Visibility = SetupWorkspace.Visibility = Visibility.Collapsed;
-                AppBulkActions.Visibility = CheckButton.Visibility = Visibility.Collapsed;
-                MaintenanceButton.Visibility = Visibility.Collapsed;
-            }
-            else PresentWorkspace(_workspace);
-        }
-    }
-
-    private void ReturnToGngFlow()
-    {
-        if (!HasGngFlow) return;
-        _gngFlowWorkspace = _workspace;
-        if (_workspace == "Setup") { _gngFlowSection = "Gng"; SetupWorkspace.ShowSection("Gng"); }
-        UpdateGngPresentation();
     }
 
     private void RefreshGngLocalState()

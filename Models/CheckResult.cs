@@ -15,7 +15,8 @@ public enum CheckRowAction
 }
 
 public sealed record GngOperationState(string Message, string Stage, bool Busy = false,
-    bool CanCancel = false, bool NeedsAttention = false, double? Percent = null, bool Warning = false);
+    bool CanCancel = false, bool NeedsAttention = false, double? Percent = null, bool Warning = false,
+    string? TransferSummary = null);
 
 public sealed record SaamanOperationState(string Message, bool Busy = false, bool Warning = false,
     double? Percent = null, bool CanCancel = false, bool CanRetrySave = false,
@@ -90,7 +91,8 @@ public class CheckResult : INotifyPropertyChanged
     {
         get
         {
-            if (HasFontsCheck && GngOperation is { } gng) return gng.Stage;
+            if (HasFontsCheck && GngOperation is { } gng) return HasGngTransfer && gng.Percent is { } percent
+                ? $"{percent:0}% · {gng.Stage}" : gng.Stage;
             if (HasFontsCheck && GngIsTesting && FontsState != FontsState.NeedsAction && Status is CheckStatus.UpToDate or CheckStatus.Installed) return "Testing package";
             if (IsNotUsed && !SoftwareUpdateBusy && !SaamanBusy && !IsRunning) return "Not used";
             if (HasSaamanManagement && SaamanOperation is { } saaman)
@@ -186,7 +188,7 @@ public class CheckResult : INotifyPropertyChanged
         get
         {
             if (HasFontsCheck && GngOperation is { } gng)
-                return gng.NeedsAttention ? "Continue the GNG update" : gng.CanCancel ? "Preparing in the background" : "Keep Launchpad open";
+                return HasGngTransfer ? gng.TransferSummary! : gng.NeedsAttention ? "Continue the GNG update" : gng.CanCancel ? "Preparing in the background" : "Keep Launchpad open";
             if (HasFontsCheck && GngIsTesting) return "Navteam testing package · manually imported";
             if (IsNotUsed) return "Optional · your saved locations and settings are kept";
             if (HasSaamanManagement && SaamanOperation is { } saaman)
@@ -467,6 +469,7 @@ public class CheckResult : INotifyPropertyChanged
         }
     }
     private bool GngBusy => HasFontsCheck && GngOperation?.Busy == true;
+    public bool HasGngTransfer => GngBusy && !string.IsNullOrWhiteSpace(GngOperation?.TransferSummary);
     private SaamanOperationState? _saamanOperation;
     public SaamanOperationState? SaamanOperation
     {
@@ -833,7 +836,7 @@ public class CheckResult : INotifyPropertyChanged
         // Use direct notifications: derived labels must not recursively invalidate one another.
         foreach (var name in new[] { nameof(DisplayInstalledVersion), nameof(DisplayLatestVersion),
             nameof(LatestVersionCaption), nameof(RowStatusText), nameof(RowStatusKind), nameof(RowStatusSymbol),
-            nameof(RowExplanation), nameof(DetailHeading), nameof(DetailText), nameof(LaunchActionText),
+            nameof(RowExplanation), nameof(HasGngTransfer), nameof(DetailHeading), nameof(DetailText), nameof(LaunchActionText),
             nameof(UsageActionText), nameof(SelectedProfileCaption), nameof(ShowLaunch), nameof(ShowSimpleLaunch), nameof(ShowSplitLaunch), nameof(ShowRunningActions) })
             OnPropertyChanged(name);
         NotifyRowAction();
