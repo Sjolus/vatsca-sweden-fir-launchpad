@@ -11,8 +11,12 @@ public enum CheckStatus { Unknown, Checking, UpToDate, UpdateAvailable, Unsuppor
 public enum CheckRowAction
 {
     None, Setup, SoftwareUpdate, SoftwareCancel, SoftwareCheck, Downloads,
-    SelfUpdate, GngUpdate, Fonts, SaamanManage, EuroScopeManage
+    SelfUpdate, GngUpdate, Fonts, SaamanManage, EuroScopeManage, SaamanCancel, SaamanRetrySave
 }
+
+public sealed record SaamanOperationState(string Message, bool Busy = false, bool Warning = false,
+    double? Percent = null, bool CanCancel = false, bool CanRetrySave = false,
+    bool RuntimeRequired = false, bool Cancelled = false);
 
 public class CheckResult : INotifyPropertyChanged
 {
@@ -77,7 +81,10 @@ public class CheckResult : INotifyPropertyChanged
     {
         get
         {
-            if (IsNotUsed && !SoftwareUpdateBusy && !IsRunning) return "Not used";
+            if (IsNotUsed && !SoftwareUpdateBusy && !SaamanBusy && !IsRunning) return "Not used";
+            if (HasSaamanManagement && SaamanOperation is { } saaman)
+                return saaman.Busy ? saaman.Percent.HasValue ? $"Updating {saaman.Percent:0}%" : "Updating…"
+                    : saaman.Warning ? "Needs attention" : saaman.Cancelled ? "Update cancelled" : "Updated";
             if (HasSoftwareUpdate)
             {
                 if (SoftwareNeedsSetup && !SoftwareUpdateBusy)
@@ -129,7 +136,9 @@ public class CheckResult : INotifyPropertyChanged
     {
         get
         {
-            if (IsNotUsed && !SoftwareUpdateBusy) return "Neutral";
+            if (IsNotUsed && !SoftwareUpdateBusy && !SaamanBusy) return "Neutral";
+            if (HasSaamanManagement && SaamanOperation is { } saaman)
+                return saaman.Busy ? "Neutral" : saaman.Warning || saaman.Cancelled ? "Warning" : "Success";
             if (HasSoftwareUpdate)
                 return SoftwareNeedsSetup && !SoftwareUpdateBusy ? "Warning" : SoftwareUpdate?.Phase switch
                 {
@@ -164,6 +173,12 @@ public class CheckResult : INotifyPropertyChanged
         get
         {
             if (IsNotUsed) return "Optional · your saved locations and settings are kept";
+            if (HasSaamanManagement && SaamanOperation is { } saaman)
+                return saaman.Busy ? saaman.CanCancel ? "Updating in the background" : "Keep Launchpad open"
+                    : saaman.CanRetrySave ? "Save the updated location"
+                    : saaman.RuntimeRequired ? "Install WebView2 in Setup"
+                    : saaman.Warning ? "Review the error before retrying"
+                    : saaman.Cancelled ? "Retry when ready" : "Ready to use in EuroScope";
             if (HasSaamanManagement) return Status switch
             {
                 CheckStatus.Checking => "Checking the DLL and stable releases",
@@ -234,6 +249,7 @@ public class CheckResult : INotifyPropertyChanged
         {
             var paragraphs = new List<string>();
             if (IsNotUsed) AddDetail(paragraphs, "You chose not to use this application. Your saved locations and data are unchanged. Choose Use this application whenever you need it.");
+            if (HasSaamanManagement) AddDetail(paragraphs, SaamanOperation?.Message);
             AddDetail(paragraphs, StatusMessage);
             if (HasSoftwareUpdate) AddDetail(paragraphs, SoftwareUpdate?.Message);
             if (HasSoftwareUpdate) AddDetail(paragraphs, SoftwareBlockingReason);
@@ -271,8 +287,16 @@ public class CheckResult : INotifyPropertyChanged
         get
         {
             if (HasSoftwareUpdate && SoftwareCanCancel) return CheckRowAction.SoftwareCancel;
+            if (SaamanBusy) return SaamanOperation!.CanCancel ? CheckRowAction.SaamanCancel : CheckRowAction.None;
             if (SoftwareUpdateBusy || SelfUpdateBusy) return CheckRowAction.None;
             if (HasSelfUpdate) return ShowSelfUpdateAction ? CheckRowAction.SelfUpdate : CheckRowAction.None;
+            if (HasSaamanManagement && SaamanOperation is { } saaman)
+            {
+                if (saaman.CanRetrySave) return CheckRowAction.SaamanRetrySave;
+                if (saaman.RuntimeRequired) return CheckRowAction.Setup;
+                if (saaman.Warning || saaman.Cancelled)
+                    return Status is CheckStatus.NotConfigured or CheckStatus.Error ? CheckRowAction.Setup : CheckRowAction.SaamanManage;
+            }
             if (Status == CheckStatus.Checking) return CheckRowAction.None;
             if (IsNotUsed) return !IsRunning && CanOpenSetup ? CheckRowAction.Setup : CheckRowAction.None;
             if (HasSoftwareUpdate)
@@ -310,8 +334,10 @@ public class CheckResult : INotifyPropertyChanged
     public string RowActionText => RowAction switch
     {
         CheckRowAction.Setup => "Set up",
-        CheckRowAction.SoftwareUpdate or CheckRowAction.GngUpdate or CheckRowAction.SaamanManage => "Update",
-        CheckRowAction.SoftwareCancel => "Cancel",
+        CheckRowAction.SoftwareUpdate or CheckRowAction.GngUpdate => "Update",
+        CheckRowAction.SaamanManage => SaamanOperation is { Warning: true } or { Cancelled: true } ? "Retry" : "Update",
+        CheckRowAction.SoftwareCancel or CheckRowAction.SaamanCancel => "Cancel",
+        CheckRowAction.SaamanRetrySave => "Retry save",
         CheckRowAction.SoftwareCheck => SoftwareUpdate?.Phase is SoftwareUpdatePhase.Error or SoftwareUpdatePhase.Cancelled ? "Retry" : "Check",
         CheckRowAction.Downloads => "Downloads",
         CheckRowAction.Fonts => "Fonts",
@@ -333,6 +359,7 @@ public class CheckResult : INotifyPropertyChanged
     {
         CheckRowAction.None => false,
         CheckRowAction.SoftwareCancel => SoftwareCanCancel,
+        CheckRowAction.SaamanCancel => SaamanBusy && SaamanOperation!.CanCancel,
         CheckRowAction.SelfUpdate => SelfUpdateActionEnabled,
         CheckRowAction.SoftwareUpdate => SoftwareActionEnabled,
         CheckRowAction.Setup => SoftwareActionsAllowed && ApplicationActionsAllowed && !IsRunning,
@@ -341,9 +368,11 @@ public class CheckResult : INotifyPropertyChanged
     public string RowActionTooltip => RowAction switch
     {
         CheckRowAction.Setup => HasFontsCheck ? "Choose the data folder or get a package in Setup → Swedish GNG." :
+            HasSaamanManagement && SaamanOperation?.RuntimeRequired == true ? "Install WebView2 for SAAMAN in Setup → Applications." :
             HasSaamanManagement ? "Enable SAAMAN or choose its DLL in Setup → Applications." :
             "Choose or install the program in Setup → Applications.",
-        CheckRowAction.SoftwareCancel => "Cancel the current check or download.",
+        CheckRowAction.SoftwareCancel or CheckRowAction.SaamanCancel => "Cancel the current check or download.",
+        CheckRowAction.SaamanRetrySave => "Save the updated SAAMAN location without downloading or installing again.",
         CheckRowAction.SoftwareUpdate => !SoftwareActionEnabled ? SoftwareSummary : SoftwareActionText,
         CheckRowAction.SoftwareCheck or CheckRowAction.Downloads => SoftwareActionText,
         CheckRowAction.SelfUpdate => SelfUpdateActionText,
@@ -400,6 +429,19 @@ public class CheckResult : INotifyPropertyChanged
     public bool HasSelfUpdate { get; init; }
     public bool HasEuroScopeManagement { get; init; }
     public bool HasSaamanManagement { get; init; }
+    private SaamanOperationState? _saamanOperation;
+    public SaamanOperationState? SaamanOperation
+    {
+        get => _saamanOperation;
+        set
+        {
+            Set(ref _saamanOperation, value);
+            OnPropertyChanged(nameof(RowProgressVisible));
+            OnPropertyChanged(nameof(RowProgressValue));
+            OnPropertyChanged(nameof(RowProgressIndeterminate));
+        }
+    }
+    private bool SaamanBusy => HasSaamanManagement && SaamanOperation?.Busy == true;
     public string EuroScopeSetupText => string.IsNullOrWhiteSpace(LaunchPath) || !File.Exists(LaunchPath) ? "Set up…" : "Manage…";
     public bool ShowConfigure => (HasFontsCheck && string.IsNullOrWhiteSpace(LaunchPath)) ||
         (IsLocalUrl && !HasSoftwareUpdate && Status is CheckStatus.Unknown or CheckStatus.NotConfigured);
@@ -450,6 +492,9 @@ public class CheckResult : INotifyPropertyChanged
     public bool SoftwareCanCancel => SoftwareUpdate?.CanCancel == true;
     public double SoftwareProgressValue => SoftwareUpdate?.ProgressPercent ?? 0;
     public bool SoftwareProgressIndeterminate => SoftwareUpdateBusy && SoftwareUpdate?.ProgressPercent == null;
+    public bool RowProgressVisible => SoftwareUpdateBusy || SaamanBusy;
+    public double RowProgressValue => SaamanBusy ? SaamanOperation?.Percent ?? 0 : SoftwareProgressValue;
+    public bool RowProgressIndeterminate => SaamanBusy ? SaamanOperation?.Percent == null : SoftwareProgressIndeterminate;
     private bool _applicationActionsAllowed = true;
     public bool ApplicationActionsAllowed
     {
@@ -513,6 +558,7 @@ public class CheckResult : INotifyPropertyChanged
     {
         foreach (var name in new[] { nameof(SoftwareUpdateBusy), nameof(SoftwareCanCancel),
             nameof(SoftwareProgressValue), nameof(SoftwareProgressIndeterminate), nameof(LaunchEnabled),
+            nameof(RowProgressVisible), nameof(RowProgressValue), nameof(RowProgressIndeterminate),
             nameof(SoftwareActionEnabled), nameof(ShowSoftwareAction), nameof(ShowSoftwareDownloads), nameof(SoftwareActionText), nameof(SoftwareSummary),
             nameof(SoftwareNeedsSetup), nameof(ShowSoftwareSetup), nameof(SoftwareSetupText), nameof(SoftwareDetail), nameof(HasSoftwareDetail) })
             OnPropertyChanged(name);

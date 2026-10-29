@@ -16,6 +16,7 @@ public partial class MainWindow
 
     private async Task CheckSaamanAsync()
     {
+        if (!SaamanNeedsSaveRetry && !SaamanNeedsRuntime) SaamanRow.SaamanOperation = null;
         await RefreshSaamanLocalAsync();
         if (_windowClosed) return;
         var row = SaamanRow;
@@ -83,9 +84,12 @@ public partial class MainWindow
 
     private async void SaamanManage_Click(object sender, RoutedEventArgs e)
     {
-        SetupWorkspace.ShowSection("Applications");
-        ShowWorkspace("Setup");
         await UpdateSaamanAsync();
+    }
+
+    private async void SaamanRetrySave_Click(object sender, RoutedEventArgs e)
+    {
+        await RetrySaamanSaveAsync();
     }
 
     private void SaamanGuide_Click(object sender, RoutedEventArgs e)

@@ -9,6 +9,14 @@ public partial class MainWindow
 {
     private readonly Dictionary<string, SetupPluginFeedback> _pluginFeedback = new();
     private bool _vatEfsNeedsSaveRetry;
+    private bool _saamanRowFeedbackEnabled;
+
+    private void BeginSaamanFeedback(ReportingOperation operation)
+    {
+        _saamanRowFeedbackEnabled = operation is ReportingOperation.Update or ReportingOperation.Install ||
+            operation == ReportingOperation.Save && SaamanRow.SaamanOperation is not null;
+        SaamanRow.SaamanOperation = null;
+    }
 
     private SetupWorkspaceApplication BuildSetupApplication(CheckResult row)
     {
@@ -51,10 +59,13 @@ public partial class MainWindow
         return new(key, row.DisplayName, path, status, action, row.IsNotUsed, plugin, feedback, available);
     }
 
-    private void SetPluginStatus(string key, string message, bool warning = false, double? percent = null, bool busy = false)
+    private void SetPluginStatus(string key, string message, bool warning = false, double? percent = null, bool busy = false, bool cancelled = false)
     {
         if (_windowClosed) return;
         _pluginFeedback[key] = new(message, warning, busy, percent);
+        if (key == "SAAMAN" && _saamanRowFeedbackEnabled)
+            SaamanRow.SaamanOperation = new(message, busy, warning, percent, busy && SaamanCanCancel,
+                SaamanNeedsSaveRetry, SaamanNeedsRuntime, cancelled);
         LastCheckedText.Text = key + ": " + message.ReplaceLineEndings(" ");
         RefreshWorkspace();
     }

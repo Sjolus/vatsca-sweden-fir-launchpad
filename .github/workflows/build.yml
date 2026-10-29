@@ -158,6 +158,13 @@ jobs:
       - name: Check embedded Setup layouts
         run: dotnet Tests/UiReview/bin/Release/net9.0-windows/Launchpad.UiReview.dll --check-workspaces
 
+      - name: Show WPF layout failure details
+        if: failure()
+        shell: pwsh
+        run: |
+          $fixtureLog = 'Tests/UiReview/bin/Release/net9.0-windows/fixture-errors.log'
+          if (Test-Path -LiteralPath $fixtureLog) { Get-Content -LiteralPath $fixtureLog }
+
   package:
     needs: build
     runs-on: windows-latest

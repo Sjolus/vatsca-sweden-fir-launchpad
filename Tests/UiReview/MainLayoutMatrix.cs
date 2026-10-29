@@ -193,7 +193,7 @@ internal static partial class LayoutMatrix
                 var message = "Synthetic phase " + phase;
                 row.SoftwareUpdate = new(SoftwareApp.Vacs, phase, message, ProgressPercent: percent); row.StatusMessage = message;
                 DrainBindings(); LayoutValidation.CheckWindowContent(window);
-                var progress = Bound<ProgressBar>(list, ProgressBar.ValueProperty, "SoftwareProgressValue", row);
+                var progress = Bound<ProgressBar>(list, ProgressBar.ValueProperty, nameof(CheckResult.RowProgressValue), row);
                 var action = RowButton(window, row, "RowActionButton");
                 Require(IsPresented(progress) == busy && progress.IsIndeterminate == (busy && percent is null), phase + ": incorrect progress.");
                 if (percent.HasValue) Require(Math.Abs(progress.Value - percent.Value) < .01, "Download percentage did not update.");

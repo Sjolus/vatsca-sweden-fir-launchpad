@@ -142,6 +142,52 @@ internal static class SaamanLayoutReview
                 if (main.SetupWorkspace.SelectedSection != "Applications") throw new InvalidDataException("SAAMAN configuration must remain reachable in Setup.");
                 main.ShowSyntheticWorkspace("Apps");
                 LayoutValidation.CheckWindowContent(main);
+                var originalStatus = row.Status;
+                foreach (var scenario in new[]
+                {
+                    (State: new SaamanOperationState("Downloading SAAMAN.dll…", Busy: true, Percent: 64, CanCancel: true),
+                        Text: "Updating 64%", Action: CheckRowAction.SaamanCancel),
+                    (State: new SaamanOperationState("Applying the verified DLL…", Busy: true),
+                        Text: "Updating…", Action: CheckRowAction.None),
+                    (State: new SaamanOperationState("The download failed. The installed DLL is unchanged.", Warning: true),
+                        Text: "Needs attention", Action: CheckRowAction.SaamanManage),
+                    (State: new SaamanOperationState("SAAMAN updated. Its recovery copy is available in Activity & recovery."),
+                        Text: "Updated", Action: CheckRowAction.None)
+                })
+                {
+                    // A local version refresh must not hide an operation failure or change tabs.
+                    row.Status = CheckStatus.UpToDate;
+                    row.SoftwareActionsAllowed = row.ApplicationActionsAllowed = !scenario.State.Busy;
+                    row.SaamanOperation = scenario.State;
+                    LayoutValidation.CheckWindowContent(main);
+                    if (((FrameworkElement)main.FindName("AppsWorkspace")).Visibility != Visibility.Visible)
+                        throw new InvalidDataException("SAAMAN update feedback must remain in the Apps view.");
+                    var list = (ItemsControl)main.FindName("AppList");
+                    var controls = LayoutValidation.Descendants(list).OfType<FrameworkElement>()
+                        .Where(control => ReferenceEquals(control.DataContext, row)).ToArray();
+                    var status = controls.OfType<TextBox>().Single(control => control.Name == "RowStatusMessage");
+                    var action = controls.OfType<Button>().Single(control => control.Name == "RowActionButton");
+                    var progress = controls.OfType<ProgressBar>().Single(control =>
+                        System.Windows.Data.BindingOperations.GetBinding(control, ProgressBar.ValueProperty)?.Path?.Path == nameof(CheckResult.RowProgressValue));
+                    if (status.Text != scenario.Text || row.RowAction != scenario.Action ||
+                        action.Visibility != (scenario.Action == CheckRowAction.None ? Visibility.Collapsed : Visibility.Visible) ||
+                        action.IsEnabled != (scenario.Action != CheckRowAction.None))
+                        throw new InvalidDataException("SAAMAN row actions or status do not match the active operation.");
+                    if (scenario.Action == CheckRowAction.SaamanCancel && !Equals(action.Content, "Cancel") ||
+                        scenario.Action == CheckRowAction.SaamanManage && !Equals(action.Content, "Retry"))
+                        throw new InvalidDataException("SAAMAN must expose Cancel or Retry directly in its Apps row.");
+                    if (progress.Visibility != (scenario.State.Busy ? Visibility.Visible : Visibility.Collapsed) ||
+                        progress.IsIndeterminate != (scenario.State.Busy && !scenario.State.Percent.HasValue) ||
+                        progress.Value != (scenario.State.Percent ?? 0))
+                        throw new InvalidDataException("SAAMAN row progress does not match the active operation.");
+                    if (System.Windows.Automation.AutomationProperties.GetHelpText(status).Contains(scenario.State.Message, StringComparison.Ordinal) != true)
+                        throw new InvalidDataException("SAAMAN operation details must remain accessible from the row status.");
+                    count++;
+                }
+                row.SaamanOperation = null;
+                row.Status = originalStatus;
+                row.SoftwareActionsAllowed = row.ApplicationActionsAllowed = true;
+                LayoutValidation.CheckWindowContent(main);
                 if (output != null) LayoutSnapshots.SaveSaamanWindow(main, Path.Combine(output, $"{(dark ? "dark" : "light")}-saaman-main.png"));
                 count++;
             }

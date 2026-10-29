@@ -14,7 +14,7 @@ namespace VatscaUpdateChecker;
 internal static class LayoutValidation
 {
     private static readonly string[] ProgressPaths =
-        [nameof(CheckResult.SoftwareProgressValue), nameof(CheckResult.SelfUpdateProgressValue)];
+        [nameof(CheckResult.RowProgressValue), nameof(CheckResult.SelfUpdateProgressValue)];
 
     public static void CheckProgressBindingSource()
     {

@@ -100,6 +100,7 @@ await Check("Cancellation after release lookup prevents installation and activat
     Equal(0, f.Count("install")); Equal(0, f.Count("apply-profile")); Equal(0, f.Saved.Count);
     False(File.Exists(f.Dll)); False(f.Window.Settings.PatchSaaman);
     Equal(ReportingOutcome.Cancelled, f.End(ReportingOperation.Install).Outcome);
+    True(f.Statuses.Last().Cancelled); False(f.Statuses.Last().Busy); False(f.Statuses.Last().CanCancel);
     Equal(ReportingOutcome.Cancelled, f.End(ReportingOperation.ConfigurePluginProfile).Outcome); Balanced(f);
 });
 await Check("Cancellation while downloading prevents file writes", async () =>
@@ -211,6 +212,8 @@ await Check("Identical bytes with a different version still require installation
 {
     using var f = new Fixture(installed: true) { InstalledVersion = "1.2.2" };
     await f.Window.Update();
+    True(f.Statuses.Any(s => s.Busy && s.CanCancel));
+    False(f.Statuses.Last().Busy); False(f.Statuses.Last().CanCancel); False(f.Statuses.Last().Warning);
     Equal(1, f.Count("install")); False(f.Window.Settings.PatchSaaman); Equal(0, f.Count("apply-profile")); Balanced(f);
 });
 await Check("Saving SAAMAN choices does not overwrite unrelated edits made during download", async () =>
