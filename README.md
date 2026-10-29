@@ -4,7 +4,7 @@ A Windows desktop app for [VATSIM Scandinavia](https://vatsca.org) controllers. 
 
 Launchpad supports reviewed installation and updates, optional controller-profile changes, and local recovery history. Downloads, installations and application launches always require an explicit action.
 
-Latest release: **[2.6.4](https://github.com/Sjolus/vatsca-sweden-fir-launchpad/releases/tag/v2.6.4)** — 29 October 2026. See the [changelog](CHANGELOG.md) for what's new.
+Latest release: **[2.6.5](https://github.com/Sjolus/vatsca-sweden-fir-launchpad/releases/tag/v2.6.5)** — 29 October 2026. See the [changelog](CHANGELOG.md) for what's new.
 
 ![Launchpad's compact application list](Assets/screenshot.png)
 

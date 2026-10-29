@@ -15,7 +15,7 @@ public partial class MainWindow
     internal void InitializeSyntheticWorkspaces()
     {
         WorkspaceLayoutReview.PopulateSetup(SetupWorkspace, UiFixture.Blank);
-        SetupWorkspace.SectionChanged += () => PresentWorkspace("Setup");
+        SetupWorkspace.SectionChanged += () => { PresentWorkspace("Setup"); UpdateGngPresentation(); };
         PresentWorkspace("Apps");
     }
 
@@ -23,10 +23,12 @@ public partial class MainWindow
     {
         if (name is "Activity" or "Preferences")
         {
+            _workspace = "Setup";
             SetupWorkspace.ShowSection(name);
             PresentWorkspace("Setup");
         }
-        else PresentWorkspace(name);
+        else { _workspace = name; PresentWorkspace(name); }
+        UpdateGngPresentation();
     }
 
     private void WorkspaceTab_Click(object sender, RoutedEventArgs e)

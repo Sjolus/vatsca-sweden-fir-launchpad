@@ -38,6 +38,11 @@ inline guidance, prerequisite links and the same embedded sections as normal use
 asynchronous navigation. Add `--snapshots` to capture the embedded summary, Files
 workspace and compact diff without showing windows.
 
+The GNG matrix also checks browser-startup host presentation and download metrics in
+compact and comfortable Apps rows. It covers known and unknown file sizes, stalled
+transfers, both themes and 100%/150% text size; the progress bar must not overlap the
+visible transfer rate, and all rows retain their shared height. Transfer data is synthetic.
+
 Add `--snapshots artifacts/ui-review` to render the measured application and workflow layouts
 as PNGs. Cleanup and GNG fresh/existing start, sign-in waiting, package/reference download progress, preparation between downloads, cancellation, review,
 completion and runtime-fallback states capture both themes at default and minimum size,

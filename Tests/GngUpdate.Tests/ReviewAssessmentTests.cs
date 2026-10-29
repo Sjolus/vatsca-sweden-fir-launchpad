@@ -53,6 +53,7 @@ internal static class ReviewAssessmentTests
             var plan = f.Plan(); var result = GngReviewNotes.Assess(plan);
             Require(plan.ReviewContext!.UnverifiedDependencyCount == 1 && result.NeedsAttention &&
                 result.Points.Any(point => point.Contains("could not be matched to the original package")), "Changed dependency was presented as verified.");
+            Require(result.Points.Any(point => point.Contains("TopSky.dll") && point.Contains(Fixture.ProfilePath)), "Reused DLL warning does not identify the plugin and its profile.");
         });
         test("assessment flags a reused DLL absent from the verified inventory", f =>
         {
@@ -109,7 +110,49 @@ internal static class ReviewAssessmentTests
             f.Install(f.Plan()); Advance(f);
             var plan = f.Plan(); var result = GngReviewNotes.Assess(plan);
             Require(plan.ReviewContext!.PreservedCustomPluginCount == 1 && result.NeedsAttention, "Retained custom plugin uncertainty disappeared.");
-            Require(result.Points.Any(point => point.Contains("kept outside the package. Compatibility is not checked.")), "Unknown compatibility was misrepresented.");
+            var plugin = plan.ReviewContext.PreservedCustomPlugins.Single();
+            Require(plugin.FileName == "VatEFS.dll" && plugin.Profiles.SequenceEqual([Fixture.ProfilePath]) && !plugin.SuppliedByPackage, "Retained plugin facts were not collected.");
+            Require(result.Points.Any(point => point.Contains("VatEFS.dll") && point.Contains(Fixture.ProfilePath) && point.Contains("does not include or update it") && point.Contains("Check VatEFS in Apps")), "Retained plugin warning lacks its identity, impact or next step.");
+            Require(plan.Warnings.Any(point => point.Contains(plugin.Location) && point.Contains("left untouched")), "Technical notes omitted the retained DLL location.");
+        });
+        test("assessment groups the same custom plugin across profiles without confusing its folder with package membership", f =>
+        {
+            PrepareManagedUpgrade(f);
+            const string dll = "ESAA/Plugins/Custom.dll";
+            const string otherProfile = "ESAA TWR.prf";
+            f.Write(dll, "synthetic custom plugin");
+            f.Write(Fixture.ProfilePath, f.Read(Fixture.ProfilePath) + "Plugins\tPlugin9\t" + dll + "\r\n");
+            f.Entries[otherProfile] = f.Entries[Fixture.ProfilePath];
+            f.Write(otherProfile, f.Read(Fixture.ProfilePath)); f.SaveZip();
+            var plan = f.Plan(); var plugin = plan.ReviewContext!.PreservedCustomPlugins.Single();
+            Require(plugin.FileName == "Custom.dll" && plugin.Profiles.Count == 2 && plan.ReviewContext.PreservedCustomPluginCount == 1, "Duplicate profile references became duplicate plugins.");
+            var result = GngReviewNotes.Assess(plan);
+            Require(result.Points.Any(point => point.Contains("Custom.dll") && point.Contains(otherProfile) && point.Contains(Fixture.ProfilePath)), "Affected profiles were hidden.");
+            Require(result.Points.All(point => !point.Contains("outside")), "A plugin inside EuroScope was described as outside its folder.");
+        });
+        test("assessment distinguishes a custom plugin entry from a bundled DLL", f =>
+        {
+            PrepareManagedUpgrade(f);
+            const string dll = "ESAA/Plugins/Helper.dll";
+            f.Entries[dll] = "synthetic bundled support DLL";
+            f.Write(Fixture.ProfilePath, f.Read(Fixture.ProfilePath) + "Plugins\tPlugin9\t" + dll + "\r\n");
+            f.SaveZip();
+            var plan = f.Plan(); var result = GngReviewNotes.Assess(plan);
+            Require(plan.ReviewContext!.PreservedCustomPlugins.Single().SuppliedByPackage, "Supplied support DLL was described as absent from the ZIP.");
+            Require(result.Points.Any(point => point.Contains("Helper.dll") && point.Contains("GNG supplies its DLL")), "Summary incorrectly promises to leave a supplied DLL untouched.");
+        });
+        test("assessment plugin identity remains bound to the approved installation plan", f =>
+        {
+            f.Install(f.Plan()); Advance(f);
+            var plan = f.Plan();
+            var altered = plan with { ReviewContext = plan.ReviewContext! with
+            {
+                PreservedCustomPlugins = [plan.ReviewContext!.PreservedCustomPlugins.Single() with { FileName = "Misidentified.dll" }]
+            } };
+            var before = f.Snapshot();
+            try { f.Install(altered); throw new Exception("Altered plugin review installed files."); }
+            catch (InvalidOperationException) { }
+            Require(before.Count == f.Snapshot().Count && before.All(file => file.Value.SequenceEqual(f.Snapshot()[file.Key])), "Changed review facts were accepted before installation.");
         });
         test("assessment only highlights an omitted profile when it is selected", f =>
         {
@@ -143,7 +186,7 @@ internal static class ReviewAssessmentTests
         {
             PrepareManagedUpgrade(f); var plan = f.Plan();
             var unknown = plan with { Warnings = plan.Warnings.Append("Every replaced file is backed up before installation. A new unclassified rule applies.").ToArray() };
-            Require(GngReviewNotes.Assess(unknown).NeedsAttention && GngReviewNotes.Assess(unknown).Points.Any(point => point.Contains("need a closer look")), "A routine English prefix suppressed a new unknown condition.");
+            Require(GngReviewNotes.Assess(unknown).NeedsAttention && GngReviewNotes.Assess(unknown).Points.Any(point => point.Contains("A new unclassified rule applies.")), "A new unknown condition was suppressed or replaced by a vague warning.");
             Require(GngReviewNotes.Assess(plan with { ReviewContext = null }).NeedsAttention, "Absent structured assessment became a green summary.");
         });
         test("assessment stale baseline requires a fresh review before installation", f =>

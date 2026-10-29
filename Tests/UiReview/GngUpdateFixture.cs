@@ -7,7 +7,7 @@ using VatscaUpdateChecker.Models;
 
 namespace VatscaUpdateChecker;
 
-internal enum GngUpdateFixtureState { Start, FreshStart, CheckingSavedPackages, WaitingForLogin, Downloading, PreparingReference, ReferenceWaitingForLogin, DownloadingReference, PreparingPackages, DownloadCancelled, ReferenceCancelled, DownloadFailed, ReferenceFailed, ListLayoutFailed, Review, CachedReview, TestingReview, AttentionReview, RunningReview, Completion, RuntimeFallback }
+internal enum GngUpdateFixtureState { Start, FreshStart, CheckingSavedPackages, StartingBrowser, WaitingForLogin, Downloading, PreparingReference, ReferenceWaitingForLogin, DownloadingReference, PreparingPackages, DownloadCancelled, ReferenceCancelled, DownloadFailed, ReferenceFailed, ListLayoutFailed, Review, CachedReview, TestingReview, AttentionReview, RunningReview, Completion, RuntimeFallback }
 
 // Link production XAML and the presentation/navigation partials. BrowserHost stays empty: no WebView2 assembly,
 // production download/installer service, native dialog or browser is used here.
@@ -29,10 +29,16 @@ public partial class GngUpdateControl : UserControl, IDisposable
     public string DataFolder => @"C:\Users\Synthetic Controller\AppData\Roaming\EuroScope";
     public string? InstalledPackageVersion => InstallationCompleted ? "2610/01 rev.3" : null;
     public bool HasError => _showingIssue || SyntheticState is GngUpdateFixtureState.DownloadFailed or GngUpdateFixtureState.ReferenceFailed or GngUpdateFixtureState.ListLayoutFailed;
-    public bool IsBusy => _syntheticPreviewBusy || _readingFilePreview || SyntheticState is GngUpdateFixtureState.CheckingSavedPackages or GngUpdateFixtureState.Downloading or GngUpdateFixtureState.DownloadingReference or GngUpdateFixtureState.PreparingReference or GngUpdateFixtureState.PreparingPackages;
+    public bool IsBusy => _syntheticPreviewBusy || _readingFilePreview || SyntheticState is GngUpdateFixtureState.CheckingSavedPackages or GngUpdateFixtureState.StartingBrowser or GngUpdateFixtureState.Downloading or GngUpdateFixtureState.DownloadingReference or GngUpdateFixtureState.PreparingReference or GngUpdateFixtureState.PreparingPackages;
     public bool CanDismiss => !IsBusy;
     public bool CanCancel => IsBusy || SyntheticState is GngUpdateFixtureState.WaitingForLogin or GngUpdateFixtureState.ReferenceWaitingForLogin;
-    public bool NeedsAttentionView => _readingFilePreview || NestedContent.Content is not null || !IsBusy;
+    // Feed the shared production presentation predicate with synthetic operation state.
+    private bool _startingBrowser => SyntheticState == GngUpdateFixtureState.StartingBrowser;
+    private bool _busy => IsBusy;
+    private bool _queuedPreview => false;
+    private bool _recoveryRequired => false;
+    private bool _showingCompletion => SyntheticState == GngUpdateFixtureState.Completion;
+    private object? _download => SyntheticState is GngUpdateFixtureState.Downloading or GngUpdateFixtureState.DownloadingReference ? this : null;
     public string Status => StatusText.Text;
     public string Stage => DownloadStageText.Text;
     public double Progress => Activity.Value;
@@ -79,12 +85,15 @@ public partial class GngUpdateControl : UserControl, IDisposable
     {
         if (!_ready) return;
         SyntheticState = state;
+        _preparationCancelled = state is GngUpdateFixtureState.DownloadCancelled or GngUpdateFixtureState.ReferenceCancelled;
+        _showingIssue = state is GngUpdateFixtureState.DownloadFailed or GngUpdateFixtureState.ReferenceFailed or GngUpdateFixtureState.ListLayoutFailed or GngUpdateFixtureState.RuntimeFallback;
         PackageAlreadyMatches = false;
         if (state is GngUpdateFixtureState.Start or GngUpdateFixtureState.FreshStart)
             _syntheticNeedsFull = state == GngUpdateFixtureState.FreshStart;
         var downloading = state is GngUpdateFixtureState.Downloading or GngUpdateFixtureState.DownloadingReference;
         var preparing = state is GngUpdateFixtureState.PreparingReference or GngUpdateFixtureState.PreparingPackages;
         var checkingCache = state == GngUpdateFixtureState.CheckingSavedPackages;
+        var startingBrowser = state == GngUpdateFixtureState.StartingBrowser;
         var review = state == GngUpdateFixtureState.ListLayoutFailed || state is GngUpdateFixtureState.Review or GngUpdateFixtureState.CachedReview or GngUpdateFixtureState.TestingReview or GngUpdateFixtureState.AttentionReview or GngUpdateFixtureState.RunningReview;
         var waitingForLogin = state is GngUpdateFixtureState.WaitingForLogin or GngUpdateFixtureState.ReferenceWaitingForLogin;
         var failed = state is GngUpdateFixtureState.DownloadFailed or GngUpdateFixtureState.ReferenceFailed or GngUpdateFixtureState.ListLayoutFailed;
@@ -92,15 +101,15 @@ public partial class GngUpdateControl : UserControl, IDisposable
         var browsing = downloading || preparing || waitingForLogin || state is GngUpdateFixtureState.DownloadCancelled or GngUpdateFixtureState.ReferenceCancelled or GngUpdateFixtureState.DownloadFailed or GngUpdateFixtureState.ReferenceFailed;
         FolderText.Text = DataFolder;
         BrowserHost.Content = null;
-        BrowserPanel.Visibility = browsing || checkingCache || state is GngUpdateFixtureState.Start or GngUpdateFixtureState.FreshStart or GngUpdateFixtureState.RuntimeFallback ? Visibility.Visible : Visibility.Collapsed;
+        BrowserPanel.Visibility = browsing || checkingCache || startingBrowser || state is GngUpdateFixtureState.Start or GngUpdateFixtureState.FreshStart or GngUpdateFixtureState.RuntimeFallback ? Visibility.Visible : Visibility.Collapsed;
         StartPanel.Visibility = browsing ? Visibility.Collapsed : Visibility.Visible;
         BrowserToolbar.Visibility = _browserPlaceholder.Visibility = browsing ? Visibility.Visible : Visibility.Collapsed;
         BackButton.IsEnabled = ReloadButton.IsEnabled = HomeButton.IsEnabled = browsing && !downloading && !preparing;
         RetryDownloadButton.IsEnabled = state is GngUpdateFixtureState.DownloadCancelled or GngUpdateFixtureState.ReferenceCancelled or GngUpdateFixtureState.DownloadFailed or GngUpdateFixtureState.ReferenceFailed;
         RetryDownloadButton.Content = reference ? "Retry reference" : "Retry download";
-        StopRequestButton.IsEnabled = state == GngUpdateFixtureState.PreparingReference || waitingForLogin;
+        StopRequestButton.IsEnabled = state == GngUpdateFixtureState.PreparingReference || waitingForLogin || startingBrowser;
         StopRequestButton.Visibility = StopRequestButton.IsEnabled ? Visibility.Visible : Visibility.Collapsed;
-        ImportButton.IsEnabled = ExternalBrowserButton.IsEnabled = RestoreButton.IsEnabled = CloseButton.IsEnabled = !downloading && !preparing && !checkingCache;
+        ImportButton.IsEnabled = ExternalBrowserButton.IsEnabled = RestoreButton.IsEnabled = CloseButton.IsEnabled = !downloading && !preparing && !checkingCache && !startingBrowser;
         PreserveListLayout.IsEnabled = !downloading && !preparing && !checkingCache && !waitingForLogin && state != GngUpdateFixtureState.Completion;
         ImportButton.Content = reference ? "Import reference ZIP…" : "Import ZIP…";
         StartOverButton.Visibility = reference ? Visibility.Visible : Visibility.Collapsed;
@@ -115,23 +124,24 @@ public partial class GngUpdateControl : UserControl, IDisposable
         RestoreConfirmPanel.Visibility = Visibility.Collapsed;
         CompletionChecks.Visibility = CheckFontsButton.Visibility = CheckProfileButton.Visibility = Visibility.Collapsed;
         StartBrowserButton.Visibility = FreshDownloadButton.Visibility = state == GngUpdateFixtureState.RuntimeFallback ? Visibility.Collapsed : Visibility.Visible;
-        StartBrowserButton.IsEnabled = FreshDownloadButton.IsEnabled = !downloading && !preparing && !checkingCache && !waitingForLogin;
+        StartBrowserButton.IsEnabled = FreshDownloadButton.IsEnabled = !downloading && !preparing && !checkingCache && !waitingForLogin && !startingBrowser;
         StartBrowserButton.Content = reference ? "Retry reference download" : "Download Swedish GNG";
         InstallButton.Visibility = review ? Visibility.Visible : Visibility.Collapsed;
         InstallButton.IsEnabled = false;
         CancelDownloadButton.Visibility = downloading ? Visibility.Visible : Visibility.Collapsed;
-        Activity.Visibility = downloading || preparing || checkingCache ? Visibility.Visible : Visibility.Collapsed;
-        Activity.IsIndeterminate = preparing || checkingCache;
+        Activity.Visibility = downloading || preparing || checkingCache || startingBrowser ? Visibility.Visible : Visibility.Collapsed;
+        Activity.IsIndeterminate = preparing || checkingCache || startingBrowser;
         Activity.Value = downloading ? 42 : 0;
-        DownloadStageText.Visibility = downloading || preparing || checkingCache || failed || waitingForLogin || review ? Visibility.Visible : Visibility.Collapsed;
+        DownloadStageText.Visibility = downloading || preparing || checkingCache || startingBrowser || failed || waitingForLogin || review ? Visibility.Visible : Visibility.Collapsed;
         DownloadStageText.Text = state switch
         {
             GngUpdateFixtureState.WaitingForLogin => "Waiting for sign-in",
             GngUpdateFixtureState.CheckingSavedPackages => "Checking saved packages",
+            GngUpdateFixtureState.StartingBrowser => "Starting download",
             GngUpdateFixtureState.ReferenceWaitingForLogin => "Sign in for Full reference",
-            GngUpdateFixtureState.Downloading => "Downloading update (1 of 2)",
+            GngUpdateFixtureState.Downloading => "Download 1/2",
             GngUpdateFixtureState.PreparingReference => "Checking downloaded update",
-            GngUpdateFixtureState.DownloadingReference => "Downloading Full reference (2 of 2)",
+            GngUpdateFixtureState.DownloadingReference => "Reference 2/2",
             GngUpdateFixtureState.PreparingPackages => "Checking packages",
             GngUpdateFixtureState.DownloadFailed => "Download stopped",
             GngUpdateFixtureState.ReferenceFailed => "Needs attention",
@@ -187,10 +197,11 @@ public partial class GngUpdateControl : UserControl, IDisposable
         {
             GngUpdateFixtureState.WaitingForLogin => "Sign in on AeroNav. Launchpad will download the Swedish package after sign-in. Installation still requires your review.",
             GngUpdateFixtureState.CheckingSavedPackages => "Checking AeroNav's current AIRAC/revision and matching saved ZIPs before opening the browser. Synthetic progress only; no network or cache files are read.",
+            GngUpdateFixtureState.StartingBrowser => "Starting the AeroNav browser…",
             GngUpdateFixtureState.ReferenceWaitingForLogin => "Sign in again if AeroNav asks. Your Update Only ZIP is saved; Launchpad is waiting for its matching Full reference. Synthetic sign-in state only.",
-            GngUpdateFixtureState.Downloading => "Downloading 1 of 2: ESAA Update Only · 2610 / 01 rev. 3 — 42% (21 MB of 50 MB). The package will be reviewed before installation. Synthetic progress only.",
+            GngUpdateFixtureState.Downloading => "42% · 21.0 of 50.0 MB · 1.3 MB/s · About 22 seconds left for this file. You will review the update before installing.",
             GngUpdateFixtureState.PreparingReference => "Checking the Update Only ZIP before downloading its matching Full reference… Stop remains available. Synthetic validation only; no files are read or written.",
-            GngUpdateFixtureState.DownloadingReference => "Downloading 2 of 2: ESAA Full Package · 2610 / 01 rev. 3 — 42% (84 MB of 200 MB). Kept as a cleanup reference; Update Only remains the installation package. Synthetic progress only.",
+            GngUpdateFixtureState.DownloadingReference => "42% · 84.0 of 200.0 MB · 3.2 MB/s · About 36 seconds left for this file. Reference copy for future cleanup comparisons. It will not be installed.",
             GngUpdateFixtureState.PreparingPackages => "Checking the downloaded packages and calculating the proposed changes before review. Nothing is installed. Synthetic validation only; no files are read or written.",
             GngUpdateFixtureState.DownloadCancelled => "Synthetic download cancelled. Choose Retry download to try again; it does not restart automatically.",
             GngUpdateFixtureState.ReferenceCancelled => "Synthetic reference download cancelled. Update Only is saved. Retry reference, import its matching Full ZIP, or choose Start over. Nothing has been installed.",
@@ -280,6 +291,8 @@ public partial class GngUpdateControl : UserControl, IDisposable
                 HasExistingFiles = true, HasVerifiedBaseline = true,
                 RdfOverrideCount = state == GngUpdateFixtureState.AttentionReview ? 1 : 0,
                 PreservedCustomPluginCount = state == GngUpdateFixtureState.AttentionReview ? 1 : 0,
+                PreservedCustomPlugins = state == GngUpdateFixtureState.AttentionReview
+                    ? [new("VatEFS.dll", @"C:\Synthetic-VatEFS\VatEFS.dll", ["ESAA APP ACC.prf", "ESSA TWR CDM.prf"])] : [],
                 ClassifiedWarnings = []
             }
         };
@@ -454,6 +467,8 @@ internal static partial class LayoutMatrix
             if (UiFixture.Dark != dark) UiFixture.ToggleTheme();
             count += CheckGngUpdateLayouts();
             count += GngFileNavigationTests.Run();
+            count += GngBrowserStartupTests.Run();
+            count += CheckGngDownloadLayouts();
             count += CheckGngInvestigationLayouts();
             count += CheckCompactGngChangeNavigation();
         }
@@ -561,6 +576,15 @@ internal static partial class LayoutMatrix
                     Require(window.SyntheticState == GngUpdateFixtureState.CachedReview && !window.Update.InstallationCompleted,
                         "A cache hit must prepare review without installing.");
                 }
+                if (state == GngUpdateFixtureState.StartingBrowser)
+                {
+                    Require(window.Update.IsBusy && window.Update.CanCancel && !window.Update.CanDismiss && window.Update.NeedsAttentionView,
+                        "Browser initialization must remain presented while busy and cancellable.");
+                    Require(Required<FrameworkElement>(window, "BrowserSurface").Visibility == Visibility.Visible,
+                        "The uninitialized browser surface must remain visible before its native controller is ready.");
+                    Require(IsPresented(Required<Button>(window, "StopRequestButton")) && Required<Button>(window, "StopRequestButton").IsEnabled,
+                        "Starting the browser must offer a visible stop action.");
+                }
                 if (state is GngUpdateFixtureState.Downloading or GngUpdateFixtureState.DownloadingReference)
                 {
                     Require(window.Update.IsBusy && window.Update.CanCancel && !window.Update.CanDismiss && !window.Update.NeedsAttentionView,
@@ -620,6 +644,9 @@ internal static partial class LayoutMatrix
         Require(window.Update.HasWarning && Required<TextBlock>(window,"AssessmentHeading").Text == "Check before installing" &&
             Required<TextBox>(window,"AttentionText").Text.Contains("TopSky"),
             "Real concerns must be visible in the summary without opening technical details.");
+        var pluginNote = Required<TextBox>(window, "AttentionText").Text;
+        Require(pluginNote.Contains("VatEFS.dll") && pluginNote.Contains("ESAA APP ACC.prf") && pluginNote.Contains("Check VatEFS in Apps"),
+            "A retained-plugin warning must identify the DLL, affected profile and next step directly in the summary.");
         Required<Button>(window,"ViewDetailsButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         LayoutValidation.CheckWindowContent(window); DrainBindings();
         Require(IsPresented(Required<Grid>(window,"ReviewDetailsPanel")) && Required<TabItem>(window,"FilesTab").IsSelected && !Required<TabItem>(window,"OptionsTab").IsSelected,
@@ -679,6 +706,7 @@ internal static partial class LayoutSnapshots
     internal static void CaptureGng(string output)
     {
         System.IO.Directory.CreateDirectory(output);
+        CaptureGngDownloads(output);
         CaptureEmbeddedGngInvestigation(output);
         foreach (var dark in new[] { false, true })
         foreach (double scale in new[] { 1d, 1.5d })

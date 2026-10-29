@@ -47,4 +47,5 @@ Check(GngBrowserPolicy.MaximumDownloadBytes == 2L * 1024 * 1024 * 1024, "Bounded
 passed += PackageSelectionTests.Run();
 passed += DownloadRequestTests.Run();
 passed += NavigationStateTests.Run();
+passed += DownloadProgressTests.Run();
 Console.WriteLine($"PASS: {passed} GNG browser-policy checks; no browser, network or downloads used.");

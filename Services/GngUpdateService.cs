@@ -118,6 +118,7 @@ public static partial class GngUpdateService
         void AddKnownWarning(string warning) { warnings.Add(warning); classifiedWarnings.Add(warning); }
         var unchangedProfiles = new List<string>();
         var preservedCustomPlugins = new HashSet<string>(Paths);
+        var pluginProfiles = new Dictionary<string, HashSet<string>>(Paths);
         var customizedReplacements = new HashSet<string>(Paths);
         var unmatchedReplacements = new HashSet<string>(Paths);
         var packagePluginPaths = package.ProfilePlugins.Select(plugin => PluginIdentity(root, plugin)).ToHashSet(Paths);
@@ -219,6 +220,9 @@ public static partial class GngUpdateService
                 foreach (var plugin in ParsePlugins(Lines(PrfEncoding.GetString(merged))))
                 {
                     var identity = PluginIdentity(root, plugin.Path);
+                    if (!pluginProfiles.TryGetValue(identity, out var profiles))
+                        pluginProfiles[identity] = profiles = new HashSet<string>(Paths);
+                    profiles.Add(entry.Path);
                     if (!packagePluginPaths.Contains(identity) &&
                         !(saamanPolicy?.Enabled == true && Paths.Equals(identity, saamanPolicy.DllPath)))
                         preservedCustomPlugins.Add(identity);
@@ -264,6 +268,26 @@ public static partial class GngUpdateService
                     AddKnownWarning("A preserved local TopSky file overrides RDF_Mode: " + Path.GetRelativePath(root, settings) + ". Review RDF/TopSky compatibility after updating; Launchpad does not change this preference.");
                 }
             }
+        var unverifiedDependencies = reusedPlugins.Where(dependency => previous is null ||
+            !previous.TryGetValue(Path.GetRelativePath(root, dependency.Path), out var baseline) ||
+            baseline.AfterHash != dependency.Hash || baseline.AfterLength != dependency.Length).ToArray();
+        GngReviewPlugin PluginReview(string identity)
+        {
+            var relative = Path.GetRelativePath(root, identity);
+            var location = relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal) || Path.IsPathFullyQualified(relative)
+                ? identity : relative;
+            return new(Path.GetFileName(identity), location,
+                pluginProfiles.TryGetValue(identity, out var profiles) ? profiles.OrderBy(profile => profile, Paths).Take(16).ToArray() : [],
+                package.Entries.ContainsKey(relative));
+        }
+        var retainedPluginReviews = preservedCustomPlugins.OrderBy(path => path, Paths).Take(32).Select(PluginReview).ToArray();
+        var unverifiedPluginReviews = unverifiedDependencies.OrderBy(dependency => dependency.Path, Paths).Take(32).Select(dependency => PluginReview(dependency.Path)).ToArray();
+        foreach (var plugin in retainedPluginReviews)
+            AddKnownWarning("Custom plugin entry kept: " + plugin.Location + ". Used by " + string.Join(", ", plugin.Profiles) +
+                (plugin.SuppliedByPackage ? ". The DLL is included in this package, but its profiles do not load it." : ". This package does not supply the DLL; it is left untouched.") +
+                " Check the plugin's release notes for compatibility before installing.");
+        foreach (var plugin in unverifiedPluginReviews)
+            AddKnownWarning("Reused plugin differs from the verified previous package, or has no recorded original: " + plugin.Location + ". Used by " + string.Join(", ", plugin.Profiles) + ". The installed DLL is left untouched; review its source and compatibility before installing.");
         return new(Path.GetFileName(zipPath), FormatVersion(package.Generation), root, zipPath, files, warnings)
             { PackageHash = package.Hash, Generation = package.Generation, IsTestingPackage = testing, ProtectedPaths = protections, Dependencies = dependencies, PreserveListLayout = preserveListLayout, SaamanPolicy = saamanPolicy,
                 ReviewContext = new GngReviewContext
@@ -274,10 +298,10 @@ public static partial class GngUpdateService
                     CustomizedReplacementCount = files.Count(file => file.WritesFile && customizedReplacements.Contains(file.RelativePath)),
                     UnmatchedReplacementCount = files.Count(file => file.WritesFile && unmatchedReplacements.Contains(file.RelativePath)),
                     PreservedCustomPluginCount = preservedCustomPlugins.Count,
+                    PreservedCustomPlugins = retainedPluginReviews,
                     RdfOverrideCount = rdfOverrideCount,
-                    UnverifiedDependencyCount = reusedPlugins.Count(dependency => previous is null ||
-                        !previous.TryGetValue(Path.GetRelativePath(root, dependency.Path), out var baseline) ||
-                        baseline.AfterHash != dependency.Hash || baseline.AfterLength != dependency.Length),
+                    UnverifiedDependencyCount = unverifiedDependencies.Length,
+                    UnverifiedDependencies = unverifiedPluginReviews,
                     UnchangedProfiles = unchangedProfiles.ToArray(),
                     ClassifiedWarnings = classifiedWarnings.ToArray()
                 },
@@ -814,7 +838,9 @@ public static partial class GngUpdateService
     private static string ReviewContextFingerprint(GngReviewContext? context) => context is null ? "" :
         string.Join("|", context.HasExistingFiles, context.HasVerifiedBaseline, context.ReinstallsGeneration,
             context.CustomizedReplacementCount, context.UnmatchedReplacementCount, context.PreservedCustomPluginCount, context.RdfOverrideCount, context.UnverifiedDependencyCount) + "\n" +
-        string.Join("\n", context.UnchangedProfiles.OrderBy(path => path, Paths));
+        string.Join("\n", context.UnchangedProfiles.OrderBy(path => path, Paths)) + "\n" +
+        string.Join("\n", context.PreservedCustomPlugins.Concat(context.UnverifiedDependencies).Select(plugin =>
+            plugin.FileName + "|" + plugin.Location + "|" + plugin.SuppliedByPackage + "|" + string.Join("|", plugin.Profiles)));
 
     private static string BackupBase(string root, OperationContext context)
     {

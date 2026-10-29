@@ -25,10 +25,9 @@ public static class GngReviewNotes
                 Flag($"{customized} customized {(customized == 1 ? "package file will" : "package files will")} be replaced. Your originals will be backed up.");
             if (context.HasVerifiedBaseline && context.UnmatchedReplacementCount > 0)
                 Flag($"{context.UnmatchedReplacementCount} existing {(context.UnmatchedReplacementCount == 1 ? "file could" : "files could")} not be compared with the original package and will be replaced. Your originals will be backed up.");
-            if (context.PreservedCustomPluginCount > 0)
-                Flag($"{context.PreservedCustomPluginCount} {(context.PreservedCustomPluginCount == 1 ? "plugin is" : "plugins are")} kept outside the package. Compatibility is not checked.");
-            if (context.HasVerifiedBaseline && context.UnverifiedDependencyCount > 0)
-                Flag($"{context.UnverifiedDependencyCount} installed {(context.UnverifiedDependencyCount == 1 ? "plugin could" : "plugins could")} not be matched to the original package. {(context.UnverifiedDependencyCount == 1 ? "It will" : "They will")} be kept; compatibility is unverified.");
+            AddPluginNotes(context.PreservedCustomPluginCount, context.PreservedCustomPlugins, false, Flag);
+            if (context.HasVerifiedBaseline)
+                AddPluginNotes(context.UnverifiedDependencyCount, context.UnverifiedDependencies, true, Flag);
             if (context.RdfOverrideCount > 0)
                 Flag("Your local TopSky settings override the package's RDF setting. They will be kept.");
             if (!string.IsNullOrWhiteSpace(selectedProfile) && !plan.Files.Any(file =>
@@ -36,8 +35,11 @@ public static class GngReviewNotes
                 Flag("Your selected launch profile is not in this package and will stay unchanged.");
             if (context.ReinstallsGeneration && plan.Files.Any(file => file.WritesFile))
                 Flag("This version is already present. Installing will repair missing files and refresh package defaults.");
-            if (plan.Warnings.Except(context.ClassifiedWarnings, StringComparer.Ordinal).Any())
-                Flag("Some update details need a closer look. Open View details before installing.");
+            var unclassified = plan.Warnings.Except(context.ClassifiedWarnings, StringComparer.Ordinal).ToArray();
+            foreach (var warning in unclassified.Take(3))
+                Flag(Compact(warning, 300));
+            if (unclassified.Length > 3)
+                Flag($"{unclassified.Length - 3} more notes need review. Open View details → Technical notes before installing.");
             int addedProfiles = plan.Files.Count(file => file.Action == "Add profile");
             if (addedProfiles > 0)
                 points.Add($"{addedProfiles} new EuroScope {(addedProfiles == 1 ? "profile will" : "profiles will")} need your controller details.");
@@ -46,6 +48,36 @@ public static class GngReviewNotes
         if (!needsAttention)
             points.Insert(0, "Installation checks passed. No issues found.");
         return new(needsAttention, needsAttention ? "Check before installing" : "Ready to install", points);
+    }
+
+    private static void AddPluginNotes(int count, IReadOnlyList<GngReviewPlugin> plugins, bool unverifiedOriginal, Action<string> flag)
+    {
+        if (count <= 0) return;
+        foreach (var plugin in plugins.Take(4))
+        {
+            var name = Compact(plugin.FileName, 100);
+            var profiles = plugin.Profiles.Take(2).Select(profile => Compact(Path.GetFileName(profile), 75)).ToArray();
+            var profileText = profiles.Length == 0 ? "your EuroScope profiles" : string.Join(" and ", profiles) + (plugin.Profiles.Count > 2 ? " and other profiles" : "");
+            var reason = unverifiedOriginal
+                ? "Its installed copy could not be matched to the original package."
+                : plugin.SuppliedByPackage ? "GNG supplies its DLL, but does not load it in the package profiles."
+                : "This GNG package does not include or update it.";
+            var next = plugin.FileName.Equals("VatEFS.dll", StringComparison.OrdinalIgnoreCase)
+                ? "Check VatEFS in Apps and its release notes before installing GNG."
+                : "Check its release notes or ask the navteam before installing.";
+            flag($"{name} stays in the plugin list for {profileText}. {reason} Launchpad cannot check that it works with this GNG version. {next}");
+        }
+        int remaining = count - Math.Min(4, plugins.Count);
+        if (remaining > 0)
+            flag($"{remaining}{(plugins.Count > 0 ? " more" : "")} {(unverifiedOriginal ? "unverified" : "extra")} {(remaining == 1 ? "plugin will" : "plugins will")} be kept. " +
+                (count > plugins.Count ? "Review the plugin lists in your EuroScope profiles before installing."
+                    : "Open View details → Technical notes to identify them and check their compatibility before installing."));
+    }
+
+    private static string Compact(string text, int limit)
+    {
+        var cleaned = string.Join(" ", text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        return cleaned.Length <= limit ? cleaned : cleaned[..(limit - 1)] + "…";
     }
 
     private static bool SamePath(string first, string second, string root)
