@@ -79,13 +79,57 @@ button{white-space:nowrap}.dialog-heading h2{min-width:0;overflow-wrap:anywhere}
 .inventory-dll-panel { margin: 1.2rem 0; }
 .inventory-scan-summary { display: flex; flex-wrap: wrap; gap: .5rem 1.4rem; color: var(--muted); font-size: .85rem; }
 .inventory-scan-summary strong { color: var(--text); }
-.inventory-dll-identity { min-width: 10rem; }
-.inventory-dll-identity details { margin-top: .35rem; font-size: .75rem; }
-.inventory-dll-identity code { display: block; max-width: 20rem; overflow-wrap: anywhere; margin-top: .4rem; }
-.inventory-dll-version { min-width: 10rem; }
-.inventory-dll-version strong { font-family: Consolas, ui-monospace, monospace; }
-.inventory-dll-version small, .inventory-dll-count small { display: block; color: var(--muted); margin-top: .25rem; font-size: .75rem; }
-.inventory-dll-count { white-space: nowrap; }
+.dll-coverage { border-bottom: 1px solid var(--line); padding-bottom: .75rem; }
+.dll-coverage > summary { font-size: .8rem; }
+.dll-coverage[open] .inventory-scan-summary { margin-top: .75rem; }
+.dll-toolbar { display: flex; flex-wrap: wrap; align-items: end; gap: .7rem; margin: 1rem 0 .5rem; }
+.dll-search-label { flex: 1 1 16rem; }
+.dll-search-label input { width: 100%; }
+.dll-toolbar label { font-size: .78rem; }
+.dll-toolbar select { min-width: 10rem; }
+.dll-toolbar button:disabled { cursor: default; }
+.dll-results { color: var(--muted); font-size: .75rem; margin: .6rem 0 .8rem; }
+.dll-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; align-items: start; }
+.dll-groups > .empty { grid-column: 1 / -1; }
+.dll-group { min-width: 0; border: 1px solid #355161; border-radius: 6px; overflow: hidden; background: #0a2131; }
+.dll-group-heading { display: flex; align-items: baseline; justify-content: space-between; gap: .6rem; padding: .65rem .8rem; background: #122f40; border-bottom: 1px solid var(--line); }
+.dll-group-heading h3 { margin: 0; font-size: .95rem; font-weight: 600; overflow-wrap: anywhere; }
+.dll-group-heading > span { color: var(--muted); font-size: .72rem; white-space: nowrap; }
+.dll-column-labels, .dll-build > summary { display: grid; grid-template-columns: minmax(0, 1fr) 4rem 8rem .6rem; align-items: center; gap: .6rem; padding: .5rem .8rem; }
+.dll-column-labels { color: var(--muted); font-size: .65rem; padding-top: .45rem; padding-bottom: .25rem; }
+.dll-column-labels > :nth-child(3) { text-align: right; }
+.usage-panel .dll-build { margin: 0; font-size: .8rem; }
+.dll-build + .dll-build { border-top: 1px solid #233f50; }
+.dll-build > summary { list-style: none; color: var(--text); min-height: 44px; }
+.dll-build > summary::-webkit-details-marker { display: none; }
+.dll-build > summary:hover, .dll-build[open] > summary { background: #16384a; }
+.dll-build > summary:focus-visible { outline-offset: -3px; }
+.dll-version { min-width: 0; overflow-wrap: anywhere; }
+.dll-version strong { font-weight: 600; font-variant-numeric: tabular-nums; }
+.dll-short-hash { display: block; margin-top: .2rem; font: .69rem Consolas, monospace; color: var(--muted); }
+.dll-unknown-version { color: var(--amber); }
+.dll-location { font-size: .68rem; border-radius: 3px; padding: .12rem .35rem; width: fit-content; }
+.dll-location-current { color: #abe8ed; background: #173e4e; }
+.dll-location-staged { color: #c7bbeb; background: #302e48; }
+.dll-share { text-align: right; font-size: .76rem; font-variant-numeric: tabular-nums; }
+.dll-bar { display: block; height: 4px; width: 100%; margin-top: .35rem; border-radius: 2px; }
+.dll-staged .inventory-version-fill { fill: #b9a6ec; }
+.dll-expand { color: var(--cyan); font-size: 1.1rem; transition: transform .12s; }
+.dll-build[open] .dll-expand { transform: rotate(90deg); }
+.dll-build-info { background: #081c29; border-top: 1px solid var(--line); padding: .65rem .8rem; color: var(--muted); font-size: .75rem; }
+.dll-build-info p { margin: 0 0 .3rem; }
+.dll-hash-label { display: block; font-size: .65rem; margin-top: .6rem; letter-spacing: .04em; }
+.dll-build-info code { display: block; overflow-wrap: anywhere; font-size: .72rem; margin-top: .2rem; user-select: all; }
+.dll-unidentified { border-color: #6c5b3b; }
+.dll-unidentified .dll-group-heading { background: #302d27; }
+@media(max-width:1000px) { .dll-groups { grid-template-columns: 1fr; } }
+@media(max-width:480px) {
+  .dll-toolbar select { min-width: 0; }
+  .dll-column-labels, .dll-build > summary { grid-template-columns: minmax(0, 1fr) 3.5rem 6.2rem .5rem; gap: .4rem; padding-left: .6rem; padding-right: .6rem; }
+  .dll-share { font-size: .7rem; }
+  .dll-column-labels { font-size: .6rem; }
+}
+@media(prefers-reduced-motion:reduce) { .dll-expand { transition: none; } }
 .inventory-legacy > summary { padding: .7rem 0; }
 .user-create, .invitation-card { border: 1px solid var(--line); border-radius: 4px; background: var(--panel); padding: 1rem; margin: 1rem 0; }
 .user-create > summary { color: var(--cyan); cursor: pointer; }

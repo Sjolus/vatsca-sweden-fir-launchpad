@@ -234,42 +234,101 @@ function inventoryComponentCard(component, total) {
   card.append(versions);
   return card;
 }
+const dllVersion = version => version ? version.replace(/-(alpha|beta|rc)\./, ' $1 ') : 'Version unknown';
+// Keep each server observation intact: several binaries or locations can belong to one installation.
+function dllInventoryGroups(rows, { query = '', role = 'all' } = {}) {
+  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean), groups = new Map();
+  for (const row of rows) {
+    if (role !== 'all' && row.role !== role) continue;
+    const text = [row.product, row.product === 'unknown' ? 'Unidentified DLL' : usageLabel(row.product), row.version, dllVersion(row.version), row.file_version, row.sha256].join(' ').toLowerCase();
+    if (!words.every(word => text.includes(word))) continue;
+    if (!groups.has(row.product)) groups.set(row.product, []);
+    groups.get(row.product).push(row);
+  }
+  return [...groups].sort(([a], [b]) => (a === 'unknown') - (b === 'unknown') || usageLabel(a).localeCompare(usageLabel(b)))
+    .map(([product, items]) => ({ product, rows: items.sort((a, b) =>
+      (a.role === 'staged') - (b.role === 'staged') || b.installations - a.installations ||
+      String(a.version ?? '').localeCompare(String(b.version ?? ''), 'en', { numeric: true }) ||
+      a.sha256.localeCompare(b.sha256) || String(a.version_source).localeCompare(String(b.version_source)) ||
+      String(a.file_version ?? '').localeCompare(String(b.file_version ?? ''))) }));
+}
+function dllBuild(row, total, distinguishHash) {
+  const details = element('details', undefined, `dll-build dll-${row.role}`), summary = element('summary');
+  const version = element('span', undefined, 'dll-version');
+  version.append(element('strong', dllVersion(row.version), row.version ? '' : 'dll-unknown-version'));
+  if (row.product === 'unknown' || distinguishHash) version.append(element('small', row.sha256.slice(0, 12), 'dll-short-hash'));
+  const location = element('span', row.role === 'staged' ? 'Staged' : 'Current', `dll-location dll-location-${row.role}`);
+  const count = element('span', undefined, 'dll-share');
+  count.append(element('span', share(row.installations, total)));
+  const bar = inventorySvg('svg', { viewBox: '0 0 100 4', preserveAspectRatio: 'none', class: 'dll-bar', 'aria-hidden': 'true' });
+  bar.append(inventorySvg('rect', { width: 100, height: 4, class: 'inventory-version-track' }),
+    inventorySvg('rect', { width: total ? Math.max(0, Math.min(100, row.installations / total * 100)) : 0, height: 4, class: 'inventory-version-fill' }));
+  count.append(bar);
+  const expand = element('span', '›', 'dll-expand'); expand.setAttribute('aria-hidden', 'true');
+  summary.append(version, location, count, expand);
+  summary.setAttribute('aria-label', `${row.product === 'unknown' ? 'Unidentified DLL' : usageLabel(row.product)}, ${dllVersion(row.version)}, ${row.role}, ${number(row.installations)} of ${number(total)} installations. Binary details ${row.sha256.slice(0, 12)}.`);
+  const info = element('div', undefined, 'dll-build-info');
+  info.append(element('p', row.version ? row.version_source === 'registration' ? 'EuroScope plugin registration' : row.version_source === 'embedded' ? 'Embedded version label' : 'Windows version resource' : 'No readable version; age is unknown'));
+  if (row.file_version) info.append(element('p', `File version: ${row.file_version}`));
+  info.append(element('p', `${number(row.copies)} file ${row.copies === 1 ? 'copy' : 'copies'} across ${number(row.installations)} ${row.installations === 1 ? 'installation' : 'installations'}.`), element('span', 'SHA-256', 'dll-hash-label'), element('code', row.sha256));
+  details.append(summary, info); return details;
+}
 function dllInventoryPanel(dlls, total) {
-  const panel = usagePanel('All DLLs found', 'Files observed in the configured EuroScope locations, including unrecognized DLLs. Filenames and paths are not collected.');
+  const panel = usagePanel('All DLLs found', 'Compare versions by plugin. Expand a version for its source, file copies and fingerprint.');
   panel.className += ' inventory-dll-panel';
+  const rows = dlls.rows ?? [], coverage = element('details', undefined, 'dll-coverage');
+  coverage.append(element('summary', `Scan coverage · ${number(dlls.shared_installations)} of ${number(total)} installations shared DLL details`));
   const scans = element('div', undefined, 'inventory-scan-summary');
   for (const [key, label] of [['complete_installations', 'Complete scans'], ['partial_installations', 'Partial scans'], ['unavailable_installations', 'Unavailable'], ['not_shared_installations', 'Not shared']]) {
     const item = element('span'); item.append(element('strong', number(dlls[key])), document.createTextNode(` ${label}`)); scans.append(item);
   }
-  panel.append(scans, element('p', `Latest snapshot per installation · ${number(dlls.shared_installations)} / ${number(total)} shared detailed DLL observations. Not shared includes older clients and installations without this optional consent.`, 'panel-note'));
-  if (dlls.partial_installations || dlls.unavailable_installations) panel.append(element('p', `Partial or unavailable scans cannot establish that an unlisted DLL is absent. Unreadable files: ${number(dlls.unreadable_files)}.`, 'panel-note'));
+  coverage.append(scans, element('p', `Latest snapshot per installation · ${number(dlls.shared_installations)} / ${number(total)} shared detailed DLL observations. Not shared includes older clients and installations without this optional consent.`, 'panel-note'),
+    element('p', `Current locations: ${number(dlls.current_installations)} installations · Staged locations: ${number(dlls.staged_installations)}. These counts can overlap. Current and staged describe file locations, not whether a plugin is loaded. DLL version labels can differ from package releases.`, 'panel-note'),
+    element('p', 'One installation counts once per binary observation. Multiple copies do not increase that count; versions and locations can overlap. Bars use the full inventory sample. Filenames and paths are not collected.', 'panel-note'));
+  panel.append(coverage);
+  if (dlls.partial_installations || dlls.unavailable_installations) panel.append(element('p', `Partial or unavailable scans cannot establish that an unlisted DLL is absent. Unreadable files: ${number(dlls.unreadable_files)}.`, 'notice'));
   if (dlls.product_filter) panel.append(element('p', `Showing DLLs recognized as ${usageLabel(dlls.product_filter)}; unidentified DLLs remain visible under All applications. Scan counts still describe the whole inventory sample.`, 'panel-note'));
   if (!dlls.shared_installations) { panel.append(element('div', 'No detailed DLL observations were shared in these snapshots. The component summaries below may still be available from older clients.', 'empty')); return panel; }
-  const rows = dlls.rows ?? [];
-  panel.append(element('p', `Current locations: ${number(dlls.current_installations)} installations · Staged locations: ${number(dlls.staged_installations)}. These counts can overlap. Current and staged describe file locations, not whether a plugin is loaded. DLL version labels can differ from package releases.`, 'panel-note'));
-  panel.append(table(rows, [
-    { key: 'product', label: 'DLL / fingerprint', render: (product, row) => {
-      const cell = element('div', undefined, 'inventory-dll-identity');
-      cell.append(element('strong', product === 'unknown' ? `Unidentified DLL · ${row.sha256.slice(0, 12)}` : usageLabel(product)));
-      const fingerprint = element('details'); fingerprint.append(element('summary', product === 'unknown' ? 'Full fingerprint' : `SHA-256 · ${row.sha256.slice(0, 12)}`), element('code', row.sha256)); cell.append(fingerprint); return cell;
-    } },
-    { key: 'version', label: 'Version read from DLL', render: (version, row) => {
-      const cell = element('div', undefined, 'inventory-dll-version');
-      cell.append(element('strong', version ? version.replace(/-(alpha|beta|rc)\./, ' $1 ') : 'Version unknown'));
-      if (version) cell.append(element('small', row.version_source === 'registration' ? 'EuroScope plugin registration'
-        : row.version_source === 'embedded' ? 'Embedded version label' : 'Windows version resource'));
-      if (row.file_version) cell.append(element('small', `File version: ${row.file_version}`));
-      if (!version && !row.file_version) cell.append(element('small', 'No readable version; age is unknown'));
-      return cell;
-    } },
-    { key: 'role', label: 'Location', render: value => value === 'staged' ? 'Staged' : 'Current' },
-    { key: 'installations', label: `Installations · of ${number(total)}`, render: (value, row) => {
-      const cell = element('div', undefined, 'inventory-dll-count'); cell.append(element('strong', share(value, total)), element('small', `${number(row.copies)} file copies`)); return cell;
-    } }
-  ], { empty: dlls.product_filter ? 'No matching DLL was reported in these snapshots; partial or unavailable scans do not prove absence.' : 'No readable DLL fingerprint was reported. Check scan coverage above before drawing conclusions.' }));
-  if (dlls.omitted_groups) panel.append(element('p', `Showing ${number(rows.length)} of ${number(dlls.total_groups)} binary groups; ${number(dlls.omitted_groups)} additional groups are not displayed.`, 'notice'));
-  panel.append(element('p', 'One installation counts once per fingerprint and location. Multiple copies do not increase that count; rows and locations can overlap.', 'panel-note'));
-  return panel;
+  if (dlls.omitted_groups) panel.append(element('p', `Showing ${number(rows.length)} of ${number(dlls.total_groups)} binary groups; ${number(dlls.omitted_groups)} additional groups are not displayed. Search and location filters cover the displayed groups only.`, 'notice'));
+  const toolbar = element('div', undefined, 'dll-toolbar'), searchLabel = element('label', 'Find a DLL', 'dll-search-label'), search = element('input');
+  search.id = 'dll-search'; search.type = 'search'; search.placeholder = 'Plugin, version or fingerprint'; search.maxLength = 100; search.value = '';
+  searchLabel.append(search);
+  const locationLabel = element('label', 'Location'), location = element('select'); location.id = 'dll-location';
+  for (const [value, label] of [['all', 'All locations'], ['current', 'Current'], ['staged', 'Staged']]) {
+    const option = element('option', label); option.value = value; location.append(option);
+  }
+  location.value = 'all'; locationLabel.append(location);
+  const reset = element('button', 'Reset filters', 'quiet'); reset.type = 'button';
+  toolbar.append(searchLabel, locationLabel, reset);
+  const result = element('p', undefined, 'dll-results'); result.id = 'dll-results'; result.setAttribute('role', 'status'); result.setAttribute('aria-live', 'polite');
+  const grid = element('div', undefined, 'dll-groups');
+  function draw() {
+    const groups = dllInventoryGroups(rows, { query: search.value, role: location.value });
+    const found = groups.reduce((sum, group) => sum + group.rows.length, 0);
+    result.textContent = `${number(found)} of ${number(rows.length)} binary entries · ${number(groups.length)} ${groups.length === 1 ? 'group' : 'groups'} · Counts show installations, not copies.`;
+    reset.disabled = !search.value && location.value === 'all'; grid.replaceChildren();
+    if (!found) {
+      grid.append(element('div', rows.length ? 'No DLLs match these filters. Try another name, version or fingerprint, or reset the filters.' : dlls.product_filter ? 'No matching DLL was reported in these snapshots; partial or unavailable scans do not prove absence.' : 'No readable DLL fingerprint was reported. Check scan coverage above before drawing conclusions.', 'empty'));
+    }
+    for (const group of groups) {
+      const section = element('section', undefined, `dll-group${group.product === 'unknown' ? ' dll-unidentified' : ''}`), heading = element('div', undefined, 'dll-group-heading');
+      const builds = new Set(group.rows.map(row => row.sha256)).size;
+      heading.append(element('h3', group.product === 'unknown' ? 'Unidentified DLLs' : usageLabel(group.product)), element('span', `${number(builds)} ${builds === 1 ? 'binary' : 'binaries'}`));
+      section.append(heading);
+      const labels = element('div', undefined, 'dll-column-labels'); labels.setAttribute('aria-hidden', 'true');
+      labels.append(element('span', 'Version'), element('span', 'Location'), element('span', `Installations · of ${number(total)}`), element('span', ''));
+      section.append(labels);
+      for (const row of group.rows) {
+        const repeated = group.rows.filter(item => item.version === row.version && item.role === row.role).length > 1;
+        section.append(dllBuild(row, total, repeated));
+      }
+      grid.append(section);
+    }
+  }
+  search.addEventListener('input', draw); location.addEventListener('change', draw);
+  reset.addEventListener('click', () => { search.value = ''; location.value = 'all'; draw(); search.focus(); });
+  panel.append(toolbar, result, grid, element('p', 'Current = other configured locations. Staged = GNG update folders. Neither confirms that a plugin is loaded.', 'panel-note'));
+  draw(); return panel;
 }
 function renderInventory(data) {
   const fragment = document.createDocumentFragment(), inventory = data.inventory ?? {}, total = inventory.snapshot_installations ?? 0, components = inventory.components ?? [];
