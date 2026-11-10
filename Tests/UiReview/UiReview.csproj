@@ -21,6 +21,9 @@
     <Page Include="../../ActivityWindow.xaml" Link="ActivityWindow.xaml" />
     <Page Include="../../BulkApplicationActionWindow.xaml" Link="BulkApplicationActionWindow.xaml" />
     <Compile Include="../../BulkApplicationActionWindow.xaml.cs" Link="BulkApplicationActionWindow.xaml.cs" />
+    <Page Include="../../EuroScopeLaunchSetWindow.xaml" Link="EuroScopeLaunchSetWindow.xaml" />
+    <Compile Include="../../EuroScopeLaunchSetWindow.xaml.cs" Link="EuroScopeLaunchSetWindow.xaml.cs" />
+    <Compile Include="../../Services/EuroScopeLaunchPlanner.cs" Link="EuroScopeLaunchPlanner.cs" />
     <Compile Include="../../Models/ApplicationAction.cs" Link="ApplicationAction.cs" />
     <Compile Include="../../Models/ActivityEntry.cs" Link="ActivityEntry.cs" />
     <EmbeddedResource Include="../../MainWindow.xaml" LogicalName="UiReview.MainWindowSource.xaml" />

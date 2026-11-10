@@ -53,12 +53,16 @@ public partial class MainWindow
 
     private void ShowRunning_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is FrameworkElement { DataContext: CheckResult row }) ActOnRunningApplication(row, RunningApplicationAction.Show);
+        if (sender is not FrameworkElement { DataContext: CheckResult row } anchor) return;
+        if (ShowEuroScopeInstanceMenu(row, anchor)) return;
+        ActOnRunningApplication(row, RunningApplicationAction.Show);
     }
 
     private void CloseApplication_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is FrameworkElement { DataContext: CheckResult row }) ActOnRunningApplication(row, RunningApplicationAction.CloseNormally);
+        if (sender is not FrameworkElement { DataContext: CheckResult row }) return;
+        if (ReviewEuroScopeClose(row)) return;
+        ActOnRunningApplication(row, RunningApplicationAction.CloseNormally);
     }
 
     private void RunningActions_Click(object sender, RoutedEventArgs e)

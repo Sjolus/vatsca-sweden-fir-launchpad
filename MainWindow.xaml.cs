@@ -110,6 +110,7 @@ public partial class MainWindow : Window
         es.SelectedProfile = es.Profiles.FirstOrDefault(p => p.FilePath == savedPath)
                              ?? es.Profiles.FirstOrDefault(p => p.FilePath == previous)
                              ?? es.Profiles[0];
+        RefreshEuroScopeLaunchSetPresentation();
 
     }
 
@@ -155,6 +156,7 @@ public partial class MainWindow : Window
             }
             result.IsRunning = ApplicationProcessControl.Find(result.LaunchPath).Count > 0;
         }
+        UpdateEuroScopeInstanceSummary();
         RefreshBulkActionAvailability();
     }
 
@@ -543,8 +545,15 @@ public partial class MainWindow : Window
         return saved;
     }
 
-    private void Launch_Click(object sender, RoutedEventArgs e)
+    private async void Launch_Click(object sender, RoutedEventArgs e)
     {
+        // The launch set acquires its own lease for the whole sequence, including delays.
+        if (sender is FrameworkElement { DataContext: CheckResult { HasEuroScopeManagement: true } euroScope } &&
+            LaunchSetActive && euroScope.LaunchEnabled && RunningCopies(euroScope).Count == 0)
+        {
+            await LaunchEuroScopeSetAsync(euroScope);
+            return;
+        }
         if (!CanRunSoftwareAction() || !TryAcquireMaintenanceGuard(out var lease)) return;
         using var guard = lease;
         if (sender is not FrameworkElement { DataContext: CheckResult result }) return;
@@ -599,6 +608,31 @@ public partial class MainWindow : Window
 
         var menu = new System.Windows.Controls.ContextMenu();
         bool separatorAdded = false;
+        if (result.HasEuroScopeManagement)
+        {
+            foreach (var set in LaunchSets)
+            {
+                int setCount = EnabledEntries(set).Count;
+                var setItem = new System.Windows.Controls.MenuItem
+                {
+                    Header = (set.Id == ActiveLaunchSet?.Id && setCount > 0 ? "✓  " : "    ") +
+                        $"{set.Name} ({setCount} profile{(setCount == 1 ? "" : "s")})",
+                    IsEnabled = setCount > 0,
+                    ToolTip = setCount > 0 ? "Launch starts these instances in order." : "Enable at least one instance in Edit launch sets…"
+                };
+                var setId = set.Id;
+                var setName = set.Name;
+                setItem.Click += (_, _) =>
+                {
+                    if (!TryAcquireMaintenanceGuard(out var lease)) return;
+                    using var guard = lease;
+                    _settings.ActiveEuroScopeLaunchSetId = setId;
+                    RefreshEuroScopeLaunchSetPresentation();
+                    SaveSessionSettings(setName + " selected for Launch.");
+                };
+                menu.Items.Add(setItem);
+            }
+        }
         foreach (var profile in result.Profiles)
         {
             if (!separatorAdded && profile.FilePath != null)
@@ -607,7 +641,7 @@ public partial class MainWindow : Window
                 separatorAdded = true;
             }
 
-            bool isSelected = result.SelectedProfile == profile;
+            bool isSelected = result.SelectedProfile == profile && !(result.HasEuroScopeManagement && LaunchSetActive);
             var item = new System.Windows.Controls.MenuItem
             {
                 Header = (isSelected ? "✓  " : "    ") + profile.DisplayName
@@ -619,9 +653,19 @@ public partial class MainWindow : Window
                 using var guard = lease;
                 result.SelectedProfile = captured;
                 _settings.LastEuroscopeProfile = captured.FilePath ?? string.Empty;
+                // A single profile replaces the launch set for launching; the set stays saved.
+                if (result.HasEuroScopeManagement) _settings.ActiveEuroScopeLaunchSetId = null;
+                RefreshEuroScopeLaunchSetPresentation();
                 SaveSessionSettings("EuroScope profile choice saved.");
             };
             menu.Items.Add(item);
+        }
+        if (result.HasEuroScopeManagement)
+        {
+            menu.Items.Add(new System.Windows.Controls.Separator());
+            var edit = new System.Windows.Controls.MenuItem { Header = "    Edit launch sets…" };
+            edit.Click += (_, _) => EditLaunchSet(result);
+            menu.Items.Add(edit);
         }
         menu.PlacementTarget = (System.Windows.UIElement)sender;
         menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;

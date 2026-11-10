@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+- Start several EuroScope instances from one **Launch** with named launch sets. Each set lists profiles in order with an optional delay, and the sequence can be cancelled from the EuroScope row without closing started instances.
+- Show, close or start missing EuroScope instances individually. Launchpad tracks only the instances it started, verified by process identity; other EuroScope windows are listed separately.
+- Include launch sets in **Start all…** after the other applications, and remove the instance receipt with Preferences and logs reset.
+
 ## [2.6.5] — 2026-10-29
 
 - Fix the AeroNav browser getting stuck at startup when a GNG update needs a download. Keep the browser panel visible during startup, allow stopping it, and offer retry or ZIP import if it cannot start.

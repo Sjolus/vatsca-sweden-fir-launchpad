@@ -11,7 +11,7 @@ public enum CheckStatus { Unknown, Checking, UpToDate, UpdateAvailable, Unsuppor
 public enum CheckRowAction
 {
     None, Setup, SoftwareUpdate, SoftwareCancel, SoftwareCheck, Downloads,
-    SelfUpdate, GngUpdate, Fonts, SaamanManage, EuroScopeManage, SaamanCancel, SaamanRetrySave, GngCancel, GngContinue
+    SelfUpdate, GngUpdate, Fonts, SaamanManage, EuroScopeManage, SaamanCancel, SaamanRetrySave, GngCancel, GngContinue, LaunchCancel
 }
 
 public sealed record GngOperationState(string Message, string Stage, bool Busy = false,
@@ -297,7 +297,25 @@ public class CheckResult : INotifyPropertyChanged
     }
 
     public string LaunchActionText => IsFolder ? "Folder" : IsRunning ? "Show" : IsWebApp ? "Open" : "Launch";
-    public string SelectedProfileCaption => HasProfiles ? (IsRunning ? "Next launch: " : "Launch profile: ") + (SelectedProfile?.DisplayName ?? "No profile") : "";
+    public string SelectedProfileCaption => !HasProfiles ? "" :
+        !string.IsNullOrEmpty(LaunchSequenceStatus) ? LaunchSequenceStatus :
+        (IsRunning && !string.IsNullOrEmpty(RunningInstanceSummary) ? RunningInstanceSummary + " · " : "") +
+        (LaunchSetActive ? $"Launch set: {LaunchSetName} ({LaunchSetCount} profile{(LaunchSetCount == 1 ? "" : "s")})" :
+            (IsRunning ? "Next launch: " : "Launch profile: ") + (SelectedProfile?.DisplayName ?? "No profile"));
+
+    // EuroScope launch set presentation. MainWindow owns the settings and sequencing.
+    private bool _launchSetActive;
+    public bool LaunchSetActive { get => _launchSetActive; set => Set(ref _launchSetActive, value); }
+    private string _launchSetName = string.Empty;
+    public string LaunchSetName { get => _launchSetName; set => Set(ref _launchSetName, value ?? string.Empty); }
+    private int _launchSetCount;
+    public int LaunchSetCount { get => _launchSetCount; set => Set(ref _launchSetCount, value); }
+    private string _runningInstanceSummary = string.Empty;
+    public string RunningInstanceSummary { get => _runningInstanceSummary; set => Set(ref _runningInstanceSummary, value ?? string.Empty); }
+    private string _launchSequenceStatus = string.Empty;
+    public string LaunchSequenceStatus { get => _launchSequenceStatus; set => Set(ref _launchSequenceStatus, value ?? string.Empty); }
+    private bool _launchSequenceCancellable;
+    public bool LaunchSequenceCancellable { get => _launchSequenceCancellable; set => Set(ref _launchSequenceCancellable, value); }
     public bool CanOpenSetup => HasSoftwareUpdate || HasEuroScopeManagement || HasFontsCheck || HasSaamanManagement;
 
     // Select one useful shortcut; the operation itself still performs its existing checks.
@@ -305,6 +323,7 @@ public class CheckResult : INotifyPropertyChanged
     {
         get
         {
+            if (LaunchSequenceCancellable) return CheckRowAction.LaunchCancel;
             if (HasFontsCheck && GngOperation is { } gng)
                 return gng.NeedsAttention ? CheckRowAction.GngContinue : gng.CanCancel ? CheckRowAction.GngCancel : CheckRowAction.None;
             if (HasSoftwareUpdate && SoftwareCanCancel) return CheckRowAction.SoftwareCancel;
@@ -359,7 +378,7 @@ public class CheckResult : INotifyPropertyChanged
         CheckRowAction.GngCancel => "Cancel",
         CheckRowAction.SoftwareUpdate or CheckRowAction.GngUpdate => "Update",
         CheckRowAction.SaamanManage => SaamanOperation is { Warning: true } or { Cancelled: true } ? "Retry" : "Update",
-        CheckRowAction.SoftwareCancel or CheckRowAction.SaamanCancel => "Cancel",
+        CheckRowAction.SoftwareCancel or CheckRowAction.SaamanCancel or CheckRowAction.LaunchCancel => "Cancel",
         CheckRowAction.SaamanRetrySave => "Retry save",
         CheckRowAction.SoftwareCheck => SoftwareUpdate?.Phase is SoftwareUpdatePhase.Error or SoftwareUpdatePhase.Cancelled ? "Retry" : "Check",
         CheckRowAction.Downloads => "Downloads",
@@ -384,6 +403,7 @@ public class CheckResult : INotifyPropertyChanged
         CheckRowAction.GngContinue => GngOperation?.NeedsAttention == true,
         CheckRowAction.GngCancel => GngOperation?.CanCancel == true,
         CheckRowAction.SoftwareCancel => SoftwareCanCancel,
+        CheckRowAction.LaunchCancel => LaunchSequenceCancellable,
         CheckRowAction.SaamanCancel => SaamanBusy && SaamanOperation!.CanCancel,
         CheckRowAction.SelfUpdate => SelfUpdateActionEnabled,
         CheckRowAction.SoftwareUpdate => SoftwareActionEnabled,
@@ -397,6 +417,7 @@ public class CheckResult : INotifyPropertyChanged
             HasSaamanManagement ? "Enable SAAMAN or choose its DLL in Setup → Applications." :
             "Choose or install the program in Setup → Applications.",
         CheckRowAction.SoftwareCancel or CheckRowAction.SaamanCancel => "Cancel the current check or download.",
+        CheckRowAction.LaunchCancel => "Stop starting the remaining EuroScope instances. Started instances stay open.",
         CheckRowAction.SaamanRetrySave => "Save the updated SAAMAN location without downloading or installing again.",
         CheckRowAction.SoftwareUpdate => !SoftwareActionEnabled ? SoftwareSummary : SoftwareActionText,
         CheckRowAction.SoftwareCheck or CheckRowAction.Downloads => SoftwareActionText,

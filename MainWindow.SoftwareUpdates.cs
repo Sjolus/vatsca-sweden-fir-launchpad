@@ -93,7 +93,7 @@ public partial class MainWindow
 
     private bool CanRunSoftwareAction() => !_setupRestartRequired && CanControlRunningApplication();
 
-    private bool CanControlRunningApplication() => !_windowClosed && !_isChecking && !_softwareActionBusy &&
+    private bool CanControlRunningApplication() => !_windowClosed && !_isChecking && !_softwareActionBusy && !_launchSequenceBusy &&
         !_softwareUpdates.IsBusy && !_selfUpdateActionBusy && _openDialogCount == 0 && IsEnabled &&
         !System.Windows.Interop.ComponentDispatcher.IsThreadModal && OwnedWindows.Count == 0 &&
         _launchpadUpdates.State.Status is not (LaunchpadUpdateStatus.Checking or LaunchpadUpdateStatus.Downloading);

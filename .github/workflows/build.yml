@@ -56,6 +56,9 @@ jobs:
       - name: Test EuroScope launch options
         run: dotnet run --project Tests/EuroScopeLaunch.Tests/EuroScopeLaunch.Tests.csproj -c Release
 
+      - name: Test EuroScope launch sets and instances
+        run: dotnet run --project Tests/EuroScopeInstances.Tests/EuroScopeInstances.Tests.csproj -c Release
+
       - name: Test EuroScope prerequisites
         run: dotnet run --project Tests/EuroScopePrerequisite.Tests/EuroScopePrerequisite.Tests.csproj -c Release
 

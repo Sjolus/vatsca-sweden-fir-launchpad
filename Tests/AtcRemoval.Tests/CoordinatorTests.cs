@@ -100,10 +100,10 @@ internal static class CoordinatorTests
                 Assert(!f.Service.ActivityHistoryReset && File.ReadAllText(history) == "NEW-ACTIVITY");
                 Assert(!f.Service.ControllerProfileReset);
             }),
-            ("preferences and logs reset removes current browser ownership receipts", async () =>
+            ("preferences and logs reset removes current browser and EuroScope instance receipts", async () =>
             {
                 using var f = new Case();
-                var receipts = new[] { "VATIRIS.process.json", "VatEFS.process.json", "VATIRIS.pid", "VatEFS.pid" }
+                var receipts = new[] { "VATIRIS.process.json", "VatEFS.process.json", "VATIRIS.pid", "VatEFS.pid", "EuroScope.instances.json" }
                     .Select(name => f.File("roaming/VatscaUpdateChecker/" + name, "SYNTHETIC-RECEIPT")).ToArray();
                 var session = f.File("roaming/VatscaUpdateChecker/VatEFSProfile/keep", "KEEP-SESSION");
                 var plan = f.Service.Preview([], new(true, false, false, false, false), null);
