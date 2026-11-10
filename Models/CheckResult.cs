@@ -303,6 +303,11 @@ public class CheckResult : INotifyPropertyChanged
         (LaunchSetActive ? $"Launch set: {LaunchSetName} ({LaunchSetCount} profile{(LaunchSetCount == 1 ? "" : "s")})" :
             (IsRunning ? "Next launch: " : "Launch profile: ") + (SelectedProfile?.DisplayName ?? "No profile"));
 
+    // Tooltip for the profile/launch-set picker next to Launch: names what Launch will start.
+    public string LaunchTargetTooltip => LaunchSetActive
+        ? $"Launch set: {LaunchSetName} ({LaunchSetCount} profile{(LaunchSetCount == 1 ? "" : "s")})"
+        : "Launch profile: " + (SelectedProfile?.DisplayName ?? "No profile");
+
     // EuroScope launch set presentation. MainWindow owns the settings and sequencing.
     private bool _launchSetActive;
     public bool LaunchSetActive { get => _launchSetActive; set => Set(ref _launchSetActive, value); }
@@ -858,7 +863,7 @@ public class CheckResult : INotifyPropertyChanged
         foreach (var name in new[] { nameof(DisplayInstalledVersion), nameof(DisplayLatestVersion),
             nameof(LatestVersionCaption), nameof(RowStatusText), nameof(RowStatusKind), nameof(RowStatusSymbol),
             nameof(RowExplanation), nameof(HasGngTransfer), nameof(DetailHeading), nameof(DetailText), nameof(LaunchActionText),
-            nameof(UsageActionText), nameof(SelectedProfileCaption), nameof(ShowLaunch), nameof(ShowSimpleLaunch), nameof(ShowSplitLaunch), nameof(ShowRunningActions) })
+            nameof(UsageActionText), nameof(SelectedProfileCaption), nameof(LaunchTargetTooltip), nameof(ShowLaunch), nameof(ShowSimpleLaunch), nameof(ShowSplitLaunch), nameof(ShowRunningActions) })
             OnPropertyChanged(name);
         NotifyRowAction();
     }

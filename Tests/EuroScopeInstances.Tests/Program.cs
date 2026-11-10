@@ -186,67 +186,25 @@ try
     });
 
     // Settings model
-    Run("legacy single launch set migrates to a named, active set once", () =>
-    {
-        var legacy = new[] { Entry(twr), Entry(app) };
-        var settings = new AppSettings { UseEuroScopeLaunchSet = true, EuroScopeLaunchSet = [.. legacy] };
-
-        True(settings.MigrateLaunchSets());
-        Equal(1, settings.EuroScopeLaunchSets.Count);
-        Equal("Launch set 1", settings.EuroScopeLaunchSets[0].Name);
-        Equal(settings.EuroScopeLaunchSets[0].Id, settings.ActiveEuroScopeLaunchSetId);
-        True(settings.EuroScopeLaunchSets[0].Entries.SequenceEqual(legacy));
-        Equal<List<EuroScopeLaunchEntry>?>(null, settings.EuroScopeLaunchSet);
-        True(!settings.UseEuroScopeLaunchSet);
-
-        True(!settings.MigrateLaunchSets());
-        Equal(1, settings.EuroScopeLaunchSets.Count);
-    });
-
-    Run("an unused legacy set migrates without becoming the Launch target", () =>
-    {
-        var existing = new EuroScopeLaunchSetDefinition(Guid.NewGuid(), "Evening", [Entry(app)]);
-        var settings = new AppSettings { EuroScopeLaunchSets = [existing], EuroScopeLaunchSet = [Entry(twr)] };
-
-        True(settings.MigrateLaunchSets());
-        Equal(2, settings.EuroScopeLaunchSets.Count);
-        Equal(existing, settings.EuroScopeLaunchSets[0]);
-        Equal<Guid?>(null, settings.ActiveEuroScopeLaunchSetId);
-    });
-
-    Run("an empty legacy set is discarded without a save request", () =>
-    {
-        var settings = new AppSettings { UseEuroScopeLaunchSet = true, EuroScopeLaunchSet = [] };
-
-        True(!settings.MigrateLaunchSets());
-        Equal(0, settings.EuroScopeLaunchSets.Count);
-        True(!settings.UseEuroScopeLaunchSet && settings.EuroScopeLaunchSet is null);
-    });
-
     Run("Copy gives editors their own launch-set lists", () =>
     {
         var set = new EuroScopeLaunchSetDefinition(Guid.NewGuid(), "Day", [Entry(twr)]);
-        var settings = new AppSettings { EuroScopeLaunchSets = [set], ActiveEuroScopeLaunchSetId = set.Id, EuroScopeLaunchSet = [Entry(app)] };
+        var settings = new AppSettings { EuroScopeLaunchSets = [set], ActiveEuroScopeLaunchSetId = set.Id };
 
         var copy = settings.Copy();
         True(!ReferenceEquals(settings.EuroScopeLaunchSets, copy.EuroScopeLaunchSets));
-        True(!ReferenceEquals(settings.EuroScopeLaunchSet, copy.EuroScopeLaunchSet));
 
         copy.EuroScopeLaunchSets.Add(new(Guid.NewGuid(), "Night", []));
-        copy.EuroScopeLaunchSet!.Clear();
 
         Equal(1, settings.EuroScopeLaunchSets.Count);
-        Equal(1, settings.EuroScopeLaunchSet!.Count);
         Equal(set.Id, copy.ActiveEuroScopeLaunchSetId);
     });
 
-    Run("settings JSON round-trips named sets and omits the migrated legacy fields", () =>
+    Run("settings JSON round-trips named sets", () =>
     {
         var set = new EuroScopeLaunchSetDefinition(Guid.NewGuid(), "Åre & Östersund", [Entry(twr, delay: 9, enabled: false)]);
 
         var json = JsonSerializer.Serialize(new AppSettings { EuroScopeLaunchSets = [set], ActiveEuroScopeLaunchSetId = set.Id });
-        True(!json.Contains(nameof(AppSettings.UseEuroScopeLaunchSet)));
-        True(!json.Contains("\"" + nameof(AppSettings.EuroScopeLaunchSet) + "\""));
 
         var read = JsonSerializer.Deserialize<AppSettings>(json)!;
         Equal(set.Id, read.ActiveEuroScopeLaunchSetId);

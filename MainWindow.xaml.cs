@@ -608,8 +608,38 @@ public partial class MainWindow : Window
 
         var menu = new System.Windows.Controls.ContextMenu();
         bool separatorAdded = false;
-        if (result.HasEuroScopeManagement)
+        foreach (var profile in result.Profiles)
         {
+            if (!separatorAdded && profile.FilePath != null)
+            {
+                // Separates "No profile" from the real profiles; never a leading separator.
+                if (menu.Items.Count > 0) menu.Items.Add(new System.Windows.Controls.Separator());
+                separatorAdded = true;
+            }
+
+            bool isSelected = result.SelectedProfile == profile && !(result.HasEuroScopeManagement && LaunchSetActive);
+            var item = new System.Windows.Controls.MenuItem
+            {
+                Header = (isSelected ? "✓  " : "    ") + profile.DisplayName
+            };
+            var captured = profile;
+            item.Click += (_, _) =>
+            {
+                if (!TryAcquireMaintenanceGuard(out var lease)) return;
+                using var guard = lease;
+                result.SelectedProfile = captured;
+                _settings.LastEuroscopeProfile = captured.FilePath ?? string.Empty;
+                // A single profile replaces the launch set for launching; the set stays saved.
+                if (result.HasEuroScopeManagement) _settings.ActiveEuroScopeLaunchSetId = null;
+                RefreshEuroScopeLaunchSetPresentation();
+                SaveSessionSettings("EuroScope profile choice saved.");
+            };
+            menu.Items.Add(item);
+        }
+        if (result.HasEuroScopeManagement && LaunchSets.Count > 0)
+        {
+            // Launch sets sit below the single profiles, just above Edit launch sets.
+            menu.Items.Add(new System.Windows.Controls.Separator());
             foreach (var set in LaunchSets)
             {
                 int setCount = EnabledEntries(set).Count;
@@ -632,33 +662,6 @@ public partial class MainWindow : Window
                 };
                 menu.Items.Add(setItem);
             }
-        }
-        foreach (var profile in result.Profiles)
-        {
-            if (!separatorAdded && profile.FilePath != null)
-            {
-                menu.Items.Add(new System.Windows.Controls.Separator());
-                separatorAdded = true;
-            }
-
-            bool isSelected = result.SelectedProfile == profile && !(result.HasEuroScopeManagement && LaunchSetActive);
-            var item = new System.Windows.Controls.MenuItem
-            {
-                Header = (isSelected ? "✓  " : "    ") + profile.DisplayName
-            };
-            var captured = profile;
-            item.Click += (_, _) =>
-            {
-                if (!TryAcquireMaintenanceGuard(out var lease)) return;
-                using var guard = lease;
-                result.SelectedProfile = captured;
-                _settings.LastEuroscopeProfile = captured.FilePath ?? string.Empty;
-                // A single profile replaces the launch set for launching; the set stays saved.
-                if (result.HasEuroScopeManagement) _settings.ActiveEuroScopeLaunchSetId = null;
-                RefreshEuroScopeLaunchSetPresentation();
-                SaveSessionSettings("EuroScope profile choice saved.");
-            };
-            menu.Items.Add(item);
         }
         if (result.HasEuroScopeManagement)
         {

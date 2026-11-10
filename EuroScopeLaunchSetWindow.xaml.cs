@@ -152,8 +152,8 @@ public partial class EuroScopeLaunchSetWindow : Window
         var used = set.Rows.Select(row => row.Profile?.FilePath).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var next = Profiles.FirstOrDefault(profile => profile.FilePath != null && !used.Contains(profile.FilePath)) ?? _defaultProfile;
 
-        // 5 s default. The first instance ignores its delay, but keeps it if it is moved down.
-        set.Rows.Add(new LaunchSetRow(Guid.NewGuid(), true, next, "5"));
+        // Later instances already wait for the previous window, so no extra wait by default.
+        set.Rows.Add(new LaunchSetRow(Guid.NewGuid(), true, next, "0"));
     }
 
     private static LaunchSetRow? RowOf(object sender) => (sender as FrameworkElement)?.DataContext as LaunchSetRow;
@@ -194,7 +194,7 @@ public partial class EuroScopeLaunchSetWindow : Window
             {
                 if (!int.TryParse(row.DelayText?.Trim(), out var delay) || delay < 0 || delay > EuroScopeLaunchEntry.MaxDelaySeconds)
                 {
-                    problems.Add($"{label}, instance {row.OrderText}: enter a delay from 0 to {EuroScopeLaunchEntry.MaxDelaySeconds} seconds.");
+                    problems.Add($"{label}, instance {row.OrderText}: enter an extra wait from 0 to {EuroScopeLaunchEntry.MaxDelaySeconds} seconds.");
                     continue;
                 }
                 entries.Add(new(row.Id, row.Profile?.FilePath ?? string.Empty, delay, row.Enabled));
@@ -297,7 +297,7 @@ public partial class EuroScopeLaunchSetWindow : Window
         }
 
         public string OrderText => (Position + 1).ToString();
-        // The first row starts immediately; later rows wait their delay.
+        // The first row starts immediately; later rows wait for the previous window, then their extra wait.
         public bool DelayApplies => Position > 0;
 
         public event PropertyChangedEventHandler? PropertyChanged;

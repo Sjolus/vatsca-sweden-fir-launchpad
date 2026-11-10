@@ -9,7 +9,7 @@
         <StackPanel DockPanel.Dock="Top" Margin="0,0,0,12">
             <TextBlock Text="EuroScope launch sets" FontSize="{DynamicResource TextSize22}" FontWeight="SemiBold"/>
             <TextBlock Foreground="{DynamicResource SecondaryText}" TextWrapping="Wrap" Margin="0,7,0,0"
-                       Text="Each set starts its enabled instances in order. The delay is the wait after the previous instance was started; the first instance starts immediately. Choose which set Launch uses here or from the EuroScope ▾ menu."/>
+                       Text="Each set starts its enabled instances in order. Each instance after the first waits until the previous EuroScope window has opened, then for its optional extra wait. Choose which set Launch uses here or from the EuroScope ▾ menu."/>
         </StackPanel>
         <StackPanel DockPanel.Dock="Bottom" Margin="0,12,0,0">
             <TextBlock x:Name="ValidationText" Foreground="{DynamicResource ApplicationWarningText}" TextWrapping="Wrap" Margin="0,0,0,8" Visibility="Collapsed"/>
@@ -52,7 +52,7 @@
                     <TextBlock Text="Name" VerticalAlignment="Center" Margin="0,0,10,0"/>
                     <TextBox x:Name="NameBox" Grid.Column="1" Text="{Binding Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                              MaxLength="40" VerticalContentAlignment="Center" Padding="4,3" AutomationProperties.Name="Launch set name"/>
-                    <CheckBox Grid.Row="1" Grid.Column="1" Margin="0,8,0,0" IsChecked="{Binding IsActive, Mode=TwoWay}"
+                    <CheckBox Grid.Row="1" Grid.Column="1" Margin="0,8,0,0" IsChecked="{Binding IsActive, Mode=TwoWay}" Foreground="{DynamicResource PrimaryText}"
                               Content="Use this set when pressing Launch"/>
                 </Grid>
                 <Grid DockPanel.Dock="Top" Margin="0,0,0,4">
@@ -63,7 +63,7 @@
                     <TextBlock Text="#" Foreground="{DynamicResource SecondaryText}"/>
                     <TextBlock Grid.Column="1" Text="On" Foreground="{DynamicResource SecondaryText}"/>
                     <TextBlock Grid.Column="2" Text="Profile" Foreground="{DynamicResource SecondaryText}"/>
-                    <TextBlock Grid.Column="3" Text="Delay (s)" Foreground="{DynamicResource SecondaryText}"/>
+                    <TextBlock Grid.Column="3" Text="Extra wait (s)" Foreground="{DynamicResource SecondaryText}"/>
                 </Grid>
                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                     <StackPanel>
@@ -93,7 +93,7 @@
                                             </ComboBox>
                                             <TextBox Grid.Column="3" Margin="0,0,8,0" Text="{Binding DelayText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                                      VerticalContentAlignment="Center" IsEnabled="{Binding DelayApplies}"
-                                                     AutomationProperties.Name="{Binding OrderText, StringFormat=Delay in seconds before instance {0}}"/>
+                                                     AutomationProperties.Name="{Binding OrderText, StringFormat=Extra wait in seconds before instance {0}}"/>
                                             <StackPanel Grid.Column="4" Orientation="Horizontal">
                                                 <Button Content="↑" Click="Up_Click" Width="30" Margin="0,0,4,0" ToolTip="Move up"
                                                         AutomationProperties.Name="{Binding OrderText, StringFormat=Move instance {0} up}"/>

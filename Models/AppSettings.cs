@@ -46,31 +46,12 @@ public class AppSettings
     public List<EuroScopeLaunchSetDefinition> EuroScopeLaunchSets { get; set; } = [];
     public Guid? ActiveEuroScopeLaunchSetId { get; set; }
 
-    // Read-only shape from early local builds with one unnamed set; migrated by MigrateLaunchSets.
-    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
-    public bool UseEuroScopeLaunchSet { get; set; }
-    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
-    public List<EuroScopeLaunchEntry>? EuroScopeLaunchSet { get; set; }
-
-    /// <returns>True when the single unnamed set was converted and settings should be saved.</returns>
-    public bool MigrateLaunchSets()
-    {
-        if (EuroScopeLaunchSet is not { Count: > 0 } legacy) { EuroScopeLaunchSet = null; UseEuroScopeLaunchSet = false; return false; }
-        var set = new EuroScopeLaunchSetDefinition(Guid.NewGuid(), "Launch set 1", [.. legacy]);
-        EuroScopeLaunchSets = [.. EuroScopeLaunchSets ?? [], set];
-        if (UseEuroScopeLaunchSet && ActiveEuroScopeLaunchSetId is null) ActiveEuroScopeLaunchSetId = set.Id;
-        EuroScopeLaunchSet = null;
-        UseEuroScopeLaunchSet = false;
-        return true;
-    }
-
     // Value types and strings are copied by MemberwiseClone. Lists hold immutable records,
     // so a new list keeps editors from sharing the caller's collection.
     public AppSettings Copy()
     {
         var copy = (AppSettings)MemberwiseClone();
         copy.EuroScopeLaunchSets = [.. EuroScopeLaunchSets ?? []];
-        copy.EuroScopeLaunchSet = EuroScopeLaunchSet is null ? null : [.. EuroScopeLaunchSet];
         return copy;
     }
 }

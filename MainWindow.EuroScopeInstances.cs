@@ -36,8 +36,6 @@ public partial class MainWindow
 
     private void RefreshEuroScopeLaunchSetPresentation()
     {
-        if (_settings.MigrateLaunchSets()) SaveSessionSettings("EuroScope launch set converted to a named set.");
-
         var row = EuroScopeRow;
         row.LaunchSetName = ActiveLaunchSet?.Name ?? string.Empty;
         row.LaunchSetCount = EnabledLaunchEntries.Count;
@@ -69,7 +67,10 @@ public partial class MainWindow
             ProfileName = EuroScopeLaunchPlanner.ProfileName(entry.ProfilePath)
         };
 
-    /// <summary>Starts each enabled launch-set entry in order, waiting its delay first. Holds the maintenance lease throughout.</summary>
+    /// <summary>
+    /// Starts each enabled launch-set entry in order. Each later entry waits for the previously started
+    /// instance's main window, then its optional extra delay. Holds the maintenance lease throughout.
+    /// </summary>
     private async Task LaunchEuroScopeSetAsync(CheckResult row)
     {
         if (_launchSequenceBusy || !CanRunSoftwareAction() || !TryAcquireMaintenanceGuard(out var lease)) return;
@@ -104,7 +105,8 @@ public partial class MainWindow
         if (notes.Length > 0)
         {
             var lines = steps.Select(step => $"{step.Order}. {step.ProfileName} — " + (step.Kind == EuroScopeLaunchStepKind.Start
-                ? (step.DelaySeconds > 0 ? $"start after {step.DelaySeconds} s" : "start") + (step.Message is { } note ? " (" + note + ")" : "")
+                ? (step == starts[0] ? "start" : "start when the previous window opens")
+                    + (step.DelaySeconds > 0 ? $", then wait {step.DelaySeconds} s" : "") + (step.Message is { } note ? " (" + note + ")" : "")
                 : step.Message));
             if (MessageBox.Show(this, $"Start {starts.Length} EuroScope instance{(starts.Length == 1 ? "" : "s")} from {setName}?\n\n" + string.Join("\n", lines),
                     setName, MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.Yes) != MessageBoxResult.Yes) return;
@@ -119,12 +121,23 @@ public partial class MainWindow
         int started = 0;
         bool cancelled = false;
         var problems = new List<string>();
+        EuroScopeLaunchStep? previous = null;
 
         try
         {
             for (int i = 0; i < starts.Length; i++)
             {
                 var step = starts[i];
+                if (previous is { } waitFor)
+                {
+                    var failure = await WaitForEuroScopeWindowAsync(row, waitFor, $"{i + 1} of {starts.Length} ({step.ProfileName})", token);
+                    if (failure != null)
+                    {
+                        problems.Add(failure);
+                        break;
+                    }
+                }
+
                 for (int remaining = step.DelaySeconds; remaining > 0; remaining--)
                 {
                     row.LaunchSequenceStatus = $"Starting {i + 1} of {starts.Length} ({step.ProfileName}) in {remaining} s";
@@ -147,7 +160,11 @@ public partial class MainWindow
 
                 try
                 {
-                    if (StartApplicationCore(LaunchEntryTarget(baseTarget, step.Entry), step.Entry.Id, step.Order)) started++;
+                    if (StartApplicationCore(LaunchEntryTarget(baseTarget, step.Entry), step.Entry.Id, step.Order))
+                    {
+                        started++;
+                        previous = step;
+                    }
                     else problems.Add($"{step.ProfileName}: EuroScope did not accept the start request.");
                 }
                 catch (Exception error) { problems.Add($"{step.ProfileName}: {error.Message}"); }
@@ -173,6 +190,31 @@ public partial class MainWindow
         Logger.Log("LAUNCH", $"EuroScope launch set: {started}/{starts.Length} started{(cancelled ? ", cancelled" : "")}");
         UpdateRunningStates();
         FocusApplicationRow(row);
+    }
+
+    private static readonly TimeSpan EuroScopeWindowTimeout = TimeSpan.FromSeconds(120);
+
+    /// <summary>
+    /// Waits until the instance this sequence just started shows its main window, so the next
+    /// instance does not start while the previous one is still initializing.
+    /// </summary>
+    /// <returns>Null when the window appeared; otherwise the reason the remaining starts stop.</returns>
+    private async Task<string?> WaitForEuroScopeWindowAsync(CheckResult row, EuroScopeLaunchStep previous, string next, CancellationToken token)
+    {
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        while (true)
+        {
+            var record = EuroScopeInstances.Live().FirstOrDefault(item => item.EntryId == previous.Entry.Id);
+            if (record is null)
+                return $"Stopped · {previous.ProfileName} closed before its window appeared; the remaining instances were not started.";
+            if (ApplicationProcessControl.HasWindow(record.Process)) return null;
+            if (watch.Elapsed >= EuroScopeWindowTimeout)
+                return $"Stopped · {previous.ProfileName} showed no window within {EuroScopeWindowTimeout.TotalSeconds:0} s; " +
+                    "the remaining instances were not started. Use Start missing instances once it is open.";
+
+            row.LaunchSequenceStatus = $"Starting {next} after {previous.ProfileName} opens…";
+            await Task.Delay(500, token);
+        }
     }
 
     private void CancelLaunchSequence() => _launchSequenceCts?.Cancel();

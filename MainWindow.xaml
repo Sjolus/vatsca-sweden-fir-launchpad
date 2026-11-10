@@ -167,7 +167,7 @@
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="22"/></Grid.ColumnDefinitions>
                                     <Button Click="Launch_Click" Style="{StaticResource LaunchButton}" Padding="2,4"/>
                                     <Button Grid.Column="1" Content="▾" Click="ProfileDropdown_Click" Padding="2,4" Style="{StaticResource RowActionButton}"
-                                            IsEnabled="{Binding LaunchEnabled}" ToolTip="{Binding SelectedProfile.DisplayName}" AutomationProperties.Name="Choose EuroScope profile"/>
+                                            IsEnabled="{Binding LaunchEnabled}" ToolTip="{Binding LaunchTargetTooltip}" AutomationProperties.Name="Choose EuroScope profile or launch set"/>
                                 </Grid>
                                 <Grid Margin="8,0,8,0" VerticalAlignment="Center" Visibility="{Binding ShowRunningActions, Converter={StaticResource BoolToVisibility}}">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
