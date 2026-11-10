@@ -571,6 +571,37 @@ try
         Equal("Next launch: Observer", row.SelectedProfileCaption);
         Equal("Show", row.LaunchActionText);
     });
+    Run("EuroScope launch set caption names the set, running count and sequence status", () =>
+    {
+        var row = new CheckResult { AppName = "EuroScope", HasEuroScopeManagement = true };
+        row.Profiles.Add(new("Sweden", "C:\\Synthetic\\Sweden.prf"));
+        row.SelectedProfile = row.Profiles[0];
+        var notices = new HashSet<string?>();
+        row.PropertyChanged += (_, args) => notices.Add(args.PropertyName);
+        row.LaunchSetName = "Evening"; row.LaunchSetCount = 1; row.LaunchSetActive = true;
+        True(notices.Contains(nameof(CheckResult.SelectedProfileCaption)));
+        Equal("Launch set: Evening (1 profile)", row.SelectedProfileCaption);
+        row.LaunchSetCount = 3;
+        Equal("Launch set: Evening (3 profiles)", row.SelectedProfileCaption);
+        row.IsRunning = true; row.RunningInstanceSummary = "2 of 3 running";
+        Equal("2 of 3 running · Launch set: Evening (3 profiles)", row.SelectedProfileCaption);
+        row.LaunchSequenceStatus = "Starting 3 of 3 (Sweden) in 4 s";
+        Equal("Starting 3 of 3 (Sweden) in 4 s", row.SelectedProfileCaption);
+        row.LaunchSequenceStatus = ""; row.LaunchSetActive = false; row.RunningInstanceSummary = "2 instances running";
+        Equal("2 instances running · Next launch: Sweden", row.SelectedProfileCaption);
+    });
+    Run("a running launch sequence offers Cancel ahead of other EuroScope actions", () =>
+    {
+        var row = new CheckResult { AppName = "EuroScope", HasEuroScopeManagement = true, Status = CheckStatus.NotConfigured };
+        var notices = new HashSet<string?>();
+        row.PropertyChanged += (_, args) => notices.Add(args.PropertyName);
+        row.LaunchSequenceCancellable = true;
+        RowAction(row, CheckRowAction.LaunchCancel, "Cancel", true);
+        True(row.RowActionTooltip.Contains("Started instances stay open"));
+        True(notices.Contains(nameof(CheckResult.RowAction)) && notices.Contains(nameof(CheckResult.RowActionEnabled)));
+        row.LaunchSequenceCancellable = false;
+        True(row.RowAction != CheckRowAction.LaunchCancel);
+    });
 
     Run("each software state selects one compact action without changing update eligibility", () =>
     {

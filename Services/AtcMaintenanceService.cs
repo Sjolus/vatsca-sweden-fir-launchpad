@@ -311,7 +311,7 @@ public sealed class AtcMaintenanceService
         if (selected.Reporting) roots.Add(Path.Combine(_environment.LocalAppData, "VatscaUpdateChecker", "Reporting"));
         if (selected.Settings)
         {
-            roots.AddRange(new[] { "settings.json", "launchpad.log", "VATIRIS.pid", "VatEFS.pid", "VATIRIS.process.json", "VatEFS.process.json" }.Select(name => Path.Combine(roaming, name)));
+            roots.AddRange(new[] { "settings.json", "launchpad.log", "VATIRIS.pid", "VatEFS.pid", "VATIRIS.process.json", "VatEFS.process.json", "EuroScope.instances.json" }.Select(name => Path.Combine(roaming, name)));
             roots.Add(Path.Combine(software, "VatEfsLogs"));
             roots.Add(Path.Combine(_environment.LocalAppData, "VatscaUpdateChecker", "Activity"));
         }

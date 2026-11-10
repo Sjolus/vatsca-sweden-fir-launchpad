@@ -41,7 +41,31 @@ public class AppSettings
     public string ObsCallsign { get; set; } = string.Empty;
     public string LastEuroscopeProfile { get; set; } = string.Empty;
 
-    // Settings currently contain only value types and immutable strings. Keep every
-    // preference when a dialog makes an editable copy, including future additions.
-    public AppSettings Copy() => (AppSettings)MemberwiseClone();
+    // Named EuroScope launch sets. Each starts its ordered instances from one Launch press.
+    // No active set keeps the single-profile launch from LastEuroscopeProfile.
+    public List<EuroScopeLaunchSetDefinition> EuroScopeLaunchSets { get; set; } = [];
+    public Guid? ActiveEuroScopeLaunchSetId { get; set; }
+
+    // Value types and strings are copied by MemberwiseClone. Lists hold immutable records,
+    // so a new list keeps editors from sharing the caller's collection.
+    public AppSettings Copy()
+    {
+        var copy = (AppSettings)MemberwiseClone();
+        copy.EuroScopeLaunchSets = [.. EuroScopeLaunchSets ?? []];
+        return copy;
+    }
+}
+
+/// <summary>A named, ordered group of EuroScope instances.</summary>
+public sealed record EuroScopeLaunchSetDefinition(Guid Id, string Name, IReadOnlyList<EuroScopeLaunchEntry> Entries)
+{
+    public const int MaxSets = 20;
+    public const int MaxNameLength = 40;
+}
+
+/// <summary>One instance in the EuroScope launch set. DelaySeconds is the wait before this entry starts.</summary>
+public sealed record EuroScopeLaunchEntry(Guid Id, string ProfilePath, int DelaySeconds, bool Enabled)
+{
+    public const int MaxDelaySeconds = 300;
+    public const int MaxEntries = 16;
 }

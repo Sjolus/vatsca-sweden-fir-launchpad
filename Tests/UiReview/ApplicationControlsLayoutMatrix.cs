@@ -88,6 +88,7 @@ internal static partial class LayoutMatrix
                     throw new InvalidDataException($"Application controls, {scale:P0}, {density}, {(minimum ? "minimum" : "default")}: {error.Message}", error);
                 }
                 finally { window.Close(); }
+                if (density == "Compact") cases += CheckLaunchSetEditors(scale, minimum);
                 if (density == "Compact")
                 foreach (var action in Enum.GetValues<ApplicationBatchAction>())
                 {

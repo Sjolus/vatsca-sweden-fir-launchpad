@@ -33,18 +33,33 @@ public partial class MainWindow
     private void StartAll_Click(object sender, RoutedEventArgs e) => ReviewApplicationBatch(ApplicationBatchAction.Start);
     private void CloseAll_Click(object sender, RoutedEventArgs e) => ReviewApplicationBatch(ApplicationBatchAction.Close);
 
-    private void ReviewApplicationBatch(ApplicationBatchAction action)
+    private async void ReviewApplicationBatch(ApplicationBatchAction action)
+    {
+        if (ReviewApplicationBatchCore(action) && !_windowClosed)
+            await LaunchEuroScopeSetAsync(EuroScopeRow);
+    }
+
+    /// <returns>True when the reviewed EuroScope launch set should start after the batch lease is released.</returns>
+    private bool ReviewApplicationBatchCore(ApplicationBatchAction action)
     {
         bool allowed = action == ApplicationBatchAction.Start ? CanRunSoftwareAction() : CanControlRunningApplication();
-        if (!allowed || !TryAcquireMaintenanceGuard(out var lease)) return;
+        if (!allowed || !TryAcquireMaintenanceGuard(out var lease)) return false;
         using var guard = lease;
+        bool startSet = false;
         try
         {
-            var choices = ApplicationBatchActions.Prepare(action, _results.Select(ApplicationTarget),
+            bool setActive = action == ApplicationBatchAction.Start && LaunchSetActive;
+            var choices = ApplicationBatchActions.Prepare(action, _results.Select(row =>
+                    setActive && row.HasEuroScopeManagement
+                        ? ApplicationTarget(row) with { ProfilePath = null, ProfileName = $"{ActiveLaunchSet!.Name} ({EnabledLaunchEntries.Count} profiles, in order)" }
+                        : ApplicationTarget(row)),
                 target => ObserveApplication(target, validateStart: action == ApplicationBatchAction.Start));
             var review = new BulkApplicationActionWindow(action, choices) { Owner = this };
-            if (ShowOwnedDialog(review) != true) return;
-            var results = ApplicationBatchActions.Execute(action, review.Choices,
+            if (ShowOwnedDialog(review) != true) return false;
+            // The launch set has its own sequenced, cancellable start after the other applications.
+            startSet = setActive && review.Choices.Any(choice => choice.Target.IsEuroScope && choice.CanSelect && choice.IsSelected);
+            var batch = setActive ? review.Choices.Where(choice => !choice.Target.IsEuroScope).ToArray() : review.Choices;
+            var results = ApplicationBatchActions.Execute(action, batch,
                 target => ObserveApplication(target, validateStart: true), StartApplicationCore,
                 process => ApplicationProcessControl.TryAct(process, RunningApplicationAction.CloseNormally));
             foreach (var result in results)
@@ -56,13 +71,16 @@ public partial class MainWindow
                     action == ApplicationBatchAction.Close ? " Check for save or confirmation prompts." : "");
             if (results.FirstOrDefault(result => !result.Requested) is { } first &&
                 _results.FirstOrDefault(row => row.AppName == first.Id) is { } selected) FocusApplicationRow(selected);
+            if (startSet) LastCheckedText.Text += " The EuroScope launch set starts next.";
         }
         catch (Exception error)
         {
+            startSet = false;
             MessageBox.Show(this, "The application review could not finish:\n\n" + error.Message,
                 "Applications", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
         finally { if (!_windowClosed) UpdateRunningStates(); }
+        return startSet;
     }
 
     private static ApplicationActionObservation ObserveApplication(ApplicationActionTarget target, bool validateStart)
@@ -116,7 +134,10 @@ public partial class MainWindow
 
     // Guard-free core shared by one confirmed bulk operation and a single-row launch.
     // The outer handler owns the maintenance lease; nested acquisition is not reentrant.
-    private static bool StartApplicationCore(ApplicationActionTarget target)
+    private static bool StartApplicationCore(ApplicationActionTarget target) =>
+        StartApplicationCore(target, SingleLaunchEntryId, 1);
+
+    private static bool StartApplicationCore(ApplicationActionTarget target, Guid euroScopeEntryId, int euroScopeOrder)
     {
         if (StartBlockReason(target) is { } blocked) throw new InvalidOperationException(blocked);
         ProcessStartInfo start;
@@ -140,6 +161,8 @@ public partial class MainWindow
         using var process = Process.Start(start);
         if (process is null) return false;
         if (target.IsBrowser) RememberBrowser(target.Id, process);
+        // Direct start returns the real EuroScope process; remember it for per-instance Show/Close.
+        if (target.IsEuroScope) EuroScopeInstances.TryRecord(euroScopeEntryId, target.ProfilePath, euroScopeOrder, process);
         ReportingService.RecordUsage(ReportingEventName.ApplicationOpened,
             new ReportingDetails { Application = ReportingApplicationFor(target.Id), Operation = ReportingOperation.Launch });
         Logger.Log("LAUNCH", target.Id + ": start requested");

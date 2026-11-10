@@ -29,6 +29,7 @@ public partial class MainWindow
         if (sender is not FrameworkElement { DataContext: CheckResult row } || !row.RowActionEnabled) return;
         switch (row.RowAction)
         {
+            case CheckRowAction.LaunchCancel: CancelLaunchSequence(); break;
             case CheckRowAction.GngCancel: _gngUpdateFlow?.CancelPreparation(); break;
             case CheckRowAction.GngContinue: ReturnToGngFlow(); break;
             case CheckRowAction.Setup: OpenApplicationSetup(row); break;

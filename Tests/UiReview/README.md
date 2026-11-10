@@ -63,6 +63,10 @@ Assertions cover:
   diagnostic tooltips, accessibility descriptions and inert Ctrl+C command routing.
 - Separate Show/Close controls and reviewed bulk actions remain readable at each
   text size, with keyboard access, operation gating and no controls for folders or Launchpad itself.
+- The EuroScope launch-set editor fits at each text size and size in both themes, with and without
+  saved sets. It opens on the Launch target, keeps a moved profile visible, disables the first
+  instance's delay, gives every row control a numbered accessible name and explains invalid delays
+  without saving. Successful Save and the duplicate-profile prompt need a shown dialog and stay untested.
 - Text-size changes retain density and selected EuroScope profile. Apps/Setup tabs and
   primary actions remain reachable at minimum size; compact layout and keep-on-top choices live in Preferences.
 - Applications, Swedish GNG, Controller profile, Preferences and Activity remain inside
