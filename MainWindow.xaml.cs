@@ -145,7 +145,9 @@ public partial class MainWindow : Window
 
             if (result.IsWebApp)
             {
-                result.IsRunning = IsWebAppRunning(result.AppName);
+                var tracked = TrackedBrowser(result.AppName);
+                result.IsRunning = tracked != null;
+                ObserveBrowserPlacement(result.AppName, tracked);
                 continue;
             }
             if (result.IsFolder || string.IsNullOrEmpty(result.LaunchPath))
@@ -180,8 +182,6 @@ public partial class MainWindow : Window
         if (result.IsLocalUrlReachable != reachable)
             result.IsLocalUrlReachable = reachable;
     }
-
-    private bool IsWebAppRunning(string appName) => TrackedBrowser(appName) != null;
 
     private async void Window_Loaded(object sender, RoutedEventArgs e)
     {

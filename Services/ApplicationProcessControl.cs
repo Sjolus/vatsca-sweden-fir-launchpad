@@ -65,6 +65,19 @@ public static class ApplicationProcessControl
         catch (Exception ex) when (IsProcessError(ex)) { return false; }
     }
 
+    /// <summary>The main window of the exact verified process, or zero.</summary>
+    public static IntPtr MainWindow(ApplicationProcessIdentity expected)
+    {
+        try
+        {
+            using var pin = OpenPinnedProcess(expected.Id);
+            if (!SameIdentity(expected, ReadIdentity(pin, expected.Id))) return IntPtr.Zero;
+            using var process = Process.GetProcessById(expected.Id);
+            return process.MainWindowHandle;
+        }
+        catch (Exception ex) when (IsProcessError(ex)) { return IntPtr.Zero; }
+    }
+
     public static bool IsAlive(ApplicationProcessIdentity expected)
     {
         try
