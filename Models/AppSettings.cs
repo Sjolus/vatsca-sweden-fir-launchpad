@@ -20,6 +20,18 @@ public class AppSettings
     public double? WindowHeight { get; set; }
     public bool WindowMaximized { get; set; }
     public string WindowMonitor { get; set; } = string.Empty;
+    // Last observed VATIRIS visible window frame (physical pixels, excluding invisible resize borders), restored on the next Launchpad start request.
+    public double? VatirisWindowLeft { get; set; }
+    public double? VatirisWindowTop { get; set; }
+    public double? VatirisWindowWidth { get; set; }
+    public double? VatirisWindowHeight { get; set; }
+    public bool VatirisWindowMaximized { get; set; }
+    public string VatirisWindowMonitor { get; set; } = string.Empty;
+    // Invisible resize-border widths observed with that frame; Edge's launch size includes them.
+    public double? VatirisFrameLeft { get; set; }
+    public double? VatirisFrameTop { get; set; }
+    public double? VatirisFrameRight { get; set; }
+    public double? VatirisFrameBottom { get; set; }
     public double DetailPanelHeight { get; set; } = 100;
     public string EuroscopeExePath { get; set; } = string.Empty;
     public string EuroscopeDataPath { get; set; } = string.Empty;

@@ -5,10 +5,11 @@ using VatscaUpdateChecker.Models;
 
 namespace VatscaUpdateChecker.Services;
 
-/// <summary>Only the Launchpad window is positioned. Persisted bounds are physical screen pixels.</summary>
+/// <summary>Positions only the Launchpad window. Launchpad-launched browser windows are observed here and placed by
+/// Edge's launch arguments. Persisted bounds are physical screen pixels.</summary>
 public static class WindowPlacementService
 {
-    private sealed record Display(string Name, WindowBounds WorkArea, bool Primary);
+    private sealed record Display(string Name, WindowBounds WorkArea, bool Primary, WindowBounds Monitor, double Scale);
     [StructLayout(LayoutKind.Sequential)] private struct Rect { public int Left, Top, Right, Bottom; }
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     private struct MonitorInfo
@@ -25,6 +26,14 @@ public static class WindowPlacementService
     [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int width, int height, uint flags);
     [DllImport("user32.dll")] private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
     [DllImport("user32.dll")] private static extern uint GetDpiForWindow(IntPtr hwnd);
+    [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
+    [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr hwnd);
+    [DllImport("user32.dll")] private static extern bool IsZoomed(IntPtr hwnd);
+    [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr hwnd, int command);
+    [DllImport("user32.dll")] private static extern IntPtr SetThreadDpiAwarenessContext(IntPtr context);
+    [DllImport("dwmapi.dll")] private static extern int DwmGetWindowAttribute(IntPtr hwnd, int attribute, out Rect value, int size);
+    [DllImport("shcore.dll")] private static extern int GetDpiForMonitor(IntPtr monitor, int type, out uint dpiX, out uint dpiY);
+    private static readonly IntPtr PerMonitorAwareV2 = new(-4);
 
     private static MonitorInfo Info(IntPtr monitor)
     {
@@ -34,17 +43,26 @@ public static class WindowPlacementService
     }
     private static WindowBounds Bounds(Rect rect) => new(rect.Left, rect.Top, rect.Right - rect.Left, rect.Bottom - rect.Top);
 
-    public static void Restore(Window window, AppSettings settings)
+    private static List<Display> Displays()
     {
-        var hwnd = new WindowInteropHelper(window).Handle;
-        if (hwnd == IntPtr.Zero) return;
         var displays = new List<Display>();
         EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, (IntPtr monitor, IntPtr _, ref Rect rect, IntPtr data) =>
         {
             var info = Info(monitor);
-            if (Bounds(info.Work).IsValid) displays.Add(new(info.Device, Bounds(info.Work), (info.Flags & 1) != 0));
+            double scale = 1;
+            try { if (GetDpiForMonitor(monitor, 0 /* effective */, out var dpi, out uint _dpiY) == 0 && dpi > 0) scale = dpi / 96d; }
+            catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { }
+            if (Bounds(info.Work).IsValid) displays.Add(new(info.Device, Bounds(info.Work), (info.Flags & 1) != 0, Bounds(info.Monitor), scale));
             return true;
         }, IntPtr.Zero);
+        return displays;
+    }
+
+    public static void Restore(Window window, AppSettings settings)
+    {
+        var hwnd = new WindowInteropHelper(window).Handle;
+        if (hwnd == IntPtr.Zero) return;
+        var displays = Displays();
         var display = displays.FirstOrDefault(x => x.Name == settings.WindowMonitor) ?? displays.FirstOrDefault(x => x.Primary) ?? displays.FirstOrDefault();
         if (display == null) return;
         WindowBounds? saved = settings.WindowLeft is { } left && settings.WindowTop is { } top &&
@@ -92,4 +110,55 @@ public static class WindowPlacementService
         settings.WindowLeft = bounds.Left; settings.WindowTop = bounds.Top;
         settings.WindowWidth = bounds.Width; settings.WindowHeight = bounds.Height;
     }
+
+    // Launchpad itself is system DPI aware. Read other processes' windows and the display layout in
+    // physical pixels so mixed-DPI monitor layouts are described exactly; unsupported Windows builds
+    // keep the virtualized coordinates, which are still consistent between capture and launch.
+    private static T PhysicalPixels<T>(Func<T> action)
+    {
+        IntPtr previous;
+        try { previous = SetThreadDpiAwarenessContext(PerMonitorAwareV2); }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { return action(); }
+        try { return action(); }
+        finally { if (previous != IntPtr.Zero) SetThreadDpiAwarenessContext(previous); }
+    }
+
+    // Windows 10/11 frames carry invisible resize borders (about 7 px) outside the visible edge. A snapped
+    // window's outer rectangle therefore extends past the work area and would be clipped by fitting.
+    // External placements save the visible DWM frame and the border widths separately.
+    private static WindowBounds? VisibleBounds(IntPtr hwnd)
+    {
+        try
+        {
+            if (DwmGetWindowAttribute(hwnd, 9 /* DWMWA_EXTENDED_FRAME_BOUNDS */, out var frame, Marshal.SizeOf<Rect>()) == 0 && Bounds(frame).IsValid)
+                return Bounds(frame);
+        }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { }
+        return GetWindowRect(hwnd, out var rect) && Bounds(rect).IsValid ? Bounds(rect) : null;
+    }
+
+    /// <summary>Null while the window is hidden or minimized, so the previous placement is kept.</summary>
+    public static ExternalWindowPlacement? CaptureExternal(IntPtr hwnd) => hwnd == IntPtr.Zero ? null : PhysicalPixels(() =>
+    {
+        if (!IsWindowVisible(hwnd) || IsIconic(hwnd)) return null;
+        bool maximized = IsZoomed(hwnd);
+        var monitor = Info(MonitorFromWindow(hwnd, 2 /* nearest */)).Device ?? "";
+        if (maximized) return new ExternalWindowPlacement(null, true, monitor);
+        if (VisibleBounds(hwnd) is not { } visible) return null;
+        var frame = GetWindowRect(hwnd, out var rect) && Bounds(rect).IsValid ? WindowInsets.Between(Bounds(rect), visible) : default;
+        return new ExternalWindowPlacement(visible, false, monitor, frame);
+    });
+
+    /// <summary>Maximizes a shown external window once. False while it is not yet visible, so the caller can wait.</summary>
+    public static bool MaximizeExternal(IntPtr hwnd)
+    {
+        if (hwnd == IntPtr.Zero || !IsWindowVisible(hwnd)) return false;
+        if (!IsZoomed(hwnd)) ShowWindow(hwnd, 3 /* SW_MAXIMIZE */);
+        return true;
+    }
+
+    /// <summary>Resolves the saved placement against the connected displays, or null to leave Edge's default.</summary>
+    public static ExternalWindowTarget? PlanExternal(ExternalWindowPlacement saved) => PhysicalPixels(() =>
+        ExternalWindowLayout.Resolve(saved, Displays().Select(display =>
+            new DisplayArea(display.Name, display.WorkArea, display.Primary, display.Monitor, display.Scale)).ToArray()));
 }

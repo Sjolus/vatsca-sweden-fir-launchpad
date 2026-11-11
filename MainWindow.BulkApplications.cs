@@ -116,16 +116,18 @@ public partial class MainWindow
 
     // Guard-free core shared by one confirmed bulk operation and a single-row launch.
     // The outer handler owns the maintenance lease; nested acquisition is not reentrant.
-    private static bool StartApplicationCore(ApplicationActionTarget target)
+    private bool StartApplicationCore(ApplicationActionTarget target)
     {
         if (StartBlockReason(target) is { } blocked) throw new InvalidOperationException(blocked);
         ProcessStartInfo start;
+        bool maximizeBrowser = false;
         if (target.IsBrowser)
         {
             var profile = Path.Combine(AppDataDir, target.Id + "Profile");
             start = new(ApplicationBrowserPath) { UseShellExecute = false };
             start.ArgumentList.Add("--app=" + target.LaunchPath);
             start.ArgumentList.Add("--user-data-dir=" + profile);
+            maximizeBrowser = AddBrowserPlacementArguments(target.Id, start);
         }
         else if (target.IsEuroScope)
         {
@@ -140,6 +142,7 @@ public partial class MainWindow
         using var process = Process.Start(start);
         if (process is null) return false;
         if (target.IsBrowser) RememberBrowser(target.Id, process);
+        if (maximizeBrowser) MaximizeBrowserWhenShown(target.Id);
         ReportingService.RecordUsage(ReportingEventName.ApplicationOpened,
             new ReportingDetails { Application = ReportingApplicationFor(target.Id), Operation = ReportingOperation.Launch });
         Logger.Log("LAUNCH", target.Id + ": start requested");
